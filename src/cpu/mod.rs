@@ -1,24 +1,4 @@
-
-// http://wiki.nesdev.com/w/index.php/Status_flags
-struct Flags {
-    negative: bool,
-    overflow: bool,
-    break_: bool,
-    decimal: bool,
-    interrupt: bool,
-    zero: bool,
-    carry: bool
-}
-
-// http://nesdev.com/6502_cpu.txt
-struct RP2A03 {
-    acc: u8,
-    x: u8,
-    y: u8,
-    flags: Flags,
-    sp: u8,
-    pc: u16
-}
+use crate::memory::AddressSpace;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug)]
@@ -127,285 +107,704 @@ enum AddressingMode {
 #[derive(Debug)]
 struct OpCode(Op, AddressingMode, u8, bool);
 
-use Op::*;
-use AddressingMode::*;
-const OPCODES: [OpCode; 256] = [
-    // 0x
-    OpCode(BRK, Implicit, 7, false), // x0
-    OpCode(ORA, IndirectX, 6, false), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(SLO, IndirectX, 8, false), // x3
-    OpCode(NOP, ZeroPage, 3, false), // x4
-    OpCode(ORA, ZeroPage, 3, false), // x5
-    OpCode(ASL, ZeroPage, 5, false), // x6
-    OpCode(SLO, ZeroPage, 5, false), // x7
-    OpCode(PHP, Implicit, 3, false), // x8
-    OpCode(ORA, Immediate, 2, false), // x9
-    OpCode(ASL, Implicit, 2, false), // xA
-    OpCode(ANC, Immediate, 2, false), // xB
-    OpCode(NOP, Absolute, 4, false), // xC
-    OpCode(ORA, Absolute, 4, false), // xD
-    OpCode(ASL, Absolute, 6, false), // xE
-    OpCode(SLO, Absolute, 6, false), // xF
-    // 1x
-    OpCode(BPL, Relative, 2, true), // x0
-    OpCode(ORA, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(SLO, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(ORA, ZeroPageX, 4, false), // x5
-    OpCode(ASL, ZeroPageX, 6, false), // x6
-    OpCode(SLO, ZeroPageX, 6, false), // x7
-    OpCode(CLC, Implicit, 2, false), // x8
-    OpCode(ORA, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(SLO, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(ORA, AbsoluteX, 4, true), // xD
-    OpCode(ASL, AbsoluteX, 7, false), // xE
-    OpCode(SLO, AbsoluteX, 7, false), // xF
-    // 2x
-    OpCode(JSR, Absolute, 6, false), // x0
-    OpCode(AND, IndirectX, 6, false), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(RLA, IndirectX, 8, false), // x3
-    OpCode(BIT, ZeroPage, 3, false), // x4
-    OpCode(AND, ZeroPage, 3, false), // x5
-    OpCode(ROL, ZeroPage, 5, false), // x6
-    OpCode(RLA, ZeroPage, 5, false), // x7
-    OpCode(PLP, Implicit, 4, false), // x8
-    OpCode(AND, Immediate, 2, false), // x9
-    OpCode(ROL, Implicit, 2, false), // xA
-    OpCode(ANC, Immediate, 2, false), // xB
-    OpCode(BIT, Absolute, 4, false), // xC
-    OpCode(AND, Absolute, 4, false), // xD
-    OpCode(ROL, Absolute, 6, false), // xE
-    OpCode(RLA, Absolute, 6, false), // xF
-    // 3x
-    OpCode(BMI, Relative, 2, true), // x0
-    OpCode(AND, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(RLA, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(AND, ZeroPageX, 4, false), // x5
-    OpCode(ROL, ZeroPageX, 6, false), // x6
-    OpCode(RLA, ZeroPageX, 6, false), // x7
-    OpCode(SEC, Implicit, 2, false), // x8
-    OpCode(AND, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(RLA, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(AND, AbsoluteX, 4, true), // xD
-    OpCode(ROL, AbsoluteX, 7, false), // xE
-    OpCode(RLA, AbsoluteX, 7, false), // xF
-    // 4x
-    OpCode(RTI, Implicit, 6, false), // x0
-    OpCode(EOR, IndirectX, 6, false), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(SRE, IndirectX, 8, false), // x3
-    OpCode(NOP, ZeroPage, 3, false), // x4
-    OpCode(EOR, ZeroPage, 3, false), // x5
-    OpCode(LSR, ZeroPage, 5, false), // x6
-    OpCode(SRE, ZeroPage, 5, false), // x7
-    OpCode(PHA, Implicit, 3, false), // x8
-    OpCode(EOR, Immediate, 2, false), // x9
-    OpCode(LSR, Implicit, 2, false), // xA
-    OpCode(ALR, Immediate, 2, false), // xB
-    OpCode(JMP, Absolute, 3, false), // xC
-    OpCode(EOR, Absolute, 4, false), // xD
-    OpCode(LSR, Absolute, 6, false), // xE
-    OpCode(SRE, Absolute, 6, false), // xF
-    // 5x
-    OpCode(BVC, Relative, 2, true), // x0
-    OpCode(EOR, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(SRE, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(EOR, ZeroPageX, 4, false), // x5
-    OpCode(LSR, ZeroPageX, 6, false), // x6
-    OpCode(SRE, ZeroPageX, 6, false), // x7
-    OpCode(CLI, Implicit, 2, false), // x8
-    OpCode(EOR, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(SRE, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(EOR, AbsoluteX, 4, true), // xD
-    OpCode(LSR, AbsoluteX, 7, false), // xE
-    OpCode(SRE, AbsoluteX, 7, false), // xF
-    // 6x
-    OpCode(RTS, Implicit, 6, false), // x0
-    OpCode(ADC, IndirectX, 6, false), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(RRA, IndirectX, 8, false), // x3
-    OpCode(NOP, ZeroPage, 3, false), // x4
-    OpCode(ADC, ZeroPage, 3, false), // x5
-    OpCode(ROR, ZeroPage, 5, false), // x6
-    OpCode(RRA, ZeroPage, 5, false), // x7
-    OpCode(PLA, Implicit, 4, false), // x8
-    OpCode(ADC, Immediate, 2, false), // x9
-    OpCode(ROR, Implicit, 2, false), // xA
-    OpCode(ARR, Immediate, 2, false), // xB
-    OpCode(JMP, Indirect, 5, false), // xC
-    OpCode(ADC, Absolute, 4, false), // xD
-    OpCode(ROR, Absolute, 6, false), // xE
-    OpCode(RRA, Absolute, 6, false), // xF
-    // 7x
-    OpCode(BVS, Relative, 2, true), // x0
-    OpCode(ADC, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(RRA, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(ADC, ZeroPageX, 4, false), // x5
-    OpCode(ROR, ZeroPageX, 6, false), // x6
-    OpCode(RRA, ZeroPageX, 6, false), // x7
-    OpCode(SEI, Implicit, 2, false), // x8
-    OpCode(ADC, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(RRA, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(ADC, AbsoluteX, 4, true), // xD
-    OpCode(ROR, AbsoluteX, 7, false), // xE
-    OpCode(RRA, AbsoluteX, 7, false), // xF
-    // 8x
-    OpCode(NOP, Immediate, 2, false), // x0
-    OpCode(STA, IndirectX, 6, false), // x1
-    OpCode(NOP, Immediate, 2, false), // x2
-    OpCode(SAX, IndirectX, 6, false), // x3
-    OpCode(STY, ZeroPage, 3, false), // x4
-    OpCode(STA, ZeroPage, 3, false), // x5
-    OpCode(STX, ZeroPage, 3, false), // x6
-    OpCode(SAX, ZeroPage, 3, false), // x7
-    OpCode(DEY, Implicit, 2, false), // x8
-    OpCode(NOP, Immediate, 2, false), // x9
-    OpCode(TXA, Implicit, 2, false), // xA
-    OpCode(XAA, Immediate, 2, false), // xB
-    OpCode(STY, Absolute, 4, false), // xC
-    OpCode(STA, Absolute, 4, false), // xD
-    OpCode(STX, Absolute, 4, false), // xE
-    OpCode(SAX, Absolute, 4, false), // xF
-    // 9x
-    OpCode(BCC, Relative, 2, true), // x0
-    OpCode(STA, IndirectY, 6, false), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(AHX, IndirectY, 6, false), // x3
-    OpCode(STY, ZeroPageX, 4, false), // x4
-    OpCode(STA, ZeroPageX, 4, false), // x5
-    OpCode(STX, ZeroPageY, 4, false), // x6
-    OpCode(SAX, ZeroPageY, 4, false), // x7
-    OpCode(TYA, Implicit, 2, false), // x8
-    OpCode(STA, AbsoluteY, 5, false), // x9
-    OpCode(TXS, Implicit, 2, false), // xA
-    OpCode(TAS, AbsoluteY, 5, false), // xB
-    OpCode(SHY, AbsoluteX, 5, false), // xC
-    OpCode(STA, AbsoluteX, 5, false), // xD
-    OpCode(SHX, AbsoluteY, 5, false), // xE
-    OpCode(AHX, AbsoluteY, 5, false), // xF
-    // Ax
-    OpCode(LDY, Immediate, 2, false), // x0
-    OpCode(LDA, IndirectX, 6, false), // x1
-    OpCode(LDX, Immediate, 2, false), // x2
-    OpCode(LAX, IndirectX, 6, false), // x3
-    OpCode(LDY, ZeroPage, 3, false), // x4
-    OpCode(LDA, ZeroPage, 3, false), // x5
-    OpCode(LDX, ZeroPage, 3, false), // x6
-    OpCode(LAX, ZeroPage, 3, false), // x7
-    OpCode(TAY, Implicit, 2, false), // x8
-    OpCode(LDA, Immediate, 2, false), // x9
-    OpCode(TAX, Implicit, 2, false), // xA
-    OpCode(LAX, Immediate, 2, false), // xB
-    OpCode(LDY, Absolute, 4, false), // xC
-    OpCode(LDA, Absolute, 4, false), // xD
-    OpCode(LDX, Absolute, 4, false), // xE
-    OpCode(LAX, Absolute, 4, false), // xF
-    // Bx
-    OpCode(BCS, Relative, 2, true), // x0
-    OpCode(LDA, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(LAX, IndirectY, 5, true), // x3
-    OpCode(LDY, ZeroPageX, 4, false), // x4
-    OpCode(LDA, ZeroPageX, 4, false), // x5
-    OpCode(LDX, ZeroPageY, 4, false), // x6
-    OpCode(LAX, ZeroPageY, 4, false), // x7
-    OpCode(CLV, Implicit, 2, false), // x8
-    OpCode(LDA, AbsoluteY, 4, true), // x9
-    OpCode(TSX, Implicit, 2, false), // xA
-    OpCode(LAS, AbsoluteY, 4, true), // xB
-    OpCode(LDY, AbsoluteX, 4, true), // xC
-    OpCode(LDA, AbsoluteX, 4, true), // xD
-    OpCode(LDX, AbsoluteY, 4, true), // xE
-    OpCode(LAX, AbsoluteY, 4, true), // xF
-    // Cx
-    OpCode(CPY, Immediate, 2, false), // x0
-    OpCode(CMP, IndirectX, 6, false), // x1
-    OpCode(NOP, Immediate, 2, false), // x2
-    OpCode(DCP, IndirectX, 8, false), // x3
-    OpCode(CPY, ZeroPage, 3, false), // x4
-    OpCode(CMP, ZeroPage, 3, false), // x5
-    OpCode(DEC, ZeroPage, 5, false), // x6
-    OpCode(DCP, ZeroPage, 5, false), // x7
-    OpCode(INY, Implicit, 2, false), // x8
-    OpCode(CMP, Immediate, 2, false), // x9
-    OpCode(DEX, Implicit, 2, false), // xA
-    OpCode(AXS, Immediate, 2, false), // xB
-    OpCode(CPY, Absolute, 4, false), // xC
-    OpCode(CMP, Absolute, 4, false), // xD
-    OpCode(DEC, Absolute, 6, false), // xE
-    OpCode(DCP, Absolute, 6, false), // xF
-    // Dx
-    OpCode(BNE, Relative, 2, true), // x0
-    OpCode(CMP, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(DCP, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(CMP, ZeroPageX, 4, false), // x5
-    OpCode(DEC, ZeroPageX, 6, false), // x6
-    OpCode(DCP, ZeroPageX, 6, false), // x7
-    OpCode(CLD, Implicit, 2, false), // x8
-    OpCode(CMP, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(DCP, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(CMP, AbsoluteX, 4, true), // xD
-    OpCode(DEC, AbsoluteX, 7, false), // xE
-    OpCode(DCP, AbsoluteX, 7, false), // xF
-    // Ex
-    OpCode(CPX, Immediate, 2, false), // x0
-    OpCode(SBC, IndirectX, 6, false), // x1
-    OpCode(NOP, Immediate, 2, false), // x2
-    OpCode(ISC, IndirectX, 8, false), // x3
-    OpCode(CPX, ZeroPage, 3, false), // x4
-    OpCode(SBC, ZeroPage, 3, false), // x5
-    OpCode(INC, ZeroPage, 5, false), // x6
-    OpCode(ISC, ZeroPage, 5, false), // x7
-    OpCode(INX, Implicit, 2, false), // x8
-    OpCode(SBC, Immediate, 2, false), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(SBC, Immediate, 2, false), // xB
-    OpCode(CPX, Absolute, 4, false), // xC
-    OpCode(SBC, Absolute, 4, false), // xD
-    OpCode(INC, Absolute, 6, false), // xE
-    OpCode(ISC, Absolute, 6, false), // xF
-    // Fx
-    OpCode(BEQ, Relative, 2, true), // x0
-    OpCode(SBC, IndirectY, 5, true), // x1
-    OpCode(KIL, Implicit, 0, false), // x2
-    OpCode(ISC, IndirectY, 8, false), // x3
-    OpCode(NOP, ZeroPageX, 4, false), // x4
-    OpCode(SBC, ZeroPageX, 4, false), // x5
-    OpCode(INC, ZeroPageX, 6, false), // x6
-    OpCode(ISC, ZeroPageX, 6, false), // x7
-    OpCode(SED, Implicit, 2, false), // x8
-    OpCode(SBC, AbsoluteY, 4, true), // x9
-    OpCode(NOP, Implicit, 2, false), // xA
-    OpCode(ISC, AbsoluteY, 7, false), // xB
-    OpCode(NOP, AbsoluteX, 4, true), // xC
-    OpCode(SBC, AbsoluteX, 4, true), // xD
-    OpCode(INC, AbsoluteX, 7, false), // xE
-    OpCode(ISC, AbsoluteX, 7, false), // xF
-];
+const OPCODES: [OpCode; 256] = {
+    use Op::*;
+    use AddressingMode::*;
+    [
+        // 0x
+        OpCode(BRK, Implicit, 7, false), // x0
+        OpCode(ORA, IndirectX, 6, false), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(SLO, IndirectX, 8, false), // x3
+        OpCode(NOP, ZeroPage, 3, false), // x4
+        OpCode(ORA, ZeroPage, 3, false), // x5
+        OpCode(ASL, ZeroPage, 5, false), // x6
+        OpCode(SLO, ZeroPage, 5, false), // x7
+        OpCode(PHP, Implicit, 3, false), // x8
+        OpCode(ORA, Immediate, 2, false), // x9
+        OpCode(ASL, Implicit, 2, false), // xA
+        OpCode(ANC, Immediate, 2, false), // xB
+        OpCode(NOP, Absolute, 4, false), // xC
+        OpCode(ORA, Absolute, 4, false), // xD
+        OpCode(ASL, Absolute, 6, false), // xE
+        OpCode(SLO, Absolute, 6, false), // xF
+        // 1x
+        OpCode(BPL, Relative, 2, true), // x0
+        OpCode(ORA, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(SLO, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(ORA, ZeroPageX, 4, false), // x5
+        OpCode(ASL, ZeroPageX, 6, false), // x6
+        OpCode(SLO, ZeroPageX, 6, false), // x7
+        OpCode(CLC, Implicit, 2, false), // x8
+        OpCode(ORA, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(SLO, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(ORA, AbsoluteX, 4, true), // xD
+        OpCode(ASL, AbsoluteX, 7, false), // xE
+        OpCode(SLO, AbsoluteX, 7, false), // xF
+        // 2x
+        OpCode(JSR, Absolute, 6, false), // x0
+        OpCode(AND, IndirectX, 6, false), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(RLA, IndirectX, 8, false), // x3
+        OpCode(BIT, ZeroPage, 3, false), // x4
+        OpCode(AND, ZeroPage, 3, false), // x5
+        OpCode(ROL, ZeroPage, 5, false), // x6
+        OpCode(RLA, ZeroPage, 5, false), // x7
+        OpCode(PLP, Implicit, 4, false), // x8
+        OpCode(AND, Immediate, 2, false), // x9
+        OpCode(ROL, Implicit, 2, false), // xA
+        OpCode(ANC, Immediate, 2, false), // xB
+        OpCode(BIT, Absolute, 4, false), // xC
+        OpCode(AND, Absolute, 4, false), // xD
+        OpCode(ROL, Absolute, 6, false), // xE
+        OpCode(RLA, Absolute, 6, false), // xF
+        // 3x
+        OpCode(BMI, Relative, 2, true), // x0
+        OpCode(AND, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(RLA, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(AND, ZeroPageX, 4, false), // x5
+        OpCode(ROL, ZeroPageX, 6, false), // x6
+        OpCode(RLA, ZeroPageX, 6, false), // x7
+        OpCode(SEC, Implicit, 2, false), // x8
+        OpCode(AND, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(RLA, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(AND, AbsoluteX, 4, true), // xD
+        OpCode(ROL, AbsoluteX, 7, false), // xE
+        OpCode(RLA, AbsoluteX, 7, false), // xF
+        // 4x
+        OpCode(RTI, Implicit, 6, false), // x0
+        OpCode(EOR, IndirectX, 6, false), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(SRE, IndirectX, 8, false), // x3
+        OpCode(NOP, ZeroPage, 3, false), // x4
+        OpCode(EOR, ZeroPage, 3, false), // x5
+        OpCode(LSR, ZeroPage, 5, false), // x6
+        OpCode(SRE, ZeroPage, 5, false), // x7
+        OpCode(PHA, Implicit, 3, false), // x8
+        OpCode(EOR, Immediate, 2, false), // x9
+        OpCode(LSR, Implicit, 2, false), // xA
+        OpCode(ALR, Immediate, 2, false), // xB
+        OpCode(JMP, Absolute, 3, false), // xC
+        OpCode(EOR, Absolute, 4, false), // xD
+        OpCode(LSR, Absolute, 6, false), // xE
+        OpCode(SRE, Absolute, 6, false), // xF
+        // 5x
+        OpCode(BVC, Relative, 2, true), // x0
+        OpCode(EOR, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(SRE, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(EOR, ZeroPageX, 4, false), // x5
+        OpCode(LSR, ZeroPageX, 6, false), // x6
+        OpCode(SRE, ZeroPageX, 6, false), // x7
+        OpCode(CLI, Implicit, 2, false), // x8
+        OpCode(EOR, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(SRE, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(EOR, AbsoluteX, 4, true), // xD
+        OpCode(LSR, AbsoluteX, 7, false), // xE
+        OpCode(SRE, AbsoluteX, 7, false), // xF
+        // 6x
+        OpCode(RTS, Implicit, 6, false), // x0
+        OpCode(ADC, IndirectX, 6, false), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(RRA, IndirectX, 8, false), // x3
+        OpCode(NOP, ZeroPage, 3, false), // x4
+        OpCode(ADC, ZeroPage, 3, false), // x5
+        OpCode(ROR, ZeroPage, 5, false), // x6
+        OpCode(RRA, ZeroPage, 5, false), // x7
+        OpCode(PLA, Implicit, 4, false), // x8
+        OpCode(ADC, Immediate, 2, false), // x9
+        OpCode(ROR, Implicit, 2, false), // xA
+        OpCode(ARR, Immediate, 2, false), // xB
+        OpCode(JMP, Indirect, 5, false), // xC
+        OpCode(ADC, Absolute, 4, false), // xD
+        OpCode(ROR, Absolute, 6, false), // xE
+        OpCode(RRA, Absolute, 6, false), // xF
+        // 7x
+        OpCode(BVS, Relative, 2, true), // x0
+        OpCode(ADC, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(RRA, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(ADC, ZeroPageX, 4, false), // x5
+        OpCode(ROR, ZeroPageX, 6, false), // x6
+        OpCode(RRA, ZeroPageX, 6, false), // x7
+        OpCode(SEI, Implicit, 2, false), // x8
+        OpCode(ADC, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(RRA, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(ADC, AbsoluteX, 4, true), // xD
+        OpCode(ROR, AbsoluteX, 7, false), // xE
+        OpCode(RRA, AbsoluteX, 7, false), // xF
+        // 8x
+        OpCode(NOP, Immediate, 2, false), // x0
+        OpCode(STA, IndirectX, 6, false), // x1
+        OpCode(NOP, Immediate, 2, false), // x2
+        OpCode(SAX, IndirectX, 6, false), // x3
+        OpCode(STY, ZeroPage, 3, false), // x4
+        OpCode(STA, ZeroPage, 3, false), // x5
+        OpCode(STX, ZeroPage, 3, false), // x6
+        OpCode(SAX, ZeroPage, 3, false), // x7
+        OpCode(DEY, Implicit, 2, false), // x8
+        OpCode(NOP, Immediate, 2, false), // x9
+        OpCode(TXA, Implicit, 2, false), // xA
+        OpCode(XAA, Immediate, 2, false), // xB
+        OpCode(STY, Absolute, 4, false), // xC
+        OpCode(STA, Absolute, 4, false), // xD
+        OpCode(STX, Absolute, 4, false), // xE
+        OpCode(SAX, Absolute, 4, false), // xF
+        // 9x
+        OpCode(BCC, Relative, 2, true), // x0
+        OpCode(STA, IndirectY, 6, false), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(AHX, IndirectY, 6, false), // x3
+        OpCode(STY, ZeroPageX, 4, false), // x4
+        OpCode(STA, ZeroPageX, 4, false), // x5
+        OpCode(STX, ZeroPageY, 4, false), // x6
+        OpCode(SAX, ZeroPageY, 4, false), // x7
+        OpCode(TYA, Implicit, 2, false), // x8
+        OpCode(STA, AbsoluteY, 5, false), // x9
+        OpCode(TXS, Implicit, 2, false), // xA
+        OpCode(TAS, AbsoluteY, 5, false), // xB
+        OpCode(SHY, AbsoluteX, 5, false), // xC
+        OpCode(STA, AbsoluteX, 5, false), // xD
+        OpCode(SHX, AbsoluteY, 5, false), // xE
+        OpCode(AHX, AbsoluteY, 5, false), // xF
+        // Ax
+        OpCode(LDY, Immediate, 2, false), // x0
+        OpCode(LDA, IndirectX, 6, false), // x1
+        OpCode(LDX, Immediate, 2, false), // x2
+        OpCode(LAX, IndirectX, 6, false), // x3
+        OpCode(LDY, ZeroPage, 3, false), // x4
+        OpCode(LDA, ZeroPage, 3, false), // x5
+        OpCode(LDX, ZeroPage, 3, false), // x6
+        OpCode(LAX, ZeroPage, 3, false), // x7
+        OpCode(TAY, Implicit, 2, false), // x8
+        OpCode(LDA, Immediate, 2, false), // x9
+        OpCode(TAX, Implicit, 2, false), // xA
+        OpCode(LAX, Immediate, 2, false), // xB
+        OpCode(LDY, Absolute, 4, false), // xC
+        OpCode(LDA, Absolute, 4, false), // xD
+        OpCode(LDX, Absolute, 4, false), // xE
+        OpCode(LAX, Absolute, 4, false), // xF
+        // Bx
+        OpCode(BCS, Relative, 2, true), // x0
+        OpCode(LDA, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(LAX, IndirectY, 5, true), // x3
+        OpCode(LDY, ZeroPageX, 4, false), // x4
+        OpCode(LDA, ZeroPageX, 4, false), // x5
+        OpCode(LDX, ZeroPageY, 4, false), // x6
+        OpCode(LAX, ZeroPageY, 4, false), // x7
+        OpCode(CLV, Implicit, 2, false), // x8
+        OpCode(LDA, AbsoluteY, 4, true), // x9
+        OpCode(TSX, Implicit, 2, false), // xA
+        OpCode(LAS, AbsoluteY, 4, true), // xB
+        OpCode(LDY, AbsoluteX, 4, true), // xC
+        OpCode(LDA, AbsoluteX, 4, true), // xD
+        OpCode(LDX, AbsoluteY, 4, true), // xE
+        OpCode(LAX, AbsoluteY, 4, true), // xF
+        // Cx
+        OpCode(CPY, Immediate, 2, false), // x0
+        OpCode(CMP, IndirectX, 6, false), // x1
+        OpCode(NOP, Immediate, 2, false), // x2
+        OpCode(DCP, IndirectX, 8, false), // x3
+        OpCode(CPY, ZeroPage, 3, false), // x4
+        OpCode(CMP, ZeroPage, 3, false), // x5
+        OpCode(DEC, ZeroPage, 5, false), // x6
+        OpCode(DCP, ZeroPage, 5, false), // x7
+        OpCode(INY, Implicit, 2, false), // x8
+        OpCode(CMP, Immediate, 2, false), // x9
+        OpCode(DEX, Implicit, 2, false), // xA
+        OpCode(AXS, Immediate, 2, false), // xB
+        OpCode(CPY, Absolute, 4, false), // xC
+        OpCode(CMP, Absolute, 4, false), // xD
+        OpCode(DEC, Absolute, 6, false), // xE
+        OpCode(DCP, Absolute, 6, false), // xF
+        // Dx
+        OpCode(BNE, Relative, 2, true), // x0
+        OpCode(CMP, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(DCP, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(CMP, ZeroPageX, 4, false), // x5
+        OpCode(DEC, ZeroPageX, 6, false), // x6
+        OpCode(DCP, ZeroPageX, 6, false), // x7
+        OpCode(CLD, Implicit, 2, false), // x8
+        OpCode(CMP, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(DCP, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(CMP, AbsoluteX, 4, true), // xD
+        OpCode(DEC, AbsoluteX, 7, false), // xE
+        OpCode(DCP, AbsoluteX, 7, false), // xF
+        // Ex
+        OpCode(CPX, Immediate, 2, false), // x0
+        OpCode(SBC, IndirectX, 6, false), // x1
+        OpCode(NOP, Immediate, 2, false), // x2
+        OpCode(ISC, IndirectX, 8, false), // x3
+        OpCode(CPX, ZeroPage, 3, false), // x4
+        OpCode(SBC, ZeroPage, 3, false), // x5
+        OpCode(INC, ZeroPage, 5, false), // x6
+        OpCode(ISC, ZeroPage, 5, false), // x7
+        OpCode(INX, Implicit, 2, false), // x8
+        OpCode(SBC, Immediate, 2, false), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(SBC, Immediate, 2, false), // xB
+        OpCode(CPX, Absolute, 4, false), // xC
+        OpCode(SBC, Absolute, 4, false), // xD
+        OpCode(INC, Absolute, 6, false), // xE
+        OpCode(ISC, Absolute, 6, false), // xF
+        // Fx
+        OpCode(BEQ, Relative, 2, true), // x0
+        OpCode(SBC, IndirectY, 5, true), // x1
+        OpCode(KIL, Implicit, 0, false), // x2
+        OpCode(ISC, IndirectY, 8, false), // x3
+        OpCode(NOP, ZeroPageX, 4, false), // x4
+        OpCode(SBC, ZeroPageX, 4, false), // x5
+        OpCode(INC, ZeroPageX, 6, false), // x6
+        OpCode(ISC, ZeroPageX, 6, false), // x7
+        OpCode(SED, Implicit, 2, false), // x8
+        OpCode(SBC, AbsoluteY, 4, true), // x9
+        OpCode(NOP, Implicit, 2, false), // xA
+        OpCode(ISC, AbsoluteY, 7, false), // xB
+        OpCode(NOP, AbsoluteX, 4, true), // xC
+        OpCode(SBC, AbsoluteX, 4, true), // xD
+        OpCode(INC, AbsoluteX, 7, false), // xE
+        OpCode(ISC, AbsoluteX, 7, false), // xF
+    ]
+};
+
+// http://wiki.nesdev.com/w/index.php/Status_flags
+struct Flags {
+    negative: bool,
+    overflow: bool,
+    break_: bool,
+    decimal: bool,
+    interrupt: bool,
+    zero: bool,
+    carry: bool
+}
+
+impl Flags {
+    fn new() -> Self {
+        Flags { negative: false, overflow: false, break_: false, decimal: false, interrupt: false, zero: false, carry: false }
+    }
+}
+
+impl Into<u8> for &Flags {
+    fn into(self) -> u8 {
+        unimplemented!()
+    }
+}
+
+impl From<u8> for Flags {
+    fn from(_: u8) -> Self {
+        unimplemented!()
+    }
+}
+
+// http://nesdev.com/6502_cpu.txt
+struct RP2A03 {
+    acc: u8,
+    x: u8,
+    y: u8,
+    flags: Flags,
+    sp: u8,
+    pc: u16,
+
+    mem_map: Box<dyn crate::memory::AddressSpace>
+}
+
+impl RP2A03 {
+    fn new(memory_map: Box<dyn AddressSpace>) -> Self {
+        RP2A03 { acc: 0, x: 0, y: 0, flags: Flags::new(), sp: 0, pc: 0, mem_map: memory_map }
+    }
+
+    // TODO
+    fn push_stack(&mut self, v: u8) {
+        unimplemented!()
+    }
+    fn push_stack16(&mut self, v: u16) {
+        unimplemented!()
+    }
+    fn pop_stack(&mut self) -> u8 {
+        unimplemented!()
+    }
+    fn pop_stack16(&mut self) -> u16 {
+        unimplemented!()
+    }
+
+    // sets the negative and zero flags
+    fn set_flags_from(&mut self, v: u8) {
+        self.flags.negative = (v & 0x80) != 0;
+        self.flags.zero = v == 0;
+    }
+
+    fn set_flags_from_acc(&mut self) {
+        self.set_flags_from(self.acc)
+    }
+}
+
+// Operations
+impl RP2A03 {
+
+    // http://obelisk.me.uk/6502/reference.html#ADC
+    fn adc(&mut self, v: u8) {
+        let (v1, o1) = self.acc.overflowing_add(v);
+        let (v2, o2) = v1.overflowing_add(self.flags.carry as u8);
+
+        self.flags.carry = o1 | o2;
+        // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+        self.flags.overflow = (v^v2) & (self.acc^v2) & 0x80 != 0;
+        self.acc = v2;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#AND
+    fn and(&mut self, v: u8) {
+        self.acc = self.acc & v;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#ASL
+    // NOTE: this can apply to the accumulator or some memory location
+    fn asl(&mut self, v: u8) -> u8 {
+        let mult = v << 1;
+        self.flags.carry = (v & 0x80) != 0;
+        mult
+    }
+
+    fn branch_if(&mut self, branch: bool, v: u8) {
+        if branch {
+            // TODO: +1 cycle
+            // relative displacement, v is signed in this case
+            self.pc = self.pc.wrapping_add(v as i8 as u16);
+            // TODO: +1 if branching to a new page
+        }
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BCC
+    fn bcc(&mut self, v: u8) {
+        self.branch_if(!self.flags.carry, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BCS
+    fn bcs(&mut self, v: u8) {
+        self.branch_if(self.flags.carry, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BEQ
+    fn beq(&mut self, v: u8) {
+        self.branch_if(self.flags.zero, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BIT
+    fn bit(&mut self, v: u8) {
+        let r = self.acc & v;
+        self.flags.zero = r == 0;
+        self.flags.overflow = (v & 0x40) != 0; // set to the 6th bit of the value
+        self.flags.negative = (v & 0x80) != 0; // set to the 7th bit of the value
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BMI
+    fn bmi(&mut self, v: u8) {
+        self.branch_if(self.flags.negative, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BNE
+    fn bne(&mut self, v: u8) {
+        self.branch_if(!self.flags.zero, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BPL
+    fn bpl(&mut self, v: u8) {
+        self.branch_if(!self.flags.negative, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BRK
+    fn brk(&mut self) {
+        self.push_stack16(self.pc);
+        self.push_stack((&self.flags).into());
+        self.pc = self.mem_map.peek16(0xFFFE);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BVC
+    fn bvc(&mut self, v: u8) {
+        self.branch_if(!self.flags.overflow, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#BVS
+    fn bvs(&mut self, v: u8) {
+        self.branch_if(self.flags.overflow, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CLC
+    fn clc(&mut self) {
+        self.flags.carry = false
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CLD
+    fn cld(&mut self) {
+        self.flags.decimal = false
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CLI
+    fn cli(&mut self) {
+        self.flags.interrupt = false
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CLV
+    fn clv(&mut self) {
+        self.flags.overflow = false
+    }
+
+    fn compare(&mut self, a: u8, b: u8) {
+        let result = a - b;
+        self.flags.carry = a >= b;
+        self.flags.zero = a == b;
+        self.flags.negative = (result & 0x80) > 0;
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CLV
+    fn cmp(&mut self, v: u8) {
+        self.compare(self.acc, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CPX
+    fn cpx(&mut self, v: u8) {
+        self.compare(self.x, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#CPY
+    fn cpy(&mut self, v: u8) {
+        self.compare(self.y, v)
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#DEC
+    fn dec(&mut self, v: u8) -> u8 {
+        let result = v.wrapping_sub(1);
+        self.set_flags_from(result);
+        result
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#DEX
+    fn dex(&mut self) {
+        self.x = self.dec(self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#DEY
+    fn dey(&mut self) {
+        self.y = self.dec(self.y);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#EOR
+    fn eor(&mut self, v: u8) {
+        self.acc ^= v;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#INC
+    fn inc(&mut self, v: u8) -> u8 {
+        let result = v.wrapping_add(1);
+        self.set_flags_from(result);
+        result
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#INX
+    fn inx(&mut self) {
+        self.x = self.inc(self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#INY
+    fn iny(&mut self) {
+        self.y = self.inc(self.y);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#JMP
+    fn jmp(&mut self, v: u16) {
+        self.pc = v;
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#JSR
+    fn jsr(&mut self, v: u16) {
+        self.push_stack16(self.pc.wrapping_sub(1));
+        self.jmp(v);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#LDA
+    fn lda(&mut self, v: u8) {
+        self.acc = v;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#LDX
+    fn ldx(&mut self, v: u8) {
+        self.x = v;
+        self.set_flags_from(self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#LDY
+    fn ldy(&mut self, v: u8) {
+        self.y = v;
+        self.set_flags_from(self.y);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#LSR
+    fn lsr(&mut self, v: u8) -> u8 {
+        self.flags.carry = (v & 0x01) != 0;
+        let result = v >> 1;
+        self.set_flags_from(result);
+        result
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#NOP
+    fn nop(&mut self) {
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#ORA
+    fn ora(&mut self, v: u8) {
+        self.acc |= v;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#PHA
+    fn pha(&mut self) {
+        self.push_stack((&self.flags).into());
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#PLA
+    fn pla(&mut self) {
+        self.acc = self.pop_stack();
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#PLP
+    fn plp(&mut self) {
+        self.flags = self.pop_stack().into();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#ROL
+    fn rol(&mut self, v: u8) -> u8 {
+        let result = (v << 1) | self.flags.carry as u8;
+        self.flags.carry = v & 0x80 != 0;
+        self.set_flags_from(result);
+        result
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#ROR
+    fn ror(&mut self, v: u8) -> u8 {
+        let result = (v >> 1) | ((self.flags.carry as u8) << 7);
+        self.flags.carry = v & 0x01 != 0;
+        self.set_flags_from(result);
+        result
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#RTI
+    fn rti(&mut self) {
+        self.flags = self.pop_stack().into();
+        self.pc = self.pop_stack16();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#RTS
+    fn rts(&mut self) {
+        self.pc = self.pop_stack16().wrapping_add(1);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#SBC
+    fn sbc(&mut self, v: u8) {
+        let (v1, o1) = self.acc.overflowing_sub(v);
+        let (v2, o2) = v1.overflowing_sub(!self.flags.carry as u8);
+        self.flags.carry = o1 | o2;
+        // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+        self.flags.overflow = (v^v2) & (self.acc^v2) & 0x80 != 0;
+        self.acc = v2;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#SEC
+    fn sec(&mut self) {
+        self.flags.carry = true
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#SED
+    fn sed(&mut self) {
+        self.flags.decimal = true
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#SEI
+    fn sei(&mut self) {
+        self.flags.interrupt = true
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#STA
+    fn sta(&mut self, v: u16) {
+        self.mem_map.store(v, self.acc);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#STX
+    fn stx(&mut self, v: u16) {
+        self.mem_map.store(v, self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#STY
+    fn sty(&mut self, v: u16) {
+        self.mem_map.store(v, self.y);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TAX
+    fn tax(&mut self) {
+        self.x = self.acc;
+        self.set_flags_from(self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TAY
+    fn tay(&mut self) {
+        self.y = self.acc;
+        self.set_flags_from(self.y);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TSX
+    fn tsx(&mut self) {
+        self.x = self.sp;
+        self.set_flags_from(self.x);
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TXA
+    fn txa(&mut self) {
+        self.acc = self.x;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TXS
+    fn txs(&mut self) {
+        self.sp = self.x;
+        self.set_flags_from_acc();
+    }
+
+    // http://obelisk.me.uk/6502/reference.html#TYA
+    fn tya(&mut self) {
+        self.acc = self.y;
+        self.set_flags_from_acc();
+    }
+
+}
 
 pub mod generator {
     use super::*;
+    use super::Op::*;
+    use super::AddressingMode::*;
 
     const RAW_CODES: &str = r#"
 0x|BRK7|ORAizx 6|KIL|SLOizx 8|NOPzp 3|ORAzp 3|ASLzp 5|SLOzp 5|PHP3|ORAimm 2|ASL2|ANCimm 2|NOPabs 4|ORAabs 4|ASLabs 6|SLOabs 6|
