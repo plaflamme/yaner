@@ -1,5 +1,6 @@
 use clap::{Arg, App, SubCommand};
 
+mod memory;
 mod cpu;
 
 fn main() {
