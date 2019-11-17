@@ -1,5 +1,23 @@
+use clap::{Arg, App, SubCommand};
+
 mod cpu;
 
 fn main() {
-    cpu::generate_opcode_table();
+
+    let matches = App::new("rnes")
+        .subcommand(
+            SubCommand::with_name("generate").arg(
+                Arg::with_name("opcode").short("o").long("opcodes").help("Generate OpCode table")
+            )
+        )
+        .get_matches();
+
+    match matches.subcommand() {
+        ("generate", Some(args)) => {
+            if args.is_present("opcode") {
+                cpu::generator::generate_opcode_table()
+            }
+        },
+        _ => unimplemented!()
+    }
 }

@@ -404,7 +404,10 @@ const OPCODES: [OpCode; 256] = [
     OpCode(ISC, AbsoluteX, 7, false), // xF
 ];
 
-const RAW_CODES: &str = r#"
+pub mod generator {
+    use super::*;
+
+    const RAW_CODES: &str = r#"
 0x|BRK7|ORAizx 6|KIL|SLOizx 8|NOPzp 3|ORAzp 3|ASLzp 5|SLOzp 5|PHP3|ORAimm 2|ASL2|ANCimm 2|NOPabs 4|ORAabs 4|ASLabs 6|SLOabs 6|
 1x|BPLrel 2*|ORAizy 5*|KIL|SLOizy 8|NOPzpx 4|ORAzpx 4|ASLzpx 6|SLOzpx 6|CLC2|ORAaby 4*|NOP2|SLOaby 7|NOPabx 4*|ORAabx 4*|ASLabx 7|SLOabx 7|
 2x|JSRabs 6|ANDizx 6|KIL|RLAizx 8|BITzp 3|ANDzp 3|ROLzp 5|RLAzp 5|PLP4|ANDimm 2|ROL2|ANCimm 2|BITabs 4|ANDabs 4|ROLabs 6|RLAabs 6|
@@ -423,88 +426,90 @@ Ex|CPXimm 2|SBCizx 6|NOPimm 2|ISCizx 8|CPXzp 3|SBCzp 3|INCzp 5|ISCzp 5|INX2|SBCi
 Fx|BEQrel 2*|SBCizy 5*|KIL|ISCizy 8|NOPzpx 4|SBCzpx 4|INCzpx 6|ISCzpx 6|SED2|SBCaby 4*|NOP2|ISCaby 7|NOPabx 4*|SBCabx 4*|INCabx 7|ISCabx 7|
 "#;
 
-pub fn generate_opcode_table() {
-    use std::str::FromStr;
+    pub fn generate_opcode_table() {
+        use std::str::FromStr;
 
-    fn parse_code(code: &str) -> (Op, AddressingMode) {
-        let (op_str, addr_str) = code.split_at(3);
-        let op = match op_str {
-            "ADC" => ADC, "AHX" => AHX, "ANC" => ANC, "AND" => AND,
-            "ALR" => ALR, "ARR" => ARR, "ASL" => ASL, "AXS" => AXS,
-            "BCC" => BCC, "BCS" => BCS, "BEQ" => BEQ,
-            "BIT" => BIT, "BMI" => BMI, "BNE" => BNE,
-            "BPL" => BPL, "BRK" => BRK, "BVC" => BVC,
-            "BVS" => BVS, "CLC" => CLC, "CLD" => CLD,
-            "CLI" => CLI, "CLV" => CLV, "CMP" => CMP,
-            "CPX" => CPX, "CPY" => CPY, "DCP" => DCP, "DEC" => DEC,
-            "DEX" => DEX, "DEY" => DEY, "EOR" => EOR,
-            "INC" => INC, "INX" => INX, "INY" => INY, "ISC" => ISC,
-            "JMP" => JMP, "JSR" => JSR, "KIL" => KIL,
-            "LAS" => LAS, "LAX" => LAX,
-            "LDA" => LDA, "LDX" => LDX, "LDY" => LDY,
-            "LSR" => LSR, "NOP" => NOP, "ORA" => ORA,
-            "PHA" => PHA, "PHP" => PHP, "PLA" => PLA,
-            "PLP" => PLP, "RLA" => RLA, "ROL" => ROL, "ROR" => ROR, "RRA" => RRA,
-            "RTI" => RTI, "RTS" => RTS, "SAX" => SAX, "SBC" => SBC, "SHX" => SHX, "SHY" => SHY,
-            "SEC" => SEC, "SED" => SED, "SEI" => SEI,
-            "SLO" => SLO, "SRE" => SRE,
-            "STA" => STA, "STX" => STX, "STY" => STY, "TAS" => TAS,
-            "TAX" => TAX, "TAY" => TAY, "TSX" => TSX,
-            "TXA" => TXA, "TXS" => TXS, "TYA" => TYA, "XAA" => XAA,
-            c => panic!("Unexpected code {}", c)
-        };
+        fn parse_code(code: &str) -> (Op, AddressingMode) {
+            let (op_str, addr_str) = code.split_at(3);
+            let op = match op_str {
+                "ADC" => ADC, "AHX" => AHX, "ANC" => ANC, "AND" => AND,
+                "ALR" => ALR, "ARR" => ARR, "ASL" => ASL, "AXS" => AXS,
+                "BCC" => BCC, "BCS" => BCS, "BEQ" => BEQ,
+                "BIT" => BIT, "BMI" => BMI, "BNE" => BNE,
+                "BPL" => BPL, "BRK" => BRK, "BVC" => BVC,
+                "BVS" => BVS, "CLC" => CLC, "CLD" => CLD,
+                "CLI" => CLI, "CLV" => CLV, "CMP" => CMP,
+                "CPX" => CPX, "CPY" => CPY, "DCP" => DCP, "DEC" => DEC,
+                "DEX" => DEX, "DEY" => DEY, "EOR" => EOR,
+                "INC" => INC, "INX" => INX, "INY" => INY, "ISC" => ISC,
+                "JMP" => JMP, "JSR" => JSR, "KIL" => KIL,
+                "LAS" => LAS, "LAX" => LAX,
+                "LDA" => LDA, "LDX" => LDX, "LDY" => LDY,
+                "LSR" => LSR, "NOP" => NOP, "ORA" => ORA,
+                "PHA" => PHA, "PHP" => PHP, "PLA" => PLA,
+                "PLP" => PLP, "RLA" => RLA, "ROL" => ROL, "ROR" => ROR, "RRA" => RRA,
+                "RTI" => RTI, "RTS" => RTS, "SAX" => SAX, "SBC" => SBC, "SHX" => SHX, "SHY" => SHY,
+                "SEC" => SEC, "SED" => SED, "SEI" => SEI,
+                "SLO" => SLO, "SRE" => SRE,
+                "STA" => STA, "STX" => STX, "STY" => STY, "TAS" => TAS,
+                "TAX" => TAX, "TAY" => TAY, "TSX" => TSX,
+                "TXA" => TXA, "TXS" => TXS, "TYA" => TYA, "XAA" => XAA,
+                c => panic!("Unexpected code {}", c)
+            };
 
-        let addr = match addr_str {
-            "zp" => ZeroPage, "zpx" => ZeroPageX, "zpy" => ZeroPageY,
-            "ind" => Indirect, "izx" => IndirectX, "izy" => IndirectY,
-            "abs" => Absolute, "abx" => AbsoluteX, "aby" => AbsoluteY,
-            "imm" => Immediate, "rel" => Relative, "" => Implicit,
-            c => panic!("Unexpected addressing mode {}", c)
-        };
+            let addr = match addr_str {
+                "zp" => ZeroPage, "zpx" => ZeroPageX, "zpy" => ZeroPageY,
+                "ind" => Indirect, "izx" => IndirectX, "izy" => IndirectY,
+                "abs" => Absolute, "abx" => AbsoluteX, "aby" => AbsoluteY,
+                "imm" => Immediate, "rel" => Relative, "" => Implicit,
+                c => panic!("Unexpected addressing mode {}", c)
+            };
 
-        (op, addr)
+            (op, addr)
+        }
+
+        fn parse_opcode(code: &str) -> OpCode {
+            let (code_str, cycles_str) = match code.len() {
+                3 => {
+                    (code, "") // KIL
+                }
+                4 => {
+                    code.split_at(3) // BRK7
+                },
+                _ => {
+                    // ORAzp 7
+                    let parts = code.split_ascii_whitespace().collect::<Vec<_>>();
+                    (parts[0], parts[1])
+                }
+            };
+
+            let (op, addr) = parse_code(code_str);
+
+            let cycles = if cycles_str.len() > 0 {
+                u8::from_str(&cycles_str.replace('*', "")).unwrap()
+            } else { 0 };
+            OpCode(op, addr, cycles, cycles_str.contains('*'))
+        }
+
+        println!("[");
+        RAW_CODES
+            .trim()
+            .lines()
+            .enumerate()
+            .for_each(|(high_bits, line)| {
+                let codes_str: Vec<&str> = line.split_terminator('|').collect::<Vec<_>>();
+
+                assert_eq!(17, codes_str.len());
+                println!("\t// {:X?}x", high_bits);
+                codes_str
+                    .iter()
+                    .skip(1)
+                    .enumerate()
+                    .for_each(|(low_bits, &code)| {
+                        println!("\t{:?}, // x{:X?}", parse_opcode(code), low_bits)
+                    });
+            });
+        println!("]");
     }
 
-    fn parse_opcode(code: &str) -> OpCode {
-        let (code_str, cycles_str) = match code.len() {
-            3 => {
-                (code, "") // KIL
-            }
-            4 => {
-                code.split_at(3) // BRK7
-            },
-            _ => {
-                // ORAzp 7
-                let parts = code.split_ascii_whitespace().collect::<Vec<_>>();
-                (parts[0], parts[1])
-            }
-        };
-
-        let (op, addr) = parse_code(code_str);
-
-        let cycles = if cycles_str.len() > 0 {
-            u8::from_str(&cycles_str.replace('*', "")).unwrap()
-        } else { 0 };
-        OpCode(op, addr, cycles, cycles_str.contains('*'))
-    }
-
-    println!("[");
-    RAW_CODES
-        .trim()
-        .lines()
-        .enumerate()
-        .for_each(|(high_bits, line)| {
-            let codes_str: Vec<&str> = line.split_terminator('|').collect::<Vec<_>>();
-
-            assert_eq!(17, codes_str.len());
-            println!("\t// {:X?}x", high_bits);
-            codes_str
-                .iter()
-                .skip(1)
-                .enumerate()
-                .for_each(|(low_bits, &code)| {
-                    println!("\t{:?}, // x{:X?}", parse_opcode(code), low_bits)
-                });
-        });
-    println!("]");
 }

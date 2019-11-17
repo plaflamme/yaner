@@ -5,3 +5,4 @@ authors = ["Philippe Laflamme <philippe.laflamme@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+clap = "2.33.0"
