@@ -1,7 +1,7 @@
 use crate::memory::AddressSpace;
 
 // http://obelisk.me.uk/6502/reference.html
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Op {
     ADC,
     AHX,
@@ -416,7 +416,7 @@ impl From<u8> for Flags {
 }
 
 // http://nesdev.com/6502_cpu.txt
-struct RP2A03 {
+pub struct RP2A03 {
     acc: u8,
     x: u8,
     y: u8,
@@ -430,6 +430,127 @@ struct RP2A03 {
 impl RP2A03 {
     fn new(memory_map: Box<dyn AddressSpace>) -> Self {
         RP2A03 { acc: 0, x: 0, y: 0, flags: Flags::new(), sp: 0, pc: 0, mem_map: memory_map }
+    }
+
+    fn tick(&mut self) {
+        let opcode_value = self.mem_map.peek(self.pc);
+        let opcode = &OPCODES[opcode_value as usize];
+        self.pc = self.pc.wrapping_add(1);
+        let (value, addr) = match opcode.1 {
+            AddressingMode::Immediate =>
+                (Some(self.mem_map.peek(self.pc) as u16), None),
+            AddressingMode::ZeroPage => {
+                let addr = self.mem_map.peek(self.pc) as u16;
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+            AddressingMode::ZeroPageX => {
+                let addr = self.mem_map.peek(self.pc).wrapping_add(self.x) as u16;
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+            AddressingMode::ZeroPageY =>  {
+                let addr = self.mem_map.peek(self.pc).wrapping_add(self.y) as u16;
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+
+            AddressingMode::Absolute => {
+                let addr = self.mem_map.peek16(self.pc);
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+            AddressingMode::AbsoluteX => {
+                let addr = self.mem_map.peek16(self.pc).wrapping_add(self.x as u16);
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+            AddressingMode::AbsoluteY => {
+                let addr = self.mem_map.peek16(self.pc).wrapping_add(self.y as u16);
+                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+            },
+
+            AddressingMode::Indirect => {
+                // this is only used by JMP and its behaviour was actually buggy.
+                //   if addr is 0x01FF, it would fetch the lsb from 0x01FF, but msb at 0x0100 instead of 0x0200
+                let addr = self.mem_map.peek16(self.pc);
+                let lsb = self.mem_map.peek(addr) as u16;
+                let msb_addr = if addr & 0xFF != 0xFF { addr.wrapping_add(1) } else { addr & 0xFF00 };
+                let msb = self.mem_map.peek(msb_addr) as u16;
+                let v = (msb << 8) | lsb;
+                (Some(v), Some(addr))
+            },
+            AddressingMode::IndirectX => {
+                // val = PEEK(PEEK((arg + X) % 256) + PEEK((arg + X + 1) % 256) * 256)
+                let addr = self.mem_map.peek(self.pc).wrapping_add(self.x);
+                let v = self.mem_map.peek16(addr as u16);
+                (Some(v), Some(addr as u16))
+            },
+            AddressingMode::IndirectY => {
+                // val = PEEK(PEEK(arg) + PEEK((arg + 1) % 256) * 256 + Y)
+                let addr = self.mem_map.peek(self.pc);
+                let v = self.mem_map.peek16(addr as u16).wrapping_add(self.y as u16);
+                (Some(v), Some(addr as u16))
+            },
+
+            AddressingMode::Accumulator => (Some(self.acc as u16), None),
+            AddressingMode::Relative => (Some(self.mem_map.peek(self.pc) as u16), None),
+
+            AddressingMode::Implicit => (None, None)
+        };
+
+        match (opcode.0, value, addr) {
+            (Op::ADC, Some(v), None) => self.adc(v as u8),
+            (Op::AND, Some(v), None) => self.and(v as u8),
+
+            (Op::ASL, Some(v), None) => {
+                self.acc = self.asl(v as u8);
+                self.set_flags_from_acc();
+            },
+            (Op::ASL, Some(v), Some(addr)) => {
+                let result = self.asl(v as u8);
+                self.mem_map.store(addr, result);
+                self.set_flags_from(result);
+            },
+
+            (Op::BCC, Some(v), _) => self.bcc(v as u8),
+            (Op::BCS, Some(v), _) => self.bcs(v as u8),
+            (Op::BEQ, Some(v), _) => self.beq(v as u8),
+            (Op::BIT, Some(v), _) => self.bit(v as u8),
+            (Op::BMI, Some(v), _) => self.bmi(v as u8),
+            (Op::BNE, Some(v), _) => self.bne(v as u8),
+            (Op::BPL, Some(v), _) => self.bpl(v as u8),
+            (Op::BRK, None, None) => self.brk(),
+            (Op::BVC, Some(v), _) => self.bvc(v as u8),
+            (Op::BVS, Some(v), _) => self.bvs(v as u8),
+            (Op::CLC, None, None) => self.clc(),
+            (Op::CLD, None, None) => self.cld(),
+            (Op::CLI, None, _) => self.cli(),
+            (Op::CLV, None, _) => self.clv(),
+
+            (Op::CMP, Some(v), _) => self.cmp(v as u8),
+            (Op::CPX, Some(v), _) => self.cpx(v as u8),
+            (Op::CPY, Some(v), _) => self.cpy(v as u8),
+
+            (Op::DEC, Some(v), Some(addr)) => {
+                let result = self.dec(v as u8);
+                self.mem_map.store(addr, result);
+                self.set_flags_from(result);
+            },
+            (Op::DEX, None, _) => self.dex(),
+            (Op::DEY, None, _) => self.dey(),
+
+            (Op::EOR, Some(v), _) => self.eor(v as u8),
+
+            (Op::INC, Some(v), Some(addr)) => {
+                let result = self.inc(v as u8);
+                self.mem_map.store(addr, result);
+                self.set_flags_from(result);
+            },
+            (Op::INX, None, _) => self.inx(),
+            (Op::INY, None, _) => self.iny(),
+
+            (Op::JMP, Some(addr), _) => self.jmp(addr),
+            (Op::JSR, Some(v), _) => self.jsr(v),
+
+            _ => unimplemented!()
+        }
+
     }
 
     // TODO
