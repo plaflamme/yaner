@@ -2,6 +2,8 @@ use clap::{Arg, App, SubCommand};
 
 mod memory;
 mod cpu;
+mod nes;
+mod rom;
 
 fn main() {
 
