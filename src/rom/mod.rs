@@ -16,7 +16,8 @@ use nom::{
 };
 use std::convert::TryFrom;
 
-struct Header {
+#[derive(Debug)]
+pub struct Header {
     prg_rom_size: u8,
     chr_rom_size: u8,
     flags_6: Flags6,
@@ -80,7 +81,7 @@ impl From<Flags9> for TvStandard {
 
 
 #[derive(Debug)]
-struct Rom {
+pub struct Rom {
     title: Option<String>,
     mapper: u8,
     nametable_mirroring: NametableMirroring,
@@ -91,7 +92,7 @@ struct Rom {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-enum RomError {
+pub enum RomError {
     InvalidFormat,
     ParseError(String),
     UnexpectedEof
