@@ -10,6 +10,7 @@ mod rom;
 use rom::{Rom, RomError};
 
 trait Mapper {
+    fn name(&self) -> String;
     fn read_u8(&self, addr: u16) -> u8;
     fn write_u8(&self, addr: u16, value: u8);
 }
@@ -27,6 +28,7 @@ impl Display for Cartridge {
         writeln!(f, "\tPRG ROM size: {} bytes", self.rom.prg_rom.len())?;
         writeln!(f, "\tCHR ROM size: {} bytes", self.rom.chr_rom.len())?;
         writeln!(f, "\tPRG RAM size: {} bytes", self.rom.prg_ram_size)?;
+        writeln!(f, "\tMapper      : {} ({})", self.mapper.name(), self.rom.mapper)?;
         writeln!(f, "\tMirroring   : {:?}", self.rom.nametable_mirroring)?;
         writeln!(f, "\tTV Standard : {:?}", self.rom.tv_standard)
     }
@@ -36,7 +38,6 @@ impl Display for Cartridge {
 pub enum CartridgeError {
     RomError(RomError),
     IoError(std::io::Error),
-    UnimplementedMapper(u8),
 }
 
 impl From<RomError> for CartridgeError {
@@ -62,7 +63,7 @@ impl TryFrom<PathBuf> for Cartridge {
 
         let mapper: Box<dyn Mapper> = match rom.mapper {
             0 => Box::new(mapper::NROM::from(&rom)),
-            _ => Err(CartridgeError::UnimplementedMapper(rom.mapper))?
+            _ => Box::new(mapper::Unknown()), // NOTE: this allows parsing to succeed, but running it will fail
         };
 
         Ok(

@@ -2,6 +2,22 @@ use super::Mapper;
 use super::rom::Rom;
 use std::cell::Cell;
 
+pub struct Unknown();
+
+impl Mapper for Unknown {
+    fn name(&self) -> String {
+        "Unknown".to_string()
+    }
+
+    fn read_u8(&self, addr: u16) -> u8 {
+        unimplemented!()
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        unimplemented!()
+    }
+}
+
 // http://wiki.nesdev.com/w/index.php/NROM
 pub struct NROM {
     prg_ram: Cell<[u8; 2048]>,
@@ -18,6 +34,9 @@ impl From<&Rom> for NROM {
 }
 
 impl Mapper for NROM {
+    fn name(&self) -> String {
+        "NROM".to_string()
+    }
 
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
