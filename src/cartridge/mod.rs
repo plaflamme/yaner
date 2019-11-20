@@ -10,7 +10,8 @@ mod rom;
 use rom::{Rom, RomError};
 
 trait Mapper {
-
+    fn read_u8(&self, addr: u16) -> u8;
+    fn write_u8(&self, addr: u16, value: u8);
 }
 
 pub struct Cartridge {
@@ -60,7 +61,7 @@ impl TryFrom<PathBuf> for Cartridge {
         let rom = Rom::try_from(buf.as_slice())?;
 
         let mapper: Box<dyn Mapper> = match rom.mapper {
-            0 => Box::new(mapper::NROM {}),
+            0 => Box::new(mapper::NROM::from(&rom)),
             _ => Err(CartridgeError::UnimplementedMapper(rom.mapper))?
         };
 
