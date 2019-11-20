@@ -59,7 +59,7 @@ bitflags! {
 
 // https://wiki.nesdev.com/w/index.php/Mirroring#Nametable_Mirroring
 #[derive(PartialEq, Eq, Debug)]
-enum NametableMirroring {
+pub enum NametableMirroring {
     Horizontal, // vertical arrangement
     Vertical, // horizontal arrangement
     FourScreen
@@ -74,7 +74,7 @@ impl From<Flags6> for NametableMirroring {
 }
 
 #[derive(PartialEq, Eq, Debug)]
-enum TvStandard {
+pub enum TvStandard {
     NTSC,
     PAL
 }
@@ -86,16 +86,15 @@ impl From<Flags9> for TvStandard {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Rom {
-    title: Option<String>,
-    mapper: u8,
-    nametable_mirroring: NametableMirroring,
-    tv_standard: TvStandard,
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-    prg_ram_size: usize
+    pub title: Option<String>,
+    pub mapper: u8,
+    pub nametable_mirroring: NametableMirroring,
+    pub tv_standard: TvStandard,
+    pub prg_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+    pub prg_ram_size: usize
 }
 
 #[derive(PartialEq, Eq, Debug)]

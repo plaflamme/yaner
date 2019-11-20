@@ -1,6 +1,6 @@
 struct Nes {
     ram: [u8; 0x0800],
-    // TODO: mapper: Mapper,
+    cartridge: crate::cartridge::Cartridge,
     cpu: crate::cpu::RP2A03,
     // TODO: ppu
     // TODO: apu

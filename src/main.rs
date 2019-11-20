@@ -3,8 +3,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use crate::cartridge::Cartridge;
 
 mod memory;
+mod cartridge;
 mod cpu;
 mod nes;
 mod rom;
@@ -26,11 +28,8 @@ fn main() {
             cpu::generator::generate_opcode_table()
         },
         Info { rom } => {
-            let mut f = File::open(rom).unwrap();
-            let mut buffer = Vec::new();
-            // read the whole file
-            f.read_to_end(&mut buffer).unwrap();
-            println!("{:?}", rom::Rom::try_from(buffer.as_slice()).unwrap());
+            let cartridge = Cartridge::try_from(rom).unwrap();
+            println!("{}", cartridge);
         }
     }
 }
