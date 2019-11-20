@@ -1,14 +1,17 @@
-use crate::rom::{Rom, RomError};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
 use std::fmt::{Display, Formatter, Error};
 
+mod rom;
+
+use rom::{Rom, RomError};
+
 pub struct Cartridge {
     // TODO: mapper: Mapper,
     path: PathBuf,
-    rom: Rom
+    rom: Rom,
     // TODO: memory backed RAM
 }
 

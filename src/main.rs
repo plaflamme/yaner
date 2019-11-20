@@ -9,7 +9,6 @@ mod memory;
 mod cartridge;
 mod cpu;
 mod nes;
-mod rom;
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Yet Another NES Emulator in Rust")]
