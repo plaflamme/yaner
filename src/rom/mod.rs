@@ -40,7 +40,14 @@ bitflags! {
     struct Flags7: u8 {
         const VS_UNISYSTEM = 0b0000_0001;
         const PLAYCHOICE_10 = 0b0000_0010;
-        const NES2 = 0b0000_1100;
+        const NES2_0 = 0b0000_0100; // NES2 format: this bit is not set
+        const NES2_1 = 0b0000_1000; // NES2 format: this bit is set
+    }
+}
+
+impl Flags7 {
+    fn is_nes2(&self) -> bool {
+        self.contains(Flags7::NES2_1) && !self.contains(Flags7::NES2_0)
     }
 }
 
@@ -117,7 +124,7 @@ named!(flags_7<&[u8], (u8, Flags7)>,
                 take_bits!(4u8),
                 map_opt!(take_bits!(4u8), Flags7::from_bits)
             )
-        ), |(_, flags)| !flags.contains(Flags7::NES2)) >> // TODO better error message
+        ), |(_, flags)| !flags.is_nes2()) >> // TODO better error message
         ( flags )
     )
 );
