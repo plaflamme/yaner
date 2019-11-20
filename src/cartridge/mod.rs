@@ -4,12 +4,17 @@ use std::fs::File;
 use std::io::Read;
 use std::fmt::{Display, Formatter, Error};
 
+mod mapper;
 mod rom;
 
 use rom::{Rom, RomError};
 
+trait Mapper {
+
+}
+
 pub struct Cartridge {
-    // TODO: mapper: Mapper,
+    mapper: Box<dyn Mapper>,
     path: PathBuf,
     rom: Rom,
     // TODO: memory backed RAM
@@ -29,7 +34,8 @@ impl Display for Cartridge {
 #[derive(Debug)]
 pub enum CartridgeError {
     RomError(RomError),
-    IoError(std::io::Error)
+    IoError(std::io::Error),
+    UnimplementedMapper(u8),
 }
 
 impl From<RomError> for CartridgeError {
@@ -53,9 +59,15 @@ impl TryFrom<PathBuf> for Cartridge {
         f.read_to_end(&mut buf);
         let rom = Rom::try_from(buf.as_slice())?;
 
+        let mapper: Box<dyn Mapper> = match rom.mapper {
+            0 => Box::new(mapper::NROM {}),
+            _ => Err(CartridgeError::UnimplementedMapper(rom.mapper))?
+        };
+
         Ok(
             Cartridge {
-                path: path,
+                mapper,
+                path,
                 rom
             }
         )
