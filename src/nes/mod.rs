@@ -21,7 +21,7 @@ impl crate::memory::AddressSpace for Nes {
             0x4000..=0x4017 => unimplemented!(), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
-            0x4020..=0xFFFF => unimplemented!(), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.cartridge.mapper.read_u8(addr), // PRG ROM/RAM and mapper
             _ => panic!("invalid address 0x{:X?}", addr)
         }
     }
@@ -37,7 +37,7 @@ impl crate::memory::AddressSpace for Nes {
             0x4000..=0x4017 => unimplemented!(), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
-            0x4020..=0xFFFF => unimplemented!(), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.cartridge.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper
             _ => panic!("invalid address 0x{:X?}", addr)
         }
     }

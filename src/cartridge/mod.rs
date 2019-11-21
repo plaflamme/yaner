@@ -9,12 +9,12 @@ mod rom;
 
 use rom::{Rom, RomError};
 
-trait Mapper: crate::memory::AddressSpace {
+pub trait Mapper: crate::memory::AddressSpace {
     fn name(&self) -> String;
 }
 
 pub struct Cartridge {
-    mapper: Box<dyn Mapper>,
+    pub mapper: Box<dyn Mapper>,
     path: PathBuf,
     rom: Rom,
     // TODO: memory backed RAM
