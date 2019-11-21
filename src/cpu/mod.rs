@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 use crate::memory::AddressSpace;
 use std::ops::Generator;
+use std::cell::Cell;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy)]
@@ -403,6 +404,12 @@ bitflags!(
         // http://wiki.nesdev.com/w/index.php/Status_flags#D:_Decimal
         const D = 1 << 3;
 
+        // http://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        const B = 1 << 4;
+
+        // unused
+        const U = 1 << 5;
+
         // http://wiki.nesdev.com/w/index.php/Status_flags#V:_Overflow
         const V = 1 << 6;
 
@@ -414,12 +421,12 @@ bitflags!(
 // http://nesdev.com/6502_cpu.txt
 // http://wiki.nesdev.com/w/index.php/CPU_ALL
 pub struct Cpu {
-    acc: u8,
-    x: u8,
-    y: u8,
-    flags: Flags,
-    sp: u8,
-    pc: u16,
+    acc: Cell<u8>,
+    x: Cell<u8>,
+    y: Cell<u8>,
+    flags: Cell<Flags>,
+    sp: Cell<u8>,
+    pc: Cell<u16>,
 }
 
 pub enum CpuTick {
@@ -429,12 +436,55 @@ pub enum CpuTick {
 impl Cpu {
     pub fn new() -> Self {
         // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
-        Cpu { acc: 0, x: 0, y: 0, flags: Flags::from_bits_truncate(0x34), sp: 0xFD, pc: 0 }
+        Cpu {
+            acc: Cell::new(0),
+            x: Cell::new(0),
+            y: Cell::new(0),
+            flags: Cell::new(Flags::from_bits_truncate(0x34)),
+            sp: Cell::new(0xFD),
+            pc: Cell::new(0)
+        }
     }
 
-    pub fn run(&self, memory_map: Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuTick, Return = !> {
-        || {
+    // Reads pc and advances by one
+    fn next_pc(&self) -> u16 {
+        let pc = self.pc.get();
+        self.pc.set(pc.wrapping_add(1));
+        pc
+    }
+
+    // reads u8 at pc and advances by one
+    fn pc_read_u8(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+        let pc = self.next_pc();
+        mem_map.read_u8(pc)
+    }
+
+    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuTick, Return = !> + 'a {
+
+        self.pc.set( mem_map.read_u16(0xFFFC));
+
+        move || {
             loop {
+                let opcode = self.pc_read_u8(mem_map);
+                yield CpuTick::Tick; // TODO: I guess?
+
+                match OPCODES[opcode as usize] {
+                    OpCode(Op::ADC, AddressingMode::Absolute, _, _) => {
+                        let addr_lo = self.pc_read_u8(mem_map) as u16;
+                        yield CpuTick::Tick;
+
+                        let addr_hi = self.pc_read_u8(mem_map) as u16;
+                        yield CpuTick::Tick;
+
+                        let addr = addr_hi << 8 | addr_lo;
+
+                        let value = mem_map.read_u8(addr);
+                        self.adc(value);
+                        yield CpuTick::Tick;
+                    }
+                    _ => unimplemented!()
+                }
+
                 yield CpuTick::Tick
             }
         }
@@ -575,358 +625,369 @@ impl Cpu {
         unimplemented!()
     }
 
-    // sets the negative and zero flags
-    fn set_flags_from(&mut self, v: u8) {
-        self.flags.set(Flags::N, (v & 0x80) != 0);
-        self.flags.set(Flags::Z, v == 0);
+    fn flag(&self, f: Flags) -> bool {
+        self.flags.get().contains(Flags::C)
     }
 
-    fn set_flags_from_acc(&mut self) {
-        self.set_flags_from(self.acc)
+    fn set_flag(&self, flag: Flags, v: bool) {
+        let mut flags = self.flags.get();
+        flags.set(flag, v);
+        self.flags.set(flags);
     }
+
+    // sets the negative and zero flags
+    fn set_flags_from(&self, v: u8) {
+        self.set_flag(Flags::N, (v & 0x80) != 0);
+        self.set_flag(Flags::Z, v == 0);
+    }
+
+    fn set_flags_from_acc(&self) {
+        self.set_flags_from(self.acc.get())
+    }
+
 }
 
 // Operations
 impl Cpu {
 
     // http://obelisk.me.uk/6502/reference.html#ADC
-    fn adc(&mut self, v: u8) {
-        let (v1, o1) = self.acc.overflowing_add(v);
-        let (v2, o2) = v1.overflowing_add(self.flags.contains(Flags::C) as u8);
+    fn adc(&self, v: u8) {
+        let acc = self.acc.get();
+        let (v1, o1) = acc.overflowing_add(v);
+        let (v2, o2) = v1.overflowing_add(self.flag(Flags::C) as u8);
 
-        self.flags.set(Flags::C, o1 | o2);
-        // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        self.flags.set(Flags::V, (v^v2) & (self.acc^v2) & 0x80 != 0);
-        self.acc = v2;
+        self.set_flag(Flags::C, o1 | o2);
+        self.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
+        self.acc.set(v2);
         self.set_flags_from_acc();
     }
 
-    // http://obelisk.me.uk/6502/reference.html#AND
-    fn and(&mut self, v: u8) {
-        self.acc = self.acc & v;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#ASL
-    // NOTE: this can apply to the accumulator or some memory location
-    fn asl(&mut self, v: u8) -> u8 {
-        let mult = v << 1;
-        self.flags.set(Flags::C, (v & 0x80) != 0);
-        mult
-    }
-
-    fn branch_if(&mut self, branch: bool, v: u8) {
-        if branch {
-            // TODO: +1 cycle
-            // relative displacement, v is signed in this case
-            self.pc = self.pc.wrapping_add(v as i8 as u16);
-            // TODO: +1 if branching to a new page
-        }
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BCC
-    fn bcc(&mut self, v: u8) {
-        self.branch_if(!self.flags.contains(Flags::C), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BCS
-    fn bcs(&mut self, v: u8) {
-        self.branch_if(self.flags.contains(Flags::C), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BEQ
-    fn beq(&mut self, v: u8) {
-        self.branch_if(self.flags.contains(Flags::Z), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BIT
-    fn bit(&mut self, v: u8) {
-        let r = self.acc & v;
-        self.flags.set(Flags::Z, r == 0);
-        self.flags.set(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
-        self.flags.set(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BMI
-    fn bmi(&mut self, v: u8) {
-        self.branch_if(self.flags.contains(Flags::N), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BNE
-    fn bne(&mut self, v: u8) {
-        self.branch_if(!self.flags.contains(Flags::Z), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BPL
-    fn bpl(&mut self, v: u8) {
-        self.branch_if(!self.flags.contains(Flags::N), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BRK
-    fn brk(&mut self) {
-        self.push_stack16(self.pc);
-        self.push_stack(self.flags.bits);
-//        self.pc = self.mem_map.read_u16(0xFFFE);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BVC
-    fn bvc(&mut self, v: u8) {
-        self.branch_if(!self.flags.contains(Flags::V), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#BVS
-    fn bvs(&mut self, v: u8) {
-        self.branch_if(self.flags.contains(Flags::V), v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CLC
-    fn clc(&mut self) {
-        self.flags.set(Flags::C, false)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CLD
-    fn cld(&mut self) {
-        self.flags.set(Flags::D, false)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CLI
-    fn cli(&mut self) {
-        self.flags.set(Flags::I, false)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CLV
-    fn clv(&mut self) {
-        self.flags.set(Flags::V, false)
-    }
-
-    fn compare(&mut self, a: u8, b: u8) {
-        let result = a - b;
-        self.flags.set(Flags::C, a >= b);
-        self.flags.set(Flags::Z, a == b);
-        self.flags.set(Flags::N, (result & 0x80) > 0);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CLV
-    fn cmp(&mut self, v: u8) {
-        self.compare(self.acc, v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CPX
-    fn cpx(&mut self, v: u8) {
-        self.compare(self.x, v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#CPY
-    fn cpy(&mut self, v: u8) {
-        self.compare(self.y, v)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#DEC
-    fn dec(&mut self, v: u8) -> u8 {
-        let result = v.wrapping_sub(1);
-        self.set_flags_from(result);
-        result
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#DEX
-    fn dex(&mut self) {
-        self.x = self.dec(self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#DEY
-    fn dey(&mut self) {
-        self.y = self.dec(self.y);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#EOR
-    fn eor(&mut self, v: u8) {
-        self.acc ^= v;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#INC
-    fn inc(&mut self, v: u8) -> u8 {
-        let result = v.wrapping_add(1);
-        self.set_flags_from(result);
-        result
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#INX
-    fn inx(&mut self) {
-        self.x = self.inc(self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#INY
-    fn iny(&mut self) {
-        self.y = self.inc(self.y);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#JMP
-    fn jmp(&mut self, v: u16) {
-        self.pc = v;
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#JSR
-    fn jsr(&mut self, v: u16) {
-        self.push_stack16(self.pc.wrapping_sub(1));
-        self.jmp(v);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#LDA
-    fn lda(&mut self, v: u8) {
-        self.acc = v;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#LDX
-    fn ldx(&mut self, v: u8) {
-        self.x = v;
-        self.set_flags_from(self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#LDY
-    fn ldy(&mut self, v: u8) {
-        self.y = v;
-        self.set_flags_from(self.y);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#LSR
-    fn lsr(&mut self, v: u8) -> u8 {
-        self.flags.set(Flags::C, (v & 0x01) != 0);
-        let result = v >> 1;
-        self.set_flags_from(result);
-        result
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#NOP
-    fn nop(&mut self) {
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#ORA
-    fn ora(&mut self, v: u8) {
-        self.acc |= v;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#PHA
-    fn pha(&mut self) {
-        self.push_stack(self.flags.bits());
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#PLA
-    fn pla(&mut self) {
-        self.acc = self.pop_stack();
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#PLP
-    fn plp(&mut self) {
-        self.flags = Flags::from_bits_truncate(self.pop_stack());
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#ROL
-    fn rol(&mut self, v: u8) -> u8 {
-        let result = (v << 1) | self.flags.contains(Flags::C) as u8;
-        self.flags.set(Flags::C, v & 0x80 != 0);
-        self.set_flags_from(result);
-        result
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#ROR
-    fn ror(&mut self, v: u8) -> u8 {
-        let result = (v >> 1) | ((self.flags.contains(Flags::C) as u8) << 7);
-        self.flags.set(Flags::C, v & 0x01 != 0);
-        self.set_flags_from(result);
-        result
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#RTI
-    fn rti(&mut self) {
-        self.flags = Flags::from_bits_truncate(self.pop_stack());
-        self.pc = self.pop_stack16();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#RTS
-    fn rts(&mut self) {
-        self.pc = self.pop_stack16().wrapping_add(1);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#SBC
-    fn sbc(&mut self, v: u8) {
-        let (v1, o1) = self.acc.overflowing_sub(v);
-        let (v2, o2) = v1.overflowing_sub(!self.flags.contains(Flags::C) as u8);
-        self.flags.set(Flags::C, o1 | o2);
-        // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        self.flags.set(Flags::V, (v^v2) & (self.acc^v2) & 0x80 != 0);
-        self.acc = v2;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#SEC
-    fn sec(&mut self) {
-        self.flags.set(Flags::C, true)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#SED
-    fn sed(&mut self) {
-        self.flags.set(Flags::D, true)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#SEI
-    fn sei(&mut self) {
-        self.flags.set(Flags::I, true)
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#STA
-    fn sta(&mut self, v: u16) {
-//        self.mem_map.write_u8(v, self.acc);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#STX
-    fn stx(&mut self, v: u16) {
-//        self.mem_map.write_u8(v, self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#STY
-    fn sty(&mut self, v: u16) {
-//        self.mem_map.write_u8(v, self.y);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TAX
-    fn tax(&mut self) {
-        self.x = self.acc;
-        self.set_flags_from(self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TAY
-    fn tay(&mut self) {
-        self.y = self.acc;
-        self.set_flags_from(self.y);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TSX
-    fn tsx(&mut self) {
-        self.x = self.sp;
-        self.set_flags_from(self.x);
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TXA
-    fn txa(&mut self) {
-        self.acc = self.x;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TXS
-    fn txs(&mut self) {
-        self.sp = self.x;
-        self.set_flags_from_acc();
-    }
-
-    // http://obelisk.me.uk/6502/reference.html#TYA
-    fn tya(&mut self) {
-        self.acc = self.y;
-        self.set_flags_from_acc();
-    }
+//    // http://obelisk.me.uk/6502/reference.html#AND
+//    fn and(&mut self, v: u8) {
+//        self.acc = self.acc & v;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#ASL
+//    // NOTE: this can apply to the accumulator or some memory location
+//    fn asl(&mut self, v: u8) -> u8 {
+//        let mult = v << 1;
+//        self.flags.set(Flags::C, (v & 0x80) != 0);
+//        mult
+//    }
+//
+//    fn branch_if(&mut self, branch: bool, v: u8) {
+//        if branch {
+//            // TODO: +1 cycle
+//            // relative displacement, v is signed in this case
+//            self.pc = self.pc.wrapping_add(v as i8 as u16);
+//            // TODO: +1 if branching to a new page
+//        }
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BCC
+//    fn bcc(&mut self, v: u8) {
+//        self.branch_if(!self.flags.contains(Flags::C), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BCS
+//    fn bcs(&mut self, v: u8) {
+//        self.branch_if(self.flags.contains(Flags::C), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BEQ
+//    fn beq(&mut self, v: u8) {
+//        self.branch_if(self.flags.contains(Flags::Z), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BIT
+//    fn bit(&mut self, v: u8) {
+//        let r = self.acc & v;
+//        self.flags.set(Flags::Z, r == 0);
+//        self.flags.set(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
+//        self.flags.set(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BMI
+//    fn bmi(&mut self, v: u8) {
+//        self.branch_if(self.flags.contains(Flags::N), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BNE
+//    fn bne(&mut self, v: u8) {
+//        self.branch_if(!self.flags.contains(Flags::Z), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BPL
+//    fn bpl(&mut self, v: u8) {
+//        self.branch_if(!self.flags.contains(Flags::N), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BRK
+//    fn brk(&mut self) {
+//        self.push_stack16(self.pc);
+//        self.push_stack(self.flags.bits);
+////        self.pc = self.mem_map.read_u16(0xFFFE);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BVC
+//    fn bvc(&mut self, v: u8) {
+//        self.branch_if(!self.flags.contains(Flags::V), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#BVS
+//    fn bvs(&mut self, v: u8) {
+//        self.branch_if(self.flags.contains(Flags::V), v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CLC
+//    fn clc(&mut self) {
+//        self.flags.set(Flags::C, false)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CLD
+//    fn cld(&mut self) {
+//        self.flags.set(Flags::D, false)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CLI
+//    fn cli(&mut self) {
+//        self.flags.set(Flags::I, false)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CLV
+//    fn clv(&mut self) {
+//        self.flags.set(Flags::V, false)
+//    }
+//
+//    fn compare(&mut self, a: u8, b: u8) {
+//        let result = a - b;
+//        self.flags.set(Flags::C, a >= b);
+//        self.flags.set(Flags::Z, a == b);
+//        self.flags.set(Flags::N, (result & 0x80) > 0);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CLV
+//    fn cmp(&mut self, v: u8) {
+//        self.compare(self.acc, v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CPX
+//    fn cpx(&mut self, v: u8) {
+//        self.compare(self.x, v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#CPY
+//    fn cpy(&mut self, v: u8) {
+//        self.compare(self.y, v)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#DEC
+//    fn dec(&mut self, v: u8) -> u8 {
+//        let result = v.wrapping_sub(1);
+//        self.set_flags_from(result);
+//        result
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#DEX
+//    fn dex(&mut self) {
+//        self.x = self.dec(self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#DEY
+//    fn dey(&mut self) {
+//        self.y = self.dec(self.y);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#EOR
+//    fn eor(&mut self, v: u8) {
+//        self.acc ^= v;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#INC
+//    fn inc(&mut self, v: u8) -> u8 {
+//        let result = v.wrapping_add(1);
+//        self.set_flags_from(result);
+//        result
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#INX
+//    fn inx(&mut self) {
+//        self.x = self.inc(self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#INY
+//    fn iny(&mut self) {
+//        self.y = self.inc(self.y);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#JMP
+//    fn jmp(&mut self, v: u16) {
+//        self.pc = v;
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#JSR
+//    fn jsr(&mut self, v: u16) {
+//        self.push_stack16(self.pc.wrapping_sub(1));
+//        self.jmp(v);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#LDA
+//    fn lda(&mut self, v: u8) {
+//        self.acc = v;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#LDX
+//    fn ldx(&mut self, v: u8) {
+//        self.x = v;
+//        self.set_flags_from(self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#LDY
+//    fn ldy(&mut self, v: u8) {
+//        self.y = v;
+//        self.set_flags_from(self.y);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#LSR
+//    fn lsr(&mut self, v: u8) -> u8 {
+//        self.flags.set(Flags::C, (v & 0x01) != 0);
+//        let result = v >> 1;
+//        self.set_flags_from(result);
+//        result
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#NOP
+//    fn nop(&mut self) {
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#ORA
+//    fn ora(&mut self, v: u8) {
+//        self.acc |= v;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#PHA
+//    fn pha(&mut self) {
+//        self.push_stack(self.flags.bits());
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#PLA
+//    fn pla(&mut self) {
+//        self.acc = self.pop_stack();
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#PLP
+//    fn plp(&mut self) {
+//        self.flags = Flags::from_bits_truncate(self.pop_stack());
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#ROL
+//    fn rol(&mut self, v: u8) -> u8 {
+//        let result = (v << 1) | self.flags.contains(Flags::C) as u8;
+//        self.flags.set(Flags::C, v & 0x80 != 0);
+//        self.set_flags_from(result);
+//        result
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#ROR
+//    fn ror(&mut self, v: u8) -> u8 {
+//        let result = (v >> 1) | ((self.flags.contains(Flags::C) as u8) << 7);
+//        self.flags.set(Flags::C, v & 0x01 != 0);
+//        self.set_flags_from(result);
+//        result
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#RTI
+//    fn rti(&mut self) {
+//        self.flags = Flags::from_bits_truncate(self.pop_stack());
+//        self.pc = self.pop_stack16();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#RTS
+//    fn rts(&mut self) {
+//        self.pc = self.pop_stack16().wrapping_add(1);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#SBC
+//    fn sbc(&mut self, v: u8) {
+//        let (v1, o1) = self.acc.overflowing_sub(v);
+//        let (v2, o2) = v1.overflowing_sub(!self.flags.contains(Flags::C) as u8);
+//        self.flags.set(Flags::C, o1 | o2);
+//        // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+//        self.flags.set(Flags::V, (v^v2) & (self.acc^v2) & 0x80 != 0);
+//        self.acc = v2;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#SEC
+//    fn sec(&mut self) {
+//        self.flags.set(Flags::C, true)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#SED
+//    fn sed(&mut self) {
+//        self.flags.set(Flags::D, true)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#SEI
+//    fn sei(&mut self) {
+//        self.flags.set(Flags::I, true)
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#STA
+//    fn sta(&mut self, v: u16) {
+////        self.mem_map.write_u8(v, self.acc);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#STX
+//    fn stx(&mut self, v: u16) {
+////        self.mem_map.write_u8(v, self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#STY
+//    fn sty(&mut self, v: u16) {
+////        self.mem_map.write_u8(v, self.y);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TAX
+//    fn tax(&mut self) {
+//        self.x = self.acc;
+//        self.set_flags_from(self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TAY
+//    fn tay(&mut self) {
+//        self.y = self.acc;
+//        self.set_flags_from(self.y);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TSX
+//    fn tsx(&mut self) {
+//        self.x = self.sp;
+//        self.set_flags_from(self.x);
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TXA
+//    fn txa(&mut self) {
+//        self.acc = self.x;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TXS
+//    fn txs(&mut self) {
+//        self.sp = self.x;
+//        self.set_flags_from_acc();
+//    }
+//
+//    // http://obelisk.me.uk/6502/reference.html#TYA
+//    fn tya(&mut self) {
+//        self.acc = self.y;
+//        self.set_flags_from_acc();
+//    }
 
 }
 

@@ -1,7 +1,9 @@
 use std::cell::Cell;
+use std::pin::Pin;
 use crate::cartridge::Cartridge;
 use crate::memory::AddressSpace;
 use bitflags::_core::ops::Add;
+use std::ops::{Generator, GeneratorState};
 
 pub struct Nes {
     ram: crate::memory::Ram2KB,
@@ -22,7 +24,12 @@ impl Nes {
     }
 
     pub fn run(&self) {
-        self.cpu.run(Box::new(self));
+        let boxed: Box<&dyn AddressSpace> = Box::new(self);
+        let mut cpu_ticks = self.cpu.run(&boxed);
+        match Pin::new(&mut cpu_ticks).resume() {
+            GeneratorState::Yielded(crate::cpu::CpuTick::Tick) => println!("Tick!"),
+            GeneratorState::Complete(_) => unimplemented!()
+        };
     }
 }
 
