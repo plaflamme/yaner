@@ -3,7 +3,7 @@ use std::cell::Cell;
 struct Nes {
     ram: crate::memory::Ram2KB,
     cartridge: crate::cartridge::Cartridge,
-    cpu: crate::cpu::RP2A03,
+    cpu: crate::cpu::Cpu,
     // TODO: ppu
     // TODO: apu
     // TODO: input

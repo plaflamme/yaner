@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use crate::memory::AddressSpace;
 
 // http://obelisk.me.uk/6502/reference.html
@@ -387,36 +388,31 @@ const OPCODES: [OpCode; 256] = {
 };
 
 // http://wiki.nesdev.com/w/index.php/Status_flags
-struct Flags {
-    negative: bool,
-    overflow: bool,
-    break_: bool,
-    decimal: bool,
-    interrupt: bool,
-    zero: bool,
-    carry: bool
-}
+bitflags!(
+    struct Flags: u8 {
+        // http://wiki.nesdev.com/w/index.php/Status_flags#C:_Carry
+        const C = 1 << 0;
 
-impl Flags {
-    fn new() -> Self {
-        Flags { negative: false, overflow: false, break_: false, decimal: false, interrupt: false, zero: false, carry: false }
-    }
-}
+        // http://wiki.nesdev.com/w/index.php/Status_flags#Z:_Zero
+        const Z = 1 << 1;
 
-impl Into<u8> for &Flags {
-    fn into(self) -> u8 {
-        unimplemented!()
-    }
-}
+        // http://wiki.nesdev.com/w/index.php/Status_flags#I:_Interrupt_Disable
+        const I = 1 << 2;
 
-impl From<u8> for Flags {
-    fn from(_: u8) -> Self {
-        unimplemented!()
+        // http://wiki.nesdev.com/w/index.php/Status_flags#D:_Decimal
+        const D = 1 << 3;
+
+        // http://wiki.nesdev.com/w/index.php/Status_flags#V:_Overflow
+        const V = 1 << 6;
+
+        // http://wiki.nesdev.com/w/index.php/Status_flags#N:_Negative
+        const N = 1 << 7;
     }
-}
+);
 
 // http://nesdev.com/6502_cpu.txt
-pub struct RP2A03 {
+// http://wiki.nesdev.com/w/index.php/CPU_ALL
+pub struct Cpu {
     acc: u8,
     x: u8,
     y: u8,
@@ -427,9 +423,10 @@ pub struct RP2A03 {
     mem_map: Box<dyn crate::memory::AddressSpace>
 }
 
-impl RP2A03 {
+impl Cpu {
     fn new(memory_map: Box<dyn AddressSpace>) -> Self {
-        RP2A03 { acc: 0, x: 0, y: 0, flags: Flags::new(), sp: 0, pc: 0, mem_map: memory_map }
+        // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
+        Cpu { acc: 0, x: 0, y: 0, flags: Flags::from_bits_truncate(0x34), sp: 0xFD, pc: 0, mem_map: memory_map }
     }
 
     fn tick(&mut self) {
@@ -569,8 +566,8 @@ impl RP2A03 {
 
     // sets the negative and zero flags
     fn set_flags_from(&mut self, v: u8) {
-        self.flags.negative = (v & 0x80) != 0;
-        self.flags.zero = v == 0;
+        self.flags.set(Flags::N, (v & 0x80) != 0);
+        self.flags.set(Flags::Z, v == 0);
     }
 
     fn set_flags_from_acc(&mut self) {
@@ -579,16 +576,16 @@ impl RP2A03 {
 }
 
 // Operations
-impl RP2A03 {
+impl Cpu {
 
     // http://obelisk.me.uk/6502/reference.html#ADC
     fn adc(&mut self, v: u8) {
         let (v1, o1) = self.acc.overflowing_add(v);
-        let (v2, o2) = v1.overflowing_add(self.flags.carry as u8);
+        let (v2, o2) = v1.overflowing_add(self.flags.contains(Flags::C) as u8);
 
-        self.flags.carry = o1 | o2;
+        self.flags.set(Flags::C, o1 | o2);
         // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        self.flags.overflow = (v^v2) & (self.acc^v2) & 0x80 != 0;
+        self.flags.set(Flags::V, (v^v2) & (self.acc^v2) & 0x80 != 0);
         self.acc = v2;
         self.set_flags_from_acc();
     }
@@ -603,7 +600,7 @@ impl RP2A03 {
     // NOTE: this can apply to the accumulator or some memory location
     fn asl(&mut self, v: u8) -> u8 {
         let mult = v << 1;
-        self.flags.carry = (v & 0x80) != 0;
+        self.flags.set(Flags::C, (v & 0x80) != 0);
         mult
     }
 
@@ -618,84 +615,84 @@ impl RP2A03 {
 
     // http://obelisk.me.uk/6502/reference.html#BCC
     fn bcc(&mut self, v: u8) {
-        self.branch_if(!self.flags.carry, v)
+        self.branch_if(!self.flags.contains(Flags::C), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BCS
     fn bcs(&mut self, v: u8) {
-        self.branch_if(self.flags.carry, v)
+        self.branch_if(self.flags.contains(Flags::C), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BEQ
     fn beq(&mut self, v: u8) {
-        self.branch_if(self.flags.zero, v)
+        self.branch_if(self.flags.contains(Flags::Z), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BIT
     fn bit(&mut self, v: u8) {
         let r = self.acc & v;
-        self.flags.zero = r == 0;
-        self.flags.overflow = (v & 0x40) != 0; // set to the 6th bit of the value
-        self.flags.negative = (v & 0x80) != 0; // set to the 7th bit of the value
+        self.flags.set(Flags::Z, r == 0);
+        self.flags.set(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
+        self.flags.set(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
     }
 
     // http://obelisk.me.uk/6502/reference.html#BMI
     fn bmi(&mut self, v: u8) {
-        self.branch_if(self.flags.negative, v)
+        self.branch_if(self.flags.contains(Flags::N), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BNE
     fn bne(&mut self, v: u8) {
-        self.branch_if(!self.flags.zero, v)
+        self.branch_if(!self.flags.contains(Flags::Z), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BPL
     fn bpl(&mut self, v: u8) {
-        self.branch_if(!self.flags.negative, v)
+        self.branch_if(!self.flags.contains(Flags::N), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BRK
     fn brk(&mut self) {
         self.push_stack16(self.pc);
-        self.push_stack((&self.flags).into());
+        self.push_stack(self.flags.bits);
         self.pc = self.mem_map.read_u16(0xFFFE);
     }
 
     // http://obelisk.me.uk/6502/reference.html#BVC
     fn bvc(&mut self, v: u8) {
-        self.branch_if(!self.flags.overflow, v)
+        self.branch_if(!self.flags.contains(Flags::V), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#BVS
     fn bvs(&mut self, v: u8) {
-        self.branch_if(self.flags.overflow, v)
+        self.branch_if(self.flags.contains(Flags::V), v)
     }
 
     // http://obelisk.me.uk/6502/reference.html#CLC
     fn clc(&mut self) {
-        self.flags.carry = false
+        self.flags.set(Flags::C, false)
     }
 
     // http://obelisk.me.uk/6502/reference.html#CLD
     fn cld(&mut self) {
-        self.flags.decimal = false
+        self.flags.set(Flags::D, false)
     }
 
     // http://obelisk.me.uk/6502/reference.html#CLI
     fn cli(&mut self) {
-        self.flags.interrupt = false
+        self.flags.set(Flags::I, false)
     }
 
     // http://obelisk.me.uk/6502/reference.html#CLV
     fn clv(&mut self) {
-        self.flags.overflow = false
+        self.flags.set(Flags::V, false)
     }
 
     fn compare(&mut self, a: u8, b: u8) {
         let result = a - b;
-        self.flags.carry = a >= b;
-        self.flags.zero = a == b;
-        self.flags.negative = (result & 0x80) > 0;
+        self.flags.set(Flags::C, a >= b);
+        self.flags.set(Flags::Z, a == b);
+        self.flags.set(Flags::N, (result & 0x80) > 0);
     }
 
     // http://obelisk.me.uk/6502/reference.html#CLV
@@ -784,7 +781,7 @@ impl RP2A03 {
 
     // http://obelisk.me.uk/6502/reference.html#LSR
     fn lsr(&mut self, v: u8) -> u8 {
-        self.flags.carry = (v & 0x01) != 0;
+        self.flags.set(Flags::C, (v & 0x01) != 0);
         let result = v >> 1;
         self.set_flags_from(result);
         result
@@ -802,7 +799,7 @@ impl RP2A03 {
 
     // http://obelisk.me.uk/6502/reference.html#PHA
     fn pha(&mut self) {
-        self.push_stack((&self.flags).into());
+        self.push_stack(self.flags.bits());
     }
 
     // http://obelisk.me.uk/6502/reference.html#PLA
@@ -813,28 +810,28 @@ impl RP2A03 {
 
     // http://obelisk.me.uk/6502/reference.html#PLP
     fn plp(&mut self) {
-        self.flags = self.pop_stack().into();
+        self.flags = Flags::from_bits_truncate(self.pop_stack());
     }
 
     // http://obelisk.me.uk/6502/reference.html#ROL
     fn rol(&mut self, v: u8) -> u8 {
-        let result = (v << 1) | self.flags.carry as u8;
-        self.flags.carry = v & 0x80 != 0;
+        let result = (v << 1) | self.flags.contains(Flags::C) as u8;
+        self.flags.set(Flags::C, v & 0x80 != 0);
         self.set_flags_from(result);
         result
     }
 
     // http://obelisk.me.uk/6502/reference.html#ROR
     fn ror(&mut self, v: u8) -> u8 {
-        let result = (v >> 1) | ((self.flags.carry as u8) << 7);
-        self.flags.carry = v & 0x01 != 0;
+        let result = (v >> 1) | ((self.flags.contains(Flags::C) as u8) << 7);
+        self.flags.set(Flags::C, v & 0x01 != 0);
         self.set_flags_from(result);
         result
     }
 
     // http://obelisk.me.uk/6502/reference.html#RTI
     fn rti(&mut self) {
-        self.flags = self.pop_stack().into();
+        self.flags = Flags::from_bits_truncate(self.pop_stack());
         self.pc = self.pop_stack16();
     }
 
@@ -846,27 +843,27 @@ impl RP2A03 {
     // http://obelisk.me.uk/6502/reference.html#SBC
     fn sbc(&mut self, v: u8) {
         let (v1, o1) = self.acc.overflowing_sub(v);
-        let (v2, o2) = v1.overflowing_sub(!self.flags.carry as u8);
-        self.flags.carry = o1 | o2;
+        let (v2, o2) = v1.overflowing_sub(!self.flags.contains(Flags::C) as u8);
+        self.flags.set(Flags::C, o1 | o2);
         // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-        self.flags.overflow = (v^v2) & (self.acc^v2) & 0x80 != 0;
+        self.flags.set(Flags::V, (v^v2) & (self.acc^v2) & 0x80 != 0);
         self.acc = v2;
         self.set_flags_from_acc();
     }
 
     // http://obelisk.me.uk/6502/reference.html#SEC
     fn sec(&mut self) {
-        self.flags.carry = true
+        self.flags.set(Flags::C, true)
     }
 
     // http://obelisk.me.uk/6502/reference.html#SED
     fn sed(&mut self) {
-        self.flags.decimal = true
+        self.flags.set(Flags::D, true)
     }
 
     // http://obelisk.me.uk/6502/reference.html#SEI
     fn sei(&mut self) {
-        self.flags.interrupt = true
+        self.flags.set(Flags::I, true)
     }
 
     // http://obelisk.me.uk/6502/reference.html#STA
