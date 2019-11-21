@@ -433,63 +433,63 @@ impl RP2A03 {
     }
 
     fn tick(&mut self) {
-        let opcode_value = self.mem_map.peek(self.pc);
+        let opcode_value = self.mem_map.read_u8(self.pc);
         let opcode = &OPCODES[opcode_value as usize];
         self.pc = self.pc.wrapping_add(1);
         let (value, addr) = match opcode.1 {
             AddressingMode::Immediate =>
-                (Some(self.mem_map.peek(self.pc) as u16), None),
+                (Some(self.mem_map.read_u8(self.pc) as u16), None),
             AddressingMode::ZeroPage => {
-                let addr = self.mem_map.peek(self.pc) as u16;
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u8(self.pc) as u16;
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
             AddressingMode::ZeroPageX => {
-                let addr = self.mem_map.peek(self.pc).wrapping_add(self.x) as u16;
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u8(self.pc).wrapping_add(self.x) as u16;
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
             AddressingMode::ZeroPageY =>  {
-                let addr = self.mem_map.peek(self.pc).wrapping_add(self.y) as u16;
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u8(self.pc).wrapping_add(self.y) as u16;
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
 
             AddressingMode::Absolute => {
-                let addr = self.mem_map.peek16(self.pc);
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u16(self.pc);
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
             AddressingMode::AbsoluteX => {
-                let addr = self.mem_map.peek16(self.pc).wrapping_add(self.x as u16);
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u16(self.pc).wrapping_add(self.x as u16);
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
             AddressingMode::AbsoluteY => {
-                let addr = self.mem_map.peek16(self.pc).wrapping_add(self.y as u16);
-                (Some(self.mem_map.peek(addr) as u16), Some(addr))
+                let addr = self.mem_map.read_u16(self.pc).wrapping_add(self.y as u16);
+                (Some(self.mem_map.read_u8(addr) as u16), Some(addr))
             },
 
             AddressingMode::Indirect => {
                 // this is only used by JMP and its behaviour was actually buggy.
                 //   if addr is 0x01FF, it would fetch the lsb from 0x01FF, but msb at 0x0100 instead of 0x0200
-                let addr = self.mem_map.peek16(self.pc);
-                let lsb = self.mem_map.peek(addr) as u16;
+                let addr = self.mem_map.read_u16(self.pc);
+                let lsb = self.mem_map.read_u8(addr) as u16;
                 let msb_addr = if addr & 0xFF != 0xFF { addr.wrapping_add(1) } else { addr & 0xFF00 };
-                let msb = self.mem_map.peek(msb_addr) as u16;
+                let msb = self.mem_map.read_u8(msb_addr) as u16;
                 let v = (msb << 8) | lsb;
                 (Some(v), Some(addr))
             },
             AddressingMode::IndirectX => {
-                // val = PEEK(PEEK((arg + X) % 256) + PEEK((arg + X + 1) % 256) * 256)
-                let addr = self.mem_map.peek(self.pc).wrapping_add(self.x);
-                let v = self.mem_map.peek16(addr as u16);
+                // val = read_u8(read_u8((arg + X) % 256) + read_u8((arg + X + 1) % 256) * 256)
+                let addr = self.mem_map.read_u8(self.pc).wrapping_add(self.x);
+                let v = self.mem_map.read_u16(addr as u16);
                 (Some(v), Some(addr as u16))
             },
             AddressingMode::IndirectY => {
-                // val = PEEK(PEEK(arg) + PEEK((arg + 1) % 256) * 256 + Y)
-                let addr = self.mem_map.peek(self.pc);
-                let v = self.mem_map.peek16(addr as u16).wrapping_add(self.y as u16);
+                // val = read_u8(read_u8(arg) + read_u8((arg + 1) % 256) * 256 + Y)
+                let addr = self.mem_map.read_u8(self.pc);
+                let v = self.mem_map.read_u16(addr as u16).wrapping_add(self.y as u16);
                 (Some(v), Some(addr as u16))
             },
 
             AddressingMode::Accumulator => (Some(self.acc as u16), None),
-            AddressingMode::Relative => (Some(self.mem_map.peek(self.pc) as u16), None),
+            AddressingMode::Relative => (Some(self.mem_map.read_u8(self.pc) as u16), None),
 
             AddressingMode::Implicit => (None, None)
         };
@@ -504,7 +504,7 @@ impl RP2A03 {
             },
             (Op::ASL, Some(v), Some(addr)) => {
                 let result = self.asl(v as u8);
-                self.mem_map.store(addr, result);
+                self.mem_map.write_u8(addr, result);
                 self.set_flags_from(result);
             },
 
@@ -529,7 +529,7 @@ impl RP2A03 {
 
             (Op::DEC, Some(v), Some(addr)) => {
                 let result = self.dec(v as u8);
-                self.mem_map.store(addr, result);
+                self.mem_map.write_u8(addr, result);
                 self.set_flags_from(result);
             },
             (Op::DEX, None, _) => self.dex(),
@@ -539,7 +539,7 @@ impl RP2A03 {
 
             (Op::INC, Some(v), Some(addr)) => {
                 let result = self.inc(v as u8);
-                self.mem_map.store(addr, result);
+                self.mem_map.write_u8(addr, result);
                 self.set_flags_from(result);
             },
             (Op::INX, None, _) => self.inx(),
@@ -658,7 +658,7 @@ impl RP2A03 {
     fn brk(&mut self) {
         self.push_stack16(self.pc);
         self.push_stack((&self.flags).into());
-        self.pc = self.mem_map.peek16(0xFFFE);
+        self.pc = self.mem_map.read_u16(0xFFFE);
     }
 
     // http://obelisk.me.uk/6502/reference.html#BVC
@@ -871,17 +871,17 @@ impl RP2A03 {
 
     // http://obelisk.me.uk/6502/reference.html#STA
     fn sta(&mut self, v: u16) {
-        self.mem_map.store(v, self.acc);
+        self.mem_map.write_u8(v, self.acc);
     }
 
     // http://obelisk.me.uk/6502/reference.html#STX
     fn stx(&mut self, v: u16) {
-        self.mem_map.store(v, self.x);
+        self.mem_map.write_u8(v, self.x);
     }
 
     // http://obelisk.me.uk/6502/reference.html#STY
     fn sty(&mut self, v: u16) {
-        self.mem_map.store(v, self.y);
+        self.mem_map.write_u8(v, self.y);
     }
 
     // http://obelisk.me.uk/6502/reference.html#TAX

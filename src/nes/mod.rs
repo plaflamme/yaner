@@ -1,5 +1,7 @@
+use std::cell::Cell;
+
 struct Nes {
-    ram: [u8; 0x0800],
+    ram: crate::memory::Ram2KB,
     cartridge: crate::cartridge::Cartridge,
     cpu: crate::cpu::RP2A03,
     // TODO: ppu
@@ -8,10 +10,10 @@ struct Nes {
 }
 
 impl crate::memory::AddressSpace for Nes {
-    fn peek(&self, addr: u16) -> u8 {
+    fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x07FF => self.ram[addr as usize],
-            0x0800..=0x1FFF => self.ram[(addr % 0x0800) as usize],
+            0x0000..=0x07FF => self.ram.read_u8(addr),
+            0x0800..=0x1FFF => self.ram.read_u8(addr % 0x0800),
 
             0x2000..=0x2007 => unimplemented!(), // PPU
             0x2008..=0x3FFF => unimplemented!(), // PPU mirror
@@ -24,10 +26,10 @@ impl crate::memory::AddressSpace for Nes {
         }
     }
 
-    fn store(&mut self, addr: u16, value: u8) {
+    fn write_u8(&self, addr: u16, value: u8) {
         match addr {
-            0x0000..=0x07FF => self.ram[addr as usize] = value,
-            0x0800..=0x1FFF => self.ram[(addr % 0x0800) as usize] = value,
+            0x0000..=0x07FF => self.ram.write_u8(addr, value),
+            0x0800..=0x1FFF => self.ram.write_u8(addr % 0x8000, value),
 
             0x2000..=0x2007 => unimplemented!(), // PPU
             0x2008..=0x3FFF => unimplemented!(), // PPU mirror

@@ -9,10 +9,8 @@ mod rom;
 
 use rom::{Rom, RomError};
 
-trait Mapper {
+trait Mapper: crate::memory::AddressSpace {
     fn name(&self) -> String;
-    fn read_u8(&self, addr: u16) -> u8;
-    fn write_u8(&self, addr: u16, value: u8);
 }
 
 pub struct Cartridge {

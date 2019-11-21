@@ -1,32 +1,44 @@
-pub trait AddressSpace {
-    fn peek(&self, addr: u16) -> u8;
-    fn store(&mut self, addr: u16, value: u8);
+use std::cell::Cell;
 
-    fn peek16(&self, addr: u16) -> u16 {
-        let low = self.peek(addr) as u16;
-        let high = self.peek(addr + 1) as u16;
+pub trait AddressSpace {
+    fn read_u8(&self, addr: u16) -> u8;
+    fn write_u8(&self, addr: u16, value: u8);
+
+    fn read_u16(&self, addr: u16) -> u16 {
+        let low = self.read_u8(addr) as u16;
+        let high = self.read_u8(addr + 1) as u16;
         (high << 8) | low
     }
 
-    fn store16(&mut self, addr: u16, v: u16) {
+    fn write_u16(&self, addr: u16, v: u16) {
         let low = (v & 0x00FF) as u8;
         let high = (v >> 8) as u8;
-        self.store(addr, low);
-        self.store(addr.wrapping_add(1), high);
+        self.write_u8(addr, low);
+        self.write_u8(addr.wrapping_add(1), high);
     }
 }
 
-pub struct Ram {
-    bytes: Vec<u8>
+// https://github.com/rust-lang/rust/issues/43408
+pub struct Ram2KB {
+    data: Cell<[u8; 0x0800]>
 }
 
-impl AddressSpace for Ram {
-    fn peek(&self, addr: u16) -> u8 {
-        self.bytes[addr as usize]
+impl Ram2KB {
+    pub fn new() -> Self {
+        Ram2KB { data: Cell::new([0; 0x0800]) }
+    }
+}
+
+impl AddressSpace for Ram2KB {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data.get()[addr as usize]
     }
 
-    fn store(&mut self, addr: u16, value: u8) {
-        self.bytes[addr as usize] = value;
+    fn write_u8(&self, addr: u16, value: u8) {
+        // TODO: for some reason as_slice_of_cells can only be invoked on &Cell<[u8]>
+        let ram: &Cell<[u8]> = &self.data;
+        let cells = ram.as_slice_of_cells();
+        cells[addr as usize].set(value);
     }
 }
 
@@ -35,11 +47,11 @@ pub struct Rom {
 }
 
 impl AddressSpace for Rom {
-    fn peek(&self, addr: u16) -> u8 {
+    fn read_u8(&self, addr: u16) -> u8 {
         self.bytes[addr as usize]
     }
 
-    fn store(&mut self, addr: u16, value: u8) {
+    fn write_u8(&self, addr: u16, value: u8) {
         panic!("ROM is unwritable.")
     }
 }
@@ -82,12 +94,12 @@ impl MirroredAddressSpace {
 
 impl AddressSpace for MirroredAddressSpace {
 
-    fn peek(&self, addr: u16) -> u8 {
-        self.base.peek(self.map_addr(addr))
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.base.read_u8(self.map_addr(addr))
     }
 
-    fn store(&mut self, addr: u16, value: u8) {
-        self.base.store(self.map_addr(addr), value)
+    fn write_u8(&self, addr: u16, value: u8) {
+        self.base.write_u8(self.map_addr(addr), value)
     }
 }
 
@@ -121,11 +133,6 @@ impl MemoryMap {
         self.regions.iter().find(|r| r.start <= addr && r.end >= addr)
     }
 
-    // TODO: isn't there a better way? I guess we could use RefCells?
-    fn locate_mut(&mut self, addr: u16) -> Option<&mut MappedRegion> {
-        self.regions.iter_mut().find(|r| r.start <= addr && r.end >= addr)
-    }
-
     fn map_space(&mut self, start: u16, end: u16, mem: Box<dyn AddressSpace>, map_address: bool) {
         self.regions.push(MappedRegion::new(start, end, mem, map_address));
     }
@@ -138,17 +145,17 @@ impl MemoryMap {
 }
 
 impl AddressSpace for MemoryMap {
-    fn peek(&self, addr: u16) -> u8 {
+    fn read_u8(&self, addr: u16) -> u8 {
         match self.locate(addr) {
             None => unimplemented!(),
-            Some(region) => region.mem.peek(region.map_addr(addr))
+            Some(region) => region.mem.read_u8(region.map_addr(addr))
         }
     }
 
-    fn store(&mut self, addr: u16, value: u8) {
-        match self.locate_mut(addr) {
+    fn write_u8(&self, addr: u16, value: u8) {
+        match self.locate(addr) {
             None => unimplemented!(),
-            Some(region) => region.mem.store(region.map_addr(addr), value)
+            Some(region) => region.mem.write_u8(region.map_addr(addr), value)
         }
     }
 }
@@ -160,12 +167,15 @@ mod tests {
 
     #[test]
     fn test_mirrored_space() {
-        let ram = Ram { bytes: [0,1,2,3].to_vec() };
-        assert_eq!(1, ram.peek(1));
+        let ram = Ram2KB::new();
+        for i in 0..4 {
+            ram.write_u8(i, i as u8);
+        }
+        assert_eq!(1, ram.read_u8(1));
         let mirrored = MirroredAddressSpace::new(Box::new(ram), 0, 3, 10, 17);
 
         for i in 10..=17 {
-            assert_eq!(((i -10) % 4) as u8, mirrored.peek(i));
+            assert_eq!(((i -10) % 4) as u8, mirrored.read_u8(i));
         }
     }
 }
