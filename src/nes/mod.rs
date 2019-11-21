@@ -1,12 +1,29 @@
 use std::cell::Cell;
+use crate::cartridge::Cartridge;
+use crate::memory::AddressSpace;
+use bitflags::_core::ops::Add;
 
-struct Nes {
+pub struct Nes {
     ram: crate::memory::Ram2KB,
     cartridge: crate::cartridge::Cartridge,
     cpu: crate::cpu::Cpu,
     // TODO: ppu
     // TODO: apu
     // TODO: input
+}
+
+impl Nes {
+    pub fn new(cartridge: Cartridge) -> Self {
+        Nes {
+            ram: crate::memory::Ram2KB::new(),
+            cartridge,
+            cpu: crate::cpu::Cpu::new()
+        }
+    }
+
+    pub fn run(&self) {
+        self.cpu.run(Box::new(self));
+    }
 }
 
 impl crate::memory::AddressSpace for Nes {

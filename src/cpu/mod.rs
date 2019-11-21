@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use crate::memory::AddressSpace;
+use std::ops::Generator;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy)]
@@ -419,16 +420,26 @@ pub struct Cpu {
     flags: Flags,
     sp: u8,
     pc: u16,
+}
 
-    mem_map: Box<dyn crate::memory::AddressSpace>
+pub enum CpuTick {
+    Tick
 }
 
 impl Cpu {
-    fn new(memory_map: Box<dyn AddressSpace>) -> Self {
+    pub fn new() -> Self {
         // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
-        Cpu { acc: 0, x: 0, y: 0, flags: Flags::from_bits_truncate(0x34), sp: 0xFD, pc: 0, mem_map: memory_map }
+        Cpu { acc: 0, x: 0, y: 0, flags: Flags::from_bits_truncate(0x34), sp: 0xFD, pc: 0 }
     }
 
+    pub fn run(&self, memory_map: Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuTick, Return = !> {
+        || {
+            loop {
+                yield CpuTick::Tick
+            }
+        }
+    }
+/*
     fn tick(&mut self) {
         let opcode_value = self.mem_map.read_u8(self.pc);
         let opcode = &OPCODES[opcode_value as usize];
@@ -549,7 +560,7 @@ impl Cpu {
         }
 
     }
-
+*/
     // TODO
     fn push_stack(&mut self, v: u8) {
         unimplemented!()
@@ -655,7 +666,7 @@ impl Cpu {
     fn brk(&mut self) {
         self.push_stack16(self.pc);
         self.push_stack(self.flags.bits);
-        self.pc = self.mem_map.read_u16(0xFFFE);
+//        self.pc = self.mem_map.read_u16(0xFFFE);
     }
 
     // http://obelisk.me.uk/6502/reference.html#BVC
@@ -868,17 +879,17 @@ impl Cpu {
 
     // http://obelisk.me.uk/6502/reference.html#STA
     fn sta(&mut self, v: u16) {
-        self.mem_map.write_u8(v, self.acc);
+//        self.mem_map.write_u8(v, self.acc);
     }
 
     // http://obelisk.me.uk/6502/reference.html#STX
     fn stx(&mut self, v: u16) {
-        self.mem_map.write_u8(v, self.x);
+//        self.mem_map.write_u8(v, self.x);
     }
 
     // http://obelisk.me.uk/6502/reference.html#STY
     fn sty(&mut self, v: u16) {
-        self.mem_map.write_u8(v, self.y);
+//        self.mem_map.write_u8(v, self.y);
     }
 
     // http://obelisk.me.uk/6502/reference.html#TAX

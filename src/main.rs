@@ -1,3 +1,8 @@
+#![feature(
+    never_type,
+    generators, generator_trait
+)]
+
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::Read;
@@ -16,6 +21,9 @@ enum Yaner {
     Generate,
     Info {
         rom: PathBuf
+    },
+    Run {
+        rom: PathBuf
     }
 }
 
@@ -29,6 +37,11 @@ fn main() {
         Info { rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             println!("{}", cartridge);
-        }
+        },
+        Run { rom } => {
+            let cartridge = Cartridge::try_from(rom).unwrap();
+            let nes = crate::nes::Nes::new(cartridge);
+            nes.run();
+        },
     }
 }
