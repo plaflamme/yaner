@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::cartridge::Cartridge;
 
+#[macro_use] mod helper;
 mod memory;
 mod cartridge;
 mod cpu;
