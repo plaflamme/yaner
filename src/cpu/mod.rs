@@ -1,11 +1,12 @@
 use bitflags::bitflags;
 use crate::memory::AddressSpace;
-use std::ops::Generator;
+use std::ops::{Generator, GeneratorState};
 use std::cell::Cell;
+use std::pin::Pin;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy)]
-enum Op {
+pub enum Op {
     ADC,
     AHX,
     ANC,
@@ -84,7 +85,7 @@ enum Op {
 }
 
 #[derive(Debug)]
-enum AddressingMode {
+pub enum AddressingMode {
     Immediate, // imm
 
     ZeroPage, // zp $00
@@ -429,8 +430,9 @@ pub struct Cpu {
     pc: Cell<u16>,
 }
 
-pub enum CpuTick {
-    Tick
+pub enum CpuCycle {
+    Tick,
+    Done { op: Op, mode: AddressingMode }
 }
 
 impl Cpu {
@@ -459,33 +461,32 @@ impl Cpu {
         mem_map.read_u8(pc)
     }
 
-    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuTick, Return = !> + 'a {
+    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = !> + 'a {
 
         self.pc.set( mem_map.read_u16(0xFFFC));
 
         move || {
             loop {
                 let opcode = self.pc_read_u8(mem_map);
-                yield CpuTick::Tick; // TODO: I guess?
+                yield CpuCycle::Tick;
 
-                match OPCODES[opcode as usize] {
+                let instr = &OPCODES[opcode as usize];
+
+                match instr {
                     OpCode(Op::ADC, AddressingMode::Absolute, _, _) => {
-                        let addr_lo = self.pc_read_u8(mem_map) as u16;
-                        yield CpuTick::Tick;
-
-                        let addr_hi = self.pc_read_u8(mem_map) as u16;
-                        yield CpuTick::Tick;
-
-                        let addr = addr_hi << 8 | addr_lo;
-
-                        let value = mem_map.read_u8(addr);
-                        self.adc(value);
-                        yield CpuTick::Tick;
-                    }
+                        let gen = Absolute::read(&AdcOp, self, mem_map);
+                        unimplemented!()
+                    },
+                    OpCode(Op::ASL, AddressingMode::Absolute, _, _) => {
+                        let gen = Absolute::modify(&AslOp, self, mem_map);
+                        unimplemented!()
+                    },
+                    OpCode(Op::JMP, AddressingMode::Absolute, _, _) => {
+                        let gen = Absolute::jmp(self, mem_map);
+                        unimplemented!()
+                    },
                     _ => unimplemented!()
                 }
-
-                yield CpuTick::Tick
             }
         }
     }
@@ -668,13 +669,13 @@ impl Cpu {
 //        self.set_flags_from_acc();
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#ASL
-//    // NOTE: this can apply to the accumulator or some memory location
-//    fn asl(&mut self, v: u8) -> u8 {
-//        let mult = v << 1;
-//        self.flags.set(Flags::C, (v & 0x80) != 0);
-//        mult
-//    }
+    // http://obelisk.me.uk/6502/reference.html#ASL
+    fn asl(&self, v: u8) -> u8 {
+        let result = v << 1;
+        self.set_flag(Flags::C, (v & 0x80) != 0);
+        self.set_flags_from(result);
+        result
+    }
 //
 //    fn branch_if(&mut self, branch: bool, v: u8) {
 //        if branch {
@@ -991,6 +992,121 @@ impl Cpu {
 
 }
 
+// http://nesdev.com/6502_cpu.txt
+trait ReadOperation {
+    fn op(&self) -> Op;
+    fn operate(&self, cpu: &Cpu, value: u8);
+}
+
+struct AdcOp;
+impl ReadOperation for AdcOp {
+    fn op(&self) -> Op {
+        Op::ADC
+    }
+
+    fn operate(&self, cpu: &Cpu, value: u8) {
+        cpu.adc(value)
+    }
+}
+
+trait ModifyOperation {
+    fn op(&self) -> Op;
+    fn operate(&self, cpu: &Cpu, value: u8) -> u8;
+}
+struct AslOp;
+impl ModifyOperation for AslOp {
+    fn op(&self) -> Op {
+        Op::ASL
+    }
+
+    fn operate(&self, cpu: &Cpu, value: u8) -> u8 {
+        cpu.asl(value)
+    }
+}
+
+// TODO: Use this type alias leads to a compiler error
+//type Gn<'a> = impl Generator<Yield = CpuCycle, Return = CpuCycle> + 'a;
+struct Absolute;
+impl Absolute {
+
+    // #  address R/W description
+    //       --- ------- --- -------------------------------------------------
+    //        1    PC     R  fetch opcode, increment PC
+    //        2    PC     R  fetch low address byte, increment PC
+    //        3    PC     R  copy low address byte to PCL, fetch high address
+    //                       byte to PCH
+    fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = CpuCycle> + 'a {
+        move || {
+            let addr_lo = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr_hi = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr = addr_hi << 8 | addr_lo;
+            cpu.pc.set(addr);
+
+            CpuCycle::Done { op: Op::JMP, mode: AddressingMode::Absolute }
+        }
+    }
+
+    // #  address R/W description
+    //       --- ------- --- ------------------------------------------
+    //        1    PC     R  fetch opcode, increment PC
+    //        2    PC     R  fetch low byte of address, increment PC
+    //        3    PC     R  fetch high byte of address, increment PC
+    //        4  address  R  read from effective address
+    fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = CpuCycle> + 'a {
+        move || {
+            let addr_lo = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr_hi = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr = addr_hi << 8 | addr_lo;
+
+            let value = mem_map.read_u8(addr);
+            operation.operate(cpu, value);
+            CpuCycle::Tick;
+
+            CpuCycle::Done { op: operation.op(), mode: AddressingMode::Absolute }
+        }
+    }
+
+    // #  address R/W description
+    //       --- ------- --- ------------------------------------------
+    //        1    PC     R  fetch opcode, increment PC
+    //        2    PC     R  fetch low byte of address, increment PC
+    //        3    PC     R  fetch high byte of address, increment PC
+    //        4  address  R  read from effective address
+    //        5  address  W  write the value back to effective address,
+    //                       and do the operation on it
+    //        6  address  W  write the new value to effective address
+    fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = CpuCycle> + 'a {
+        move || {
+            let addr_lo = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr_hi = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr = addr_hi << 8 | addr_lo;
+
+            let value = mem_map.read_u8(addr);
+            yield CpuCycle::Tick;
+
+            mem_map.write_u8(addr, value);
+            let result = operation.operate(cpu, value);
+            yield CpuCycle::Tick;
+
+            mem_map.write_u8(addr, result);
+            CpuCycle::Done { op: operation.op(), mode: AddressingMode::Absolute }
+        }
+    }
+}
+
+
 pub mod generator {
     use super::*;
     use super::Op::*;
@@ -1049,7 +1165,7 @@ Fx|BEQrel 2*|SBCizy 5*|KIL|ISCizy 8|NOPzpx 4|SBCzpx 4|INCzpx 6|ISCzpx 6|SED2|SBC
             let addr = match addr_str {
                 "zp" => ZeroPage, "zpx" => ZeroPageX, "zpy" => ZeroPageY,
                 "ind" => Indirect, "izx" => IndirectX, "izy" => IndirectY,
-                "abs" => Absolute, "abx" => AbsoluteX, "aby" => AbsoluteY,
+                "abs" => AddressingMode::Absolute, "abx" => AbsoluteX, "aby" => AbsoluteY,
                 "imm" => Immediate, "rel" => Relative, "" => Implicit,
                 c => panic!("Unexpected addressing mode {}", c)
             };
