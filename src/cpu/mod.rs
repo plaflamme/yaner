@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 use crate::memory::AddressSpace;
 use bitflags::bitflags;
 use std::ops::{Generator, GeneratorState};
@@ -195,16 +197,40 @@ impl Cpu {
 
                 match instr {
                     OpCode(Op::ADC, AddressingMode::Absolute) => {
-                        yield_complete!(Absolute::read(&Adc, self, mem_map));
+                        yield_complete!(Absolute::read(&adc, self, mem_map));
                     },
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
-                        yield_complete!(Absolute::modify(&Asl, self, mem_map));
+                        yield_complete!(Absolute::modify(&asl, self, mem_map));
+                    },
+                    OpCode(Op::CLC, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&clc, self, mem_map));
+                    },
+                    OpCode(Op::CLD, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&cld, self, mem_map));
+                    },
+                    OpCode(Op::CLI, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&cli, self, mem_map));
+                    },
+                    OpCode(Op::CLV, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&clv, self, mem_map));
+                    },
+                    OpCode(Op::NOP, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&nop, self, mem_map));
                     },
                     OpCode(Op::JMP, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::jmp(self, mem_map));
                     },
                     OpCode(Op::STA, AddressingMode::Absolute) => {
-                        yield_complete!(Absolute::write(&Sta, self, mem_map));
+                        yield_complete!(Absolute::write(&sta, self, mem_map));
+                    },
+                    OpCode(Op::SEC, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&sec, self, mem_map));
+                    },
+                    OpCode(Op::SED, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&sed, self, mem_map));
+                    },
+                    OpCode(Op::SEI, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&sei, self, mem_map));
                     },
                     _ => {
                         println!("{:?} not implemented", instr);
@@ -638,21 +664,6 @@ impl Cpu {
 //        self.set_flags_from_acc();
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#SEC
-//    fn sec(&mut self) {
-//        self.flags.set(Flags::C, true)
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#SED
-//    fn sed(&mut self) {
-//        self.flags.set(Flags::D, true)
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#SEI
-//    fn sei(&mut self) {
-//        self.flags.set(Flags::I, true)
-//    }
-//
 //    // http://obelisk.me.uk/6502/reference.html#STA
 //    fn sta(&mut self, v: u16) {
 ////        self.mem_map.write_u8(v, self.acc);
@@ -713,8 +724,8 @@ trait ReadOperation {
 }
 
 // http://obelisk.me.uk/6502/reference.html#ADC
-struct Adc;
-impl ReadOperation for Adc {
+struct adc;
+impl ReadOperation for adc {
     fn operate(&self, cpu: &Cpu, v: u8) {
         let acc = cpu.acc.get();
         let (v1, o1) = acc.overflowing_add(v);
@@ -733,8 +744,8 @@ trait ModifyOperation {
 }
 
 // http://obelisk.me.uk/6502/reference.html#ASL
-struct Asl;
-impl ModifyOperation for Asl {
+struct asl;
+impl ModifyOperation for asl {
     fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
         let result = v << 1;
         cpu.set_flag(Flags::C, (v & 0x80) != 0);
@@ -749,10 +760,78 @@ trait WriteOperation {
 }
 
 // http://obelisk.me.uk/6502/reference.html#STA
-struct Sta;
-impl WriteOperation for Sta {
+struct sta;
+impl WriteOperation for sta {
     fn operate(&self, cpu: &Cpu) -> u8 {
         cpu.acc.get()
+    }
+}
+
+trait ImplicitOperation {
+    fn operate(&self, cpu: &Cpu);
+}
+
+// http://obelisk.me.uk/6502/reference.html#CLC
+struct clc;
+impl ImplicitOperation for clc {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::C, false);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#CLD
+struct cld;
+impl ImplicitOperation for cld {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::D, false);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#CLI
+struct cli;
+impl ImplicitOperation for cli {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::I, false);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#CLV
+struct clv;
+impl ImplicitOperation for clv {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::V, false);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#NOP
+struct nop;
+impl ImplicitOperation for nop {
+    fn operate(&self, cpu: &Cpu) {
+
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#SEC
+struct sec;
+impl ImplicitOperation for sec {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::C, true);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#SED
+struct sed;
+impl ImplicitOperation for sed {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::D, true);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#SEI
+struct sei;
+impl ImplicitOperation for sei {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.set_flag(Flags::I, true);
     }
 }
 
@@ -836,6 +915,41 @@ impl Absolute {
             let addr = yield_complete!(Absolute::abs_addr(cpu, mem_map));
 
             mem_map.write_u8(addr, operation.operate(cpu));
+            yield CpuCycle::Tick;
+        }
+    }
+}
+
+struct Implicit;
+impl Implicit {
+    //  #  address R/W description
+    // --- ------- --- -----------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  read next instruction byte (and throw it away)
+    fn run<'a, O: ImplicitOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+        move || {
+            let _ = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            operation.operate(cpu);
+            yield CpuCycle::Tick;
+        }
+    }
+}
+
+struct Accumulator;
+impl Accumulator {
+    //  #  address R/W description
+    // --- ------- --- -----------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  read next instruction byte (and throw it away)
+    fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+        move || {
+            let _ = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let result = operation.operate(cpu, cpu.acc.get());
+            cpu.acc.set(result);
             yield CpuCycle::Tick;
         }
     }
