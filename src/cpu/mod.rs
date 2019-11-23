@@ -195,13 +195,16 @@ impl Cpu {
 
                 match instr {
                     OpCode(Op::ADC, AddressingMode::Absolute) => {
-                        yield_complete!(Absolute::read(&AdcOp, self, mem_map));
+                        yield_complete!(Absolute::read(&Adc, self, mem_map));
                     },
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
-                        yield_complete!(Absolute::modify(&AslOp, self, mem_map));
+                        yield_complete!(Absolute::modify(&Asl, self, mem_map));
                     },
                     OpCode(Op::JMP, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::jmp(self, mem_map));
+                    },
+                    OpCode(Op::STA, AddressingMode::Absolute) => {
+                        yield_complete!(Absolute::write(&Sta, self, mem_map));
                     },
                     _ => {
                         println!("{:?} not implemented", instr);
@@ -373,18 +376,6 @@ impl Cpu {
 
 // Operations
 impl Cpu {
-
-    // http://obelisk.me.uk/6502/reference.html#ADC
-    fn adc(&self, v: u8) {
-        let acc = self.acc.get();
-        let (v1, o1) = acc.overflowing_add(v);
-        let (v2, o2) = v1.overflowing_add(self.flag(Flags::C) as u8);
-
-        self.set_flag(Flags::C, o1 | o2);
-        self.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
-        self.acc.set(v2);
-        self.set_flags_from_acc();
-    }
 
 //    // http://obelisk.me.uk/6502/reference.html#AND
 //    fn and(&mut self, v: u8) {
@@ -716,39 +707,55 @@ impl Cpu {
 }
 
 // http://nesdev.com/6502_cpu.txt
+// Read operations
 trait ReadOperation {
-    fn op(&self) -> Op;
     fn operate(&self, cpu: &Cpu, value: u8);
 }
 
-struct AdcOp;
-impl ReadOperation for AdcOp {
-    fn op(&self) -> Op {
-        Op::ADC
-    }
+// http://obelisk.me.uk/6502/reference.html#ADC
+struct Adc;
+impl ReadOperation for Adc {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        let acc = cpu.acc.get();
+        let (v1, o1) = acc.overflowing_add(v);
+        let (v2, o2) = v1.overflowing_add(cpu.flag(Flags::C) as u8);
 
-    fn operate(&self, cpu: &Cpu, value: u8) {
-        cpu.adc(value)
+        cpu.set_flag(Flags::C, o1 | o2);
+        cpu.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
+        cpu.acc.set(v2);
+        cpu.set_flags_from_acc();
     }
 }
 
+// Read-modify-write operations
 trait ModifyOperation {
-    fn op(&self) -> Op;
     fn operate(&self, cpu: &Cpu, value: u8) -> u8;
 }
-struct AslOp;
-impl ModifyOperation for AslOp {
-    fn op(&self) -> Op {
-        Op::ASL
-    }
 
-    fn operate(&self, cpu: &Cpu, value: u8) -> u8 {
-        cpu.asl(value)
+// http://obelisk.me.uk/6502/reference.html#ASL
+struct Asl;
+impl ModifyOperation for Asl {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = v << 1;
+        cpu.set_flag(Flags::C, (v & 0x80) != 0);
+        cpu.set_flags_from(result);
+        result
     }
 }
 
-// TODO: Use this type alias leads to a compiler error
-//type Gn<'a> = impl Generator<Yield = CpuCycle, Return = CpuCycle> + 'a;
+// Write operations
+trait WriteOperation {
+    fn operate(&self, cpu: &Cpu) -> u8;
+}
+
+// http://obelisk.me.uk/6502/reference.html#STA
+struct Sta;
+impl WriteOperation for Sta {
+    fn operate(&self, cpu: &Cpu) -> u8 {
+        cpu.acc.get()
+    }
+}
+
 struct Absolute;
 impl Absolute {
 
@@ -764,11 +771,11 @@ impl Absolute {
         }
     }
 
-    // #  address R/W description
-    //       --- ------- --- -------------------------------------------------
-    //        1    PC     R  fetch opcode, increment PC
-    //        2    PC     R  fetch low address byte, increment PC
-    //        3    PC     R  copy low address byte to PCL, fetch high address
+    //  #  address R/W description
+    // --- ------- --- -------------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch low address byte, increment PC
+    //  3    PC     R  copy low address byte to PCL, fetch high address
     //                       byte to PCH
     fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
@@ -777,12 +784,12 @@ impl Absolute {
         }
     }
 
-    // #  address R/W description
-    //       --- ------- --- ------------------------------------------
-    //        1    PC     R  fetch opcode, increment PC
-    //        2    PC     R  fetch low byte of address, increment PC
-    //        3    PC     R  fetch high byte of address, increment PC
-    //        4  address  R  read from effective address
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch low byte of address, increment PC
+    //  3    PC     R  fetch high byte of address, increment PC
+    //  4  address  R  read from effective address
     fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
             let addr = yield_complete!(Absolute::abs_addr(cpu, mem_map));
@@ -793,15 +800,15 @@ impl Absolute {
         }
     }
 
-    // #  address R/W description
-    //       --- ------- --- ------------------------------------------
-    //        1    PC     R  fetch opcode, increment PC
-    //        2    PC     R  fetch low byte of address, increment PC
-    //        3    PC     R  fetch high byte of address, increment PC
-    //        4  address  R  read from effective address
-    //        5  address  W  write the value back to effective address,
-    //                       and do the operation on it
-    //        6  address  W  write the new value to effective address
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch low byte of address, increment PC
+    //  3    PC     R  fetch high byte of address, increment PC
+    //  4  address  R  read from effective address
+    //  5  address  W  write the value back to effective address,
+    //                 and do the operation on it
+    //  6  address  W  write the new value to effective address
     fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
             let addr = yield_complete!(Absolute::abs_addr(cpu, mem_map));
@@ -814,6 +821,22 @@ impl Absolute {
             yield CpuCycle::Tick;
 
             mem_map.write_u8(addr, result);
+            yield CpuCycle::Tick;
+        }
+    }
+
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch low byte of address, increment PC
+    //  3    PC     R  fetch high byte of address, increment PC
+    //  4  address  W  write register to effective address
+    fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr = yield_complete!(Absolute::abs_addr(cpu, mem_map));
+
+            mem_map.write_u8(addr, operation.operate(cpu));
+            yield CpuCycle::Tick;
         }
     }
 }
