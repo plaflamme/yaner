@@ -6,7 +6,7 @@ pub trait AddressSpace {
 
     fn read_u16(&self, addr: u16) -> u16 {
         let low = self.read_u8(addr) as u16;
-        let high = self.read_u8(addr + 1) as u16;
+        let high = self.read_u8(addr.wrapping_add(1)) as u16;
         (high << 8) | low
     }
 

@@ -179,8 +179,14 @@ impl Cpu {
     }
 
     // reads u8 at pc and advances by one
-    fn pc_read_u8(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+    fn pc_read_u8_next(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
         let pc = self.next_pc();
+        mem_map.read_u8(pc)
+    }
+
+    // reads u8 at pc
+    fn pc_read_u8(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+        let pc = self.pc.get();
         mem_map.read_u8(pc)
     }
 
@@ -190,7 +196,8 @@ impl Cpu {
 
         move || {
             loop {
-                let opcode = self.pc_read_u8(mem_map);
+                println!("0x{:02X?}", self.pc.get());
+                let opcode = self.pc_read_u8_next(mem_map);
                 yield CpuCycle::Tick;
 
                 let instr = &OPCODES[opcode as usize];
@@ -723,10 +730,10 @@ impl Absolute {
 
     fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
         move || {
-            let addr_lo = cpu.pc_read_u8(mem_map) as u16;
+            let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
             yield CpuCycle::Tick;
 
-            let addr_hi = cpu.pc_read_u8(mem_map) as u16;
+            let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
             yield CpuCycle::Tick;
 
             addr_hi << 8 | addr_lo
@@ -812,7 +819,7 @@ impl Immediate {
     //  2    PC     R  fetch value, increment PC
     fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
-            let addr = cpu.pc_read_u8(mem_map) as u16;
+            let addr = cpu.pc_read_u8_next(mem_map) as u16;
             yield CpuCycle::Tick;
 
             let value = mem_map.read_u8(addr);
