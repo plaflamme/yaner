@@ -26,11 +26,13 @@ impl Nes {
     pub fn run(&self) {
         let boxed: Box<&dyn AddressSpace> = Box::new(self);
         let mut cpu_ticks = self.cpu.run(&boxed);
-        match Pin::new(&mut cpu_ticks).resume() {
-            GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => println!("Tick!"),
-            GeneratorState::Yielded(crate::cpu::CpuCycle::Done { op, mode }) => println!("Done {:?}, {:?}", op, mode),
-            GeneratorState::Complete(_) => unimplemented!()
-        };
+        loop {
+            match Pin::new(&mut cpu_ticks).resume() {
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => println!("Tick!"),
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { op, mode }) => println!("Done {:?}, {:?}", op, mode),
+                GeneratorState::Complete(_) => unimplemented!()
+            };
+        }
     }
 }
 

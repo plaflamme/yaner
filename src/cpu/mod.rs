@@ -203,7 +203,10 @@ impl Cpu {
                     OpCode(Op::JMP, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::jmp(self, mem_map));
                     },
-                    _ => unimplemented!()
+                    _ => {
+                        println!("{:?} not implemented", instr);
+                        unimplemented!();
+                    }
                 }
 
                 yield CpuCycle::Done { op: instr.0, mode: instr.1 };
