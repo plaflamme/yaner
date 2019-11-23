@@ -221,6 +221,12 @@ impl Cpu {
                     OpCode(Op::CLV, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&clv, self, mem_map));
                     },
+                    OpCode(Op::LDA, AddressingMode::Absolute) => {
+                        yield_complete!(Absolute::read(&lda, self, mem_map));
+                    },
+                    OpCode(Op::LDA, AddressingMode::Immediate) => {
+                        yield_complete!(Immediate::read(&lda, self, mem_map));
+                    },
                     OpCode(Op::LDX, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::read(&ldx, self, mem_map));
                     },
@@ -596,6 +602,15 @@ impl ReadOperation for adc {
         cpu.set_flag(Flags::C, o1 | o2);
         cpu.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
         cpu.acc.set(v2);
+        cpu.set_flags_from_acc();
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#LDA
+struct lda;
+impl ReadOperation for lda {
+    fn operate(&self, cpu: &Cpu, value: u8) {
+        cpu.acc.set(value);
         cpu.set_flags_from_acc();
     }
 }
