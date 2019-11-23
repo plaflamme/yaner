@@ -214,6 +214,12 @@ impl Cpu {
                     OpCode(Op::CLV, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&clv, self, mem_map));
                     },
+                    OpCode(Op::LDX, AddressingMode::Absolute) => {
+                        yield_complete!(Absolute::read(&ldx, self, mem_map));
+                    },
+                    OpCode(Op::LDX, AddressingMode::Immediate) => {
+                        yield_complete!(Immediate::read(&ldx, self, mem_map));
+                    },
                     OpCode(Op::NOP, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&nop, self, mem_map));
                     },
@@ -231,6 +237,12 @@ impl Cpu {
                     },
                     OpCode(Op::SEI, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&sei, self, mem_map));
+                    },
+                    OpCode(Op::TSX, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&tsx, self, mem_map));
+                    },
+                    OpCode(Op::TXS, AddressingMode::Implicit) => {
+                        yield_complete!(Implicit::run(&txs, self, mem_map));
                     },
                     _ => {
                         println!("{:?} not implemented", instr);
@@ -481,26 +493,6 @@ impl Cpu {
 //        self.branch_if(self.flags.contains(Flags::V), v)
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#CLC
-//    fn clc(&mut self) {
-//        self.flags.set(Flags::C, false)
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#CLD
-//    fn cld(&mut self) {
-//        self.flags.set(Flags::D, false)
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#CLI
-//    fn cli(&mut self) {
-//        self.flags.set(Flags::I, false)
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#CLV
-//    fn clv(&mut self) {
-//        self.flags.set(Flags::V, false)
-//    }
-//
 //    fn compare(&mut self, a: u8, b: u8) {
 //        let result = a - b;
 //        self.flags.set(Flags::C, a >= b);
@@ -508,7 +500,7 @@ impl Cpu {
 //        self.flags.set(Flags::N, (result & 0x80) > 0);
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#CLV
+//    // http://obelisk.me.uk/6502/reference.html#CMP
 //    fn cmp(&mut self, v: u8) {
 //        self.compare(self.acc, v)
 //    }
@@ -580,12 +572,6 @@ impl Cpu {
 //        self.set_flags_from_acc();
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#LDX
-//    fn ldx(&mut self, v: u8) {
-//        self.x = v;
-//        self.set_flags_from(self.x);
-//    }
-//
 //    // http://obelisk.me.uk/6502/reference.html#LDY
 //    fn ldy(&mut self, v: u8) {
 //        self.y = v;
@@ -598,10 +584,6 @@ impl Cpu {
 //        let result = v >> 1;
 //        self.set_flags_from(result);
 //        result
-//    }
-//
-//    // http://obelisk.me.uk/6502/reference.html#NOP
-//    fn nop(&mut self) {
 //    }
 //
 //    // http://obelisk.me.uk/6502/reference.html#ORA
@@ -691,12 +673,6 @@ impl Cpu {
 //        self.set_flags_from(self.y);
 //    }
 //
-//    // http://obelisk.me.uk/6502/reference.html#TSX
-//    fn tsx(&mut self) {
-//        self.x = self.sp;
-//        self.set_flags_from(self.x);
-//    }
-//
 //    // http://obelisk.me.uk/6502/reference.html#TXA
 //    fn txa(&mut self) {
 //        self.acc = self.x;
@@ -735,6 +711,15 @@ impl ReadOperation for adc {
         cpu.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
         cpu.acc.set(v2);
         cpu.set_flags_from_acc();
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#LDX
+struct ldx;
+impl ReadOperation for ldx {
+    fn operate(&self, cpu: &Cpu, value: u8) {
+        cpu.x.set(value);
+        cpu.set_flags_from(value);
     }
 }
 
@@ -835,6 +820,25 @@ impl ImplicitOperation for sei {
     }
 }
 
+// http://obelisk.me.uk/6502/reference.html#TSX
+struct tsx;
+impl ImplicitOperation for tsx {
+    fn operate(&self, cpu: &Cpu) {
+        let sp = cpu.sp.get();
+        cpu.x.set(sp);
+        cpu.set_flags_from(sp);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#TXS
+struct txs;
+impl ImplicitOperation for txs {
+    fn operate(&self, cpu: &Cpu) {
+        let sp = cpu.x.get();
+        cpu.sp.set(sp);
+    }
+}
+
 struct Absolute;
 impl Absolute {
 
@@ -915,6 +919,25 @@ impl Absolute {
             let addr = yield_complete!(Absolute::abs_addr(cpu, mem_map));
 
             mem_map.write_u8(addr, operation.operate(cpu));
+            yield CpuCycle::Tick;
+        }
+    }
+}
+
+struct Immediate;
+impl Immediate {
+
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch value, increment PC
+    fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr = cpu.pc_read_u8(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let value = mem_map.read_u8(addr);
+            operation.operate(cpu, cpu.acc.get());
             yield CpuCycle::Tick;
         }
     }
