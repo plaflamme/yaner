@@ -245,7 +245,7 @@ impl Cpu {
                         yield_complete!(Implicit::run(&txs, self, mem_map));
                     },
                     _ => {
-                        println!("{:?} not implemented", instr);
+                        println!("{:?} (0x{:02X?}) not implemented", instr, opcode);
                         unimplemented!();
                     }
                 }
