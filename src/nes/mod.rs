@@ -9,7 +9,7 @@ pub struct Nes {
     ram: crate::memory::Ram2KB,
     cartridge: crate::cartridge::Cartridge,
     cpu: crate::cpu::Cpu,
-    // TODO: ppu
+    ppu: crate::ppu::Ppu,
     // TODO: apu
     // TODO: input
 }
@@ -19,7 +19,8 @@ impl Nes {
         Nes {
             ram: crate::memory::Ram2KB::new(),
             cartridge,
-            cpu: crate::cpu::Cpu::new()
+            cpu: crate::cpu::Cpu::new(),
+            ppu: crate::ppu::Ppu::new(),
         }
     }
 
@@ -42,6 +43,7 @@ impl crate::memory::AddressSpace for Nes {
             0x0000..=0x07FF => self.ram.read_u8(addr),
             0x0800..=0x1FFF => self.ram.read_u8(addr % 0x0800),
 
+            0x2002 => self.ppu.status(),
             0x2000..=0x2007 => unimplemented!(), // PPU
             0x2008..=0x3FFF => unimplemented!(), // PPU mirror
 

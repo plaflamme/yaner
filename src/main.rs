@@ -14,6 +14,7 @@ use crate::cartridge::Cartridge;
 mod memory;
 mod cartridge;
 mod cpu;
+mod ppu;
 mod nes;
 
 #[derive(Debug, StructOpt)]
