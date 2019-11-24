@@ -262,6 +262,10 @@ impl Cpu {
                         yield_complete!(Absolute::jmp(self, mem_map));
                     },
 
+                    OpCode(Op::JSR, AddressingMode::Absolute) => {
+                        yield_complete!(Stack::jsr(self, mem_map));
+                    },
+
                     OpCode(Op::STA, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::write(&sta, self, mem_map));
                     },
@@ -310,8 +314,14 @@ impl Cpu {
     }
 
     // TODO
-    fn push_stack(&mut self, v: u8) {
-        unimplemented!()
+    fn stack_addr(&self) -> u16 {
+        let sp = self.sp.get() as u16;
+        0x0100 | sp
+    }
+    fn push_stack(&self, mem_map: &Box<&dyn AddressSpace>, v: u8) {
+        let addr = self.stack_addr();
+        mem_map.write_u8(addr, v);
+        self.sp.set(self.sp.get().wrapping_sub(1));
     }
     fn push_stack16(&mut self, v: u16) {
         unimplemented!()
@@ -794,6 +804,40 @@ impl ImplicitOperation for txs {
     fn operate(&self, cpu: &Cpu) {
         let sp = cpu.x.get();
         cpu.sp.set(sp);
+    }
+}
+
+struct Stack;
+impl Stack {
+    //  #  address R/W description
+    // --- ------- --- -------------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch low address byte, increment PC
+    //  3  $0100,S  R  internal operation (predecrement S?)
+    //  4  $0100,S  W  push PCH on stack, decrement S
+    //  5  $0100,S  W  push PCL on stack, decrement S
+    //  6    PC     R  copy low address byte to PCL, fetch high address
+    //                 byte to PCH
+    fn jsr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            yield CpuCycle::Tick;
+
+            let pc_hi = (cpu.pc.get() >> 8) as u8;
+            cpu.push_stack(mem_map, pc_hi);
+            yield CpuCycle::Tick;
+
+            let pc_lo = (cpu.pc.get() & 0x00FF) as u8;
+            cpu.push_stack(mem_map, pc_lo);
+            yield CpuCycle::Tick;
+
+            let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
+            let pc = addr_hi << 8 | addr_lo;
+            cpu.pc.set(pc);
+            yield CpuCycle::Tick;
+        }
     }
 }
 
