@@ -221,8 +221,29 @@ impl Cpu {
                         yield_complete!(ZeroPage::modify(&asl, self, mem_map));
                     },
 
+                    OpCode(Op::BCC, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bcc, self, mem_map));
+                    },
                     OpCode(Op::BCS, AddressingMode::Relative) => {
                         yield_complete!(Relative::branch(&bcs, self, mem_map));
+                    },
+                    OpCode(Op::BEQ, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&beq, self, mem_map));
+                    },
+                    OpCode(Op::BMI, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bmi, self, mem_map));
+                    },
+                    OpCode(Op::BNE, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bne, self, mem_map));
+                    },
+                    OpCode(Op::BPL, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bpl, self, mem_map));
+                    },
+                    OpCode(Op::BVC, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bvc, self, mem_map));
+                    },
+                    OpCode(Op::BVS, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bvs, self, mem_map));
                     },
 
                     OpCode(Op::CLC, AddressingMode::Implicit) => {
@@ -646,10 +667,59 @@ trait BranchOperation {
     fn branch(&self, cpu: &Cpu) -> bool;
 }
 
+struct bcc;
+impl BranchOperation for bcc {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        !cpu.flag(Flags::C)
+    }
+}
+
 struct bcs;
 impl BranchOperation for bcs {
     fn branch(&self, cpu: &Cpu) -> bool {
         cpu.flag(Flags::C)
+    }
+}
+
+struct beq;
+impl BranchOperation for beq {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        cpu.flag(Flags::Z)
+    }
+}
+
+struct bmi;
+impl BranchOperation for bmi {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        cpu.flag(Flags::N)
+    }
+}
+
+struct bne;
+impl BranchOperation for bne {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        !cpu.flag(Flags::Z)
+    }
+}
+
+struct bpl;
+impl BranchOperation for bpl {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        !cpu.flag(Flags::N)
+    }
+}
+
+struct bvc;
+impl BranchOperation for bvc {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        !cpu.flag(Flags::V)
+    }
+}
+
+struct bvs;
+impl BranchOperation for bvs {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        cpu.flag(Flags::V)
     }
 }
 
