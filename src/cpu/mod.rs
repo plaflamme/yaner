@@ -221,6 +221,10 @@ impl Cpu {
                         yield_complete!(ZeroPage::modify(&asl, self, mem_map));
                     },
 
+                    OpCode(Op::BCS, AddressingMode::Relative) => {
+                        yield_complete!(Relative::branch(&bcs, self, mem_map));
+                    },
+
                     OpCode(Op::CLC, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&clc, self, mem_map));
                     },
@@ -637,6 +641,18 @@ impl Cpu {
 }
 
 // http://nesdev.com/6502_cpu.txt
+
+trait BranchOperation {
+    fn branch(&self, cpu: &Cpu) -> bool;
+}
+
+struct bcs;
+impl BranchOperation for bcs {
+    fn branch(&self, cpu: &Cpu) -> bool {
+        cpu.flag(Flags::C)
+    }
+}
+
 // Read operations
 trait ReadOperation {
     fn operate(&self, cpu: &Cpu, value: u8);
@@ -980,21 +996,56 @@ impl Accumulator {
     }
 }
 
+struct Relative;
+impl Relative {
+    //  #   address  R/W description
+    // --- --------- --- ---------------------------------------------
+    //  1     PC      R  fetch opcode, increment PC
+    //  2     PC      R  fetch operand, increment PC
+    //  3     PC      R  Fetch opcode of next instruction,
+    //                   If branch is taken, add operand to PCL.
+    //                   Otherwise increment PC.
+    //  4+    PC*     R  Fetch opcode of next instruction.
+    //                   Fix PCH. If it did not change, increment PC.
+    //  5!    PC      R  Fetch opcode of next instruction,
+    //                   increment PC.
+    //
+    // Notes: The opcode fetch of the next instruction is included to
+    //        this diagram for illustration purposes. When determining
+    //        real execution times, remember to subtract the last
+    //        cycle.
+    //
+    //        * The high byte of Program Counter (PCH) may be invalid
+    //          at this time, i.e. it may be smaller or bigger by $100.
+    //
+    //        + If branch is taken, this cycle will be executed.
+    //
+    //        ! If branch occurs to different page, this cycle will be
+    //          executed.
+    fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+        move || {
+            let operand = cpu.pc_read_u8_next(mem_map) as i8;
+            yield CpuCycle::Tick;
+
+            if operation.branch(cpu) {
+                let pc = cpu.pc.get() as i16;
+                let addr = pc.wrapping_add(operand as i16) as u16;
+
+                if ((pc as u16) & 0xFF00) != (addr & 0xFF00) {
+                    // crossing page boundary incurs an additional cycle
+                    yield CpuCycle::Tick;
+                }
+
+                cpu.pc.set(addr);
+                yield CpuCycle::Tick;
+            }
+
+        }
+    }
+}
 
 struct ZeroPage;
 impl ZeroPage {
-
-    fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
-        move || {
-            let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
-            yield CpuCycle::Tick;
-
-            let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
-            yield CpuCycle::Tick;
-
-            addr_hi << 8 | addr_lo
-        }
-    }
 
     //  #  address R/W description
     // --- ------- --- ------------------------------------------
