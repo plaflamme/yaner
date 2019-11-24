@@ -207,9 +207,20 @@ impl Cpu {
                     OpCode(Op::ADC, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::read(&adc, self, mem_map));
                     },
+                    OpCode(Op::ADC, AddressingMode::Immediate) => {
+                        yield_complete!(Immediate::read(&adc, self, mem_map));
+                    },
+                    OpCode(Op::ADC, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::read(&adc, self, mem_map));
+                    },
+
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::modify(&asl, self, mem_map));
                     },
+                    OpCode(Op::ASL, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::modify(&asl, self, mem_map));
+                    },
+
                     OpCode(Op::CLC, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&clc, self, mem_map));
                     },
@@ -222,27 +233,56 @@ impl Cpu {
                     OpCode(Op::CLV, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&clv, self, mem_map));
                     },
+
                     OpCode(Op::LDA, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::read(&lda, self, mem_map));
                     },
                     OpCode(Op::LDA, AddressingMode::Immediate) => {
                         yield_complete!(Immediate::read(&lda, self, mem_map));
                     },
+                    OpCode(Op::LDA, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::read(&lda, self, mem_map));
+                    },
+
                     OpCode(Op::LDX, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::read(&ldx, self, mem_map));
                     },
                     OpCode(Op::LDX, AddressingMode::Immediate) => {
                         yield_complete!(Immediate::read(&ldx, self, mem_map));
                     },
+                    OpCode(Op::LDX, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::read(&ldx, self, mem_map));
+                    },
+
                     OpCode(Op::NOP, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&nop, self, mem_map));
                     },
+
                     OpCode(Op::JMP, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::jmp(self, mem_map));
                     },
+
                     OpCode(Op::STA, AddressingMode::Absolute) => {
                         yield_complete!(Absolute::write(&sta, self, mem_map));
                     },
+                    OpCode(Op::STA, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::write(&sta, self, mem_map));
+                    },
+
+                    OpCode(Op::STX, AddressingMode::Absolute) => {
+                        yield_complete!(ZeroPage::write(&stx, self, mem_map));
+                    },
+                    OpCode(Op::STX, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::write(&stx, self, mem_map));
+                    },
+
+                    OpCode(Op::STY, AddressingMode::Absolute) => {
+                        yield_complete!(Absolute::write(&sty, self, mem_map));
+                    },
+                    OpCode(Op::STY, AddressingMode::ZeroPage) => {
+                        yield_complete!(ZeroPage::write(&sty, self, mem_map));
+                    },
+
                     OpCode(Op::SEC, AddressingMode::Implicit) => {
                         yield_complete!(Implicit::run(&sec, self, mem_map));
                     },
@@ -654,6 +694,22 @@ impl WriteOperation for sta {
     }
 }
 
+// http://obelisk.me.uk/6502/reference.html#STX
+struct stx;
+impl WriteOperation for stx {
+    fn operate(&self, cpu: &Cpu) -> u8 {
+        cpu.x.get()
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#STY
+struct sty;
+impl WriteOperation for sty {
+    fn operate(&self, cpu: &Cpu) -> u8 {
+        cpu.y.get()
+    }
+}
+
 trait ImplicitOperation {
     fn operate(&self, cpu: &Cpu);
 }
@@ -875,6 +931,79 @@ impl Accumulator {
 
             let result = operation.operate(cpu, cpu.acc.get());
             cpu.acc.set(result);
+            yield CpuCycle::Tick;
+        }
+    }
+}
+
+
+struct ZeroPage;
+impl ZeroPage {
+
+    fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
+        move || {
+            let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            addr_hi << 8 | addr_lo
+        }
+    }
+
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch address, increment PC
+    //  3  address  R  read from effective address
+    fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let value = mem_map.read_u8(addr);
+            operation.operate(cpu, value);
+            yield CpuCycle::Tick;
+        }
+    }
+
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch address, increment PC
+    //  3  address  R  read from effective address
+    //  4  address  W  write the value back to effective address,
+    //                 and do the operation on it
+    //  5  address  W  write the new value to effective address
+    fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let value = mem_map.read_u8(addr);
+            yield CpuCycle::Tick;
+
+            mem_map.write_u8(addr, value);
+            let result = operation.operate(cpu, value);
+            yield CpuCycle::Tick;
+
+            mem_map.write_u8(addr, result);
+            yield CpuCycle::Tick;
+        }
+    }
+
+    //  #  address R/W description
+    // --- ------- --- ------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  fetch address, increment PC
+    //  3  address  W  write register to effective address
+    fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let addr = cpu.pc_read_u8_next(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            mem_map.write_u8(addr, operation.operate(cpu));
             yield CpuCycle::Tick;
         }
     }
