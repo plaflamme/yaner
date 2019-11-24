@@ -24,9 +24,9 @@ impl Nes {
         }
     }
 
-    pub fn run(&self) {
+    pub fn run(&self, start_at: Option<u16>) {
         let boxed: Box<&dyn AddressSpace> = Box::new(self);
-        let mut cpu_ticks = self.cpu.run(&boxed);
+        let mut cpu_ticks = self.cpu.run(&boxed, start_at);
         loop {
             match Pin::new(&mut cpu_ticks).resume() {
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => println!("Tick!"),
