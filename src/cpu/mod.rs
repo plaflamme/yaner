@@ -301,6 +301,10 @@ impl Cpu {
                         yield_complete!(stack::jsr(self, mem_map));
                     },
 
+                    OpCode(Op::RTS, AddressingMode::Implicit) => {
+                        yield_complete!(stack::rts(self, mem_map));
+                    },
+
                     OpCode(Op::STA, AddressingMode::Absolute) => {
                         yield_complete!(absolute::write(&sta, self, mem_map));
                     },
@@ -348,24 +352,29 @@ impl Cpu {
         }
     }
 
-    // TODO
     fn stack_addr(&self) -> u16 {
         let sp = self.sp.get() as u16;
         0x0100 | sp
     }
+    fn stack_inc(&self) {
+        self.sp.set(self.sp.get().wrapping_add(1));
+    }
+    fn stack_dec(&self) {
+        self.sp.set(self.sp.get().wrapping_sub(1));
+    }
     fn push_stack(&self, mem_map: &Box<&dyn AddressSpace>, v: u8) {
         let addr = self.stack_addr();
         mem_map.write_u8(addr, v);
-        self.sp.set(self.sp.get().wrapping_sub(1));
+        self.stack_dec();
     }
-    fn push_stack16(&mut self, v: u16) {
-        unimplemented!()
+    fn pop_stack(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+        let v = self.read_stack(mem_map);
+        self.stack_inc();
+        v
     }
-    fn pop_stack(&mut self) -> u8 {
-        unimplemented!()
-    }
-    fn pop_stack16(&mut self) -> u16 {
-        unimplemented!()
+    fn read_stack(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+        let addr = self.stack_addr();
+        mem_map.read_u8(addr)
     }
 
     fn flag(&self, f: Flags) -> bool {
@@ -942,6 +951,34 @@ mod stack {
 
             let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
             let pc = addr_hi << 8 | addr_lo;
+            cpu.pc.set(pc);
+            yield CpuCycle::Tick;
+        }
+    }
+
+    //  #  address R/W description
+    // --- ------- --- -----------------------------------------------
+    //  1    PC     R  fetch opcode, increment PC
+    //  2    PC     R  read next instruction byte (and throw it away)
+    //  3  $0100,S  R  increment S
+    //  4  $0100,S  R  pull PCL from stack, increment S
+    //  5  $0100,S  R  pull PCH from stack
+    //  6    PC     R  increment PC
+    pub(super) fn rts<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+        move || {
+            let _ = cpu.pc_read_u8_next(mem_map);
+            yield CpuCycle::Tick;
+
+            cpu.stack_inc();
+            yield CpuCycle::Tick;
+
+            let pc_lo = cpu.pop_stack(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let pc_hi = cpu.read_stack(mem_map) as u16;
+            yield CpuCycle::Tick;
+
+            let pc = ((pc_hi << 8) | pc_lo).wrapping_add(1);
             cpu.pc.set(pc);
             yield CpuCycle::Tick;
         }
