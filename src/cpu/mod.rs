@@ -7,6 +7,7 @@ use std::cell::Cell;
 use std::pin::Pin;
 
 mod absolute;
+mod absolute_indexed;
 mod opcode;
 mod stack;
 mod zero_page;
@@ -211,6 +212,12 @@ impl Cpu {
                     OpCode(Op::ADC, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&adc, self, mem_map));
                     },
+                    OpCode(Op::ADC, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_read(&adc, self, mem_map));
+                    },
+                    OpCode(Op::ADC, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_read(&adc, self, mem_map));
+                    },
                     OpCode(Op::ADC, AddressingMode::Immediate) => {
                         yield_complete!(immediate::read(&adc, self, mem_map));
                     },
@@ -224,6 +231,12 @@ impl Cpu {
                     OpCode(Op::AND, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&and, self, mem_map));
                     },
+                    OpCode(Op::AND, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_read(&and, self, mem_map));
+                    },
+                    OpCode(Op::AND, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_read(&and, self, mem_map));
+                    },
                     OpCode(Op::AND, AddressingMode::Immediate) => {
                         yield_complete!(immediate::read(&and, self, mem_map));
                     },
@@ -236,6 +249,12 @@ impl Cpu {
 
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
                         yield_complete!(absolute::modify(&asl, self, mem_map));
+                    },
+                    OpCode(Op::ASL, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_modify(&asl, self, mem_map));
+                    },
+                    OpCode(Op::ASL, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_modify(&asl, self, mem_map));
                     },
                     OpCode(Op::ASL, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::modify(&asl, self, mem_map));
@@ -293,6 +312,12 @@ impl Cpu {
                     OpCode(Op::LDA, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&lda, self, mem_map));
                     },
+                    OpCode(Op::LDA, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_read(&lda, self, mem_map));
+                    },
+                    OpCode(Op::LDA, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_read(&lda, self, mem_map));
+                    },
                     OpCode(Op::LDA, AddressingMode::Immediate) => {
                         yield_complete!(immediate::read(&lda, self, mem_map));
                     },
@@ -306,6 +331,12 @@ impl Cpu {
                     OpCode(Op::LDX, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&ldx, self, mem_map));
                     },
+                    OpCode(Op::LDX, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_read(&ldx, self, mem_map));
+                    },
+                    OpCode(Op::LDX, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map));
+                    },
                     OpCode(Op::LDX, AddressingMode::Immediate) => {
                         yield_complete!(immediate::read(&ldx, self, mem_map));
                     },
@@ -318,6 +349,12 @@ impl Cpu {
 
                     OpCode(Op::LDY, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&ldy, self, mem_map));
+                    },
+                    OpCode(Op::LDY, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map));
+                    },
+                    OpCode(Op::LDY, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_read(&ldy, self, mem_map));
                     },
                     OpCode(Op::LDY, AddressingMode::Immediate) => {
                         yield_complete!(immediate::read(&ldy, self, mem_map));
@@ -360,6 +397,12 @@ impl Cpu {
 
                     OpCode(Op::STA, AddressingMode::Absolute) => {
                         yield_complete!(absolute::write(&sta, self, mem_map));
+                    },
+                    OpCode(Op::STA, AddressingMode::AbsoluteX) => {
+                        yield_complete!(absolute_indexed::x_write(&sta, self, mem_map));
+                    },
+                    OpCode(Op::STA, AddressingMode::AbsoluteY) => {
+                        yield_complete!(absolute_indexed::y_write(&sta, self, mem_map));
                     },
                     OpCode(Op::STA, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::write(&sta, self, mem_map));
