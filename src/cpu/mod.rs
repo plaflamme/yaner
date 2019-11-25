@@ -216,6 +216,16 @@ impl Cpu {
                         yield_complete!(zero_page::read(&adc, self, mem_map));
                     },
 
+                    OpCode(Op::AND, AddressingMode::Absolute) => {
+                        yield_complete!(absolute::read(&and, self, mem_map));
+                    },
+                    OpCode(Op::AND, AddressingMode::Immediate) => {
+                        yield_complete!(immediate::read(&and, self, mem_map));
+                    },
+                    OpCode(Op::AND, AddressingMode::ZeroPage) => {
+                        yield_complete!(zero_page::read(&and, self, mem_map));
+                    },
+
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
                         yield_complete!(absolute::modify(&asl, self, mem_map));
                     },
@@ -774,6 +784,15 @@ impl ReadOperation for adc {
         cpu.set_flags_from_acc();
     }
 }
+
+struct and;
+impl ReadOperation for and {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        cpu.acc.set(cpu.acc.get() & v);
+        cpu.set_flags_from_acc();
+    }
+}
+
 struct bit;
 impl ReadOperation for bit {
 
