@@ -10,6 +10,7 @@ mod absolute;
 mod opcode;
 mod stack;
 mod zero_page;
+mod zero_page_indexed;
 
 use opcode::OPCODES;
 use opcode::OpCode;
@@ -216,6 +217,9 @@ impl Cpu {
                     OpCode(Op::ADC, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::read(&adc, self, mem_map));
                     },
+                    OpCode(Op::ADC, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_read(&adc, self, mem_map));
+                    },
 
                     OpCode(Op::AND, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&and, self, mem_map));
@@ -226,12 +230,18 @@ impl Cpu {
                     OpCode(Op::AND, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::read(&and, self, mem_map));
                     },
+                    OpCode(Op::AND, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_read(&and, self, mem_map));
+                    },
 
                     OpCode(Op::ASL, AddressingMode::Absolute) => {
                         yield_complete!(absolute::modify(&asl, self, mem_map));
                     },
                     OpCode(Op::ASL, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::modify(&asl, self, mem_map));
+                    },
+                    OpCode(Op::ASL, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_modify(&asl, self, mem_map));
                     },
 
                     OpCode(Op::BCC, AddressingMode::Relative) => {
@@ -289,6 +299,9 @@ impl Cpu {
                     OpCode(Op::LDA, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::read(&lda, self, mem_map));
                     },
+                    OpCode(Op::LDA, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_read(&lda, self, mem_map));
+                    },
 
                     OpCode(Op::LDX, AddressingMode::Absolute) => {
                         yield_complete!(absolute::read(&ldx, self, mem_map));
@@ -298,6 +311,22 @@ impl Cpu {
                     },
                     OpCode(Op::LDX, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::read(&ldx, self, mem_map));
+                    },
+                    OpCode(Op::LDX, AddressingMode::ZeroPageY) => {
+                        yield_complete!(zero_page_indexed::y_read(&ldx, self, mem_map));
+                    },
+
+                    OpCode(Op::LDY, AddressingMode::Absolute) => {
+                        yield_complete!(absolute::read(&ldy, self, mem_map));
+                    },
+                    OpCode(Op::LDY, AddressingMode::Immediate) => {
+                        yield_complete!(immediate::read(&ldy, self, mem_map));
+                    },
+                    OpCode(Op::LDY, AddressingMode::ZeroPage) => {
+                        yield_complete!(zero_page::read(&ldy, self, mem_map));
+                    },
+                    OpCode(Op::LDY, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_read(&ldy, self, mem_map));
                     },
 
                     OpCode(Op::NOP, AddressingMode::Implicit) => {
@@ -335,6 +364,12 @@ impl Cpu {
                     OpCode(Op::STA, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::write(&sta, self, mem_map));
                     },
+                    OpCode(Op::STA, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map));
+                    },
+                    OpCode(Op::STA, AddressingMode::ZeroPageY) => {
+                        yield_complete!(zero_page_indexed::y_write(&sta, self, mem_map));
+                    },
 
                     OpCode(Op::STX, AddressingMode::Absolute) => {
                         yield_complete!(zero_page::write(&stx, self, mem_map));
@@ -342,12 +377,18 @@ impl Cpu {
                     OpCode(Op::STX, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::write(&stx, self, mem_map));
                     },
+                    OpCode(Op::STX, AddressingMode::ZeroPageY) => {
+                        yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map));
+                    },
 
                     OpCode(Op::STY, AddressingMode::Absolute) => {
                         yield_complete!(absolute::write(&sty, self, mem_map));
                     },
                     OpCode(Op::STY, AddressingMode::ZeroPage) => {
                         yield_complete!(zero_page::write(&sty, self, mem_map));
+                    },
+                    OpCode(Op::STY, AddressingMode::ZeroPageX) => {
+                        yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map));
                     },
 
                     OpCode(Op::SEC, AddressingMode::Implicit) => {
@@ -820,6 +861,15 @@ struct ldx;
 impl ReadOperation for ldx {
     fn operate(&self, cpu: &Cpu, value: u8) {
         cpu.x.set(value);
+        cpu.set_flags_from(value);
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#LDY
+struct ldy;
+impl ReadOperation for ldy {
+    fn operate(&self, cpu: &Cpu, value: u8) {
+        cpu.y.set(value);
         cpu.set_flags_from(value);
     }
 }
