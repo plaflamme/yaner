@@ -232,6 +232,14 @@ impl Cpu {
                     OpCode(Op::BEQ, AddressingMode::Relative) => {
                         yield_complete!(relative::branch(&beq, self, mem_map));
                     },
+
+                    OpCode(Op::BIT, AddressingMode::Absolute) => {
+                        yield_complete!(absolute::read(&bit, self, mem_map));
+                    },
+                    OpCode(Op::BIT, AddressingMode::ZeroPage) => {
+                        yield_complete!(zero_page::read(&bit, self, mem_map));
+                    },
+
                     OpCode(Op::BMI, AddressingMode::Relative) => {
                         yield_complete!(relative::branch(&bmi, self, mem_map));
                     },
@@ -743,6 +751,17 @@ impl ReadOperation for adc {
         cpu.acc.set(v2);
         cpu.set_flags_from_acc();
     }
+}
+struct bit;
+impl ReadOperation for bit {
+
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        let r = cpu.acc.get() & v;
+        cpu.set_flag(Flags::Z, r == 0);
+        cpu.set_flag(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
+        cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
+    }
+
 }
 
 // http://obelisk.me.uk/6502/reference.html#LDA
