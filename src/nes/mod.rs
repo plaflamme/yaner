@@ -26,11 +26,16 @@ impl Nes {
 
     pub fn run(&self, start_at: Option<u16>) {
         let boxed: Box<&dyn AddressSpace> = Box::new(self);
-        let mut cpu_ticks = self.cpu.run(&boxed, start_at);
+        let mut cycle = 7u32; // start at 7 due to reset interrupt handling
+        let mut cpu_cycles = self.cpu.run(&boxed, start_at);
+        let mut cycle_start = cycle;
         loop {
-            match Pin::new(&mut cpu_ticks).resume() {
-                GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => println!("Tick!"),
-                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { op, mode }) => println!("Done {:?}, {:?}", op, mode),
+            match Pin::new(&mut cpu_cycles).resume() {
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cycle = cycle + 1,
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { pc, op, mode }) => {
+                    println!("{:02X?} {:?} {} CYC:{}", pc, op, self.cpu, cycle_start);
+                    cycle_start = cycle;
+                },
                 GeneratorState::Complete(_) => unimplemented!()
             };
         }

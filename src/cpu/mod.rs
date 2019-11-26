@@ -19,6 +19,7 @@ pub mod generator;
 
 use opcode::OPCODES;
 use opcode::OpCode;
+use std::fmt::{Display, Formatter, Error};
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy)]
@@ -162,9 +163,15 @@ pub struct Cpu {
     pc: Cell<u16>,
 }
 
+impl Display for Cpu {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} SP:{:02X?}", self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.sp.get())
+    }
+}
+
 pub enum CpuCycle {
     Tick,
-    Done { op: Op, mode: AddressingMode }
+    Done { pc: u16, op: Op, mode: AddressingMode }
 }
 
 impl Cpu {
@@ -206,7 +213,7 @@ impl Cpu {
 
         move || {
             loop {
-                println!("0x{:02X?}", self.pc.get());
+                let this_pc = self.pc.get();
                 let opcode = self.pc_read_u8_next(mem_map);
                 yield CpuCycle::Tick;
 
@@ -338,7 +345,7 @@ impl Cpu {
                     _ => { println!("{:?}", instr); unimplemented!() }
                 }
 
-                yield CpuCycle::Done { op: instr.0, mode: instr.1 }
+                yield CpuCycle::Done { pc: this_pc, op: instr.0, mode: instr.1 }
             }
         }
     }
