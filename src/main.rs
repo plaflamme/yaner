@@ -32,7 +32,8 @@ enum Yaner {
         #[structopt(short, parse(try_from_str = parse_hex))]
         pc: Option<u16>,
         rom: PathBuf
-    }
+    },
+    Generate,
 }
 
 fn main() {
@@ -47,6 +48,9 @@ fn main() {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
             nes.run(pc);
+        },
+        Generate => {
+            crate::cpu::generator::generate_opcode_table()
         },
     }
 }

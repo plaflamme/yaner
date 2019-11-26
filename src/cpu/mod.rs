@@ -8,10 +8,14 @@ use std::pin::Pin;
 
 mod absolute;
 mod absolute_indexed;
+mod indirect;
+mod indirect_indexed;
 mod opcode;
 mod stack;
 mod zero_page;
 mod zero_page_indexed;
+
+pub mod generator;
 
 use opcode::OPCODES;
 use opcode::OpCode;
@@ -206,256 +210,124 @@ impl Cpu {
                 let opcode = self.pc_read_u8_next(mem_map);
                 yield CpuCycle::Tick;
 
+                // TODO
                 let instr = &OPCODES[opcode as usize];
 
-                match instr {
-                    OpCode(Op::ADC, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&adc, self, mem_map));
-                    },
-                    OpCode(Op::ADC, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_read(&adc, self, mem_map));
-                    },
-                    OpCode(Op::ADC, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_read(&adc, self, mem_map));
-                    },
-                    OpCode(Op::ADC, AddressingMode::Immediate) => {
-                        yield_complete!(immediate::read(&adc, self, mem_map));
-                    },
-                    OpCode(Op::ADC, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&adc, self, mem_map));
-                    },
-                    OpCode(Op::ADC, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_read(&adc, self, mem_map));
-                    },
-
-                    OpCode(Op::AND, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&and, self, mem_map));
-                    },
-                    OpCode(Op::AND, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_read(&and, self, mem_map));
-                    },
-                    OpCode(Op::AND, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_read(&and, self, mem_map));
-                    },
-                    OpCode(Op::AND, AddressingMode::Immediate) => {
-                        yield_complete!(immediate::read(&and, self, mem_map));
-                    },
-                    OpCode(Op::AND, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&and, self, mem_map));
-                    },
-                    OpCode(Op::AND, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_read(&and, self, mem_map));
-                    },
-
-                    OpCode(Op::ASL, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::modify(&asl, self, mem_map));
-                    },
-                    OpCode(Op::ASL, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_modify(&asl, self, mem_map));
-                    },
-                    OpCode(Op::ASL, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_modify(&asl, self, mem_map));
-                    },
-                    OpCode(Op::ASL, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::modify(&asl, self, mem_map));
-                    },
-                    OpCode(Op::ASL, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_modify(&asl, self, mem_map));
-                    },
-
-                    OpCode(Op::BCC, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bcc, self, mem_map));
-                    },
-                    OpCode(Op::BCS, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bcs, self, mem_map));
-                    },
-                    OpCode(Op::BEQ, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&beq, self, mem_map));
-                    },
-
-                    OpCode(Op::BIT, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&bit, self, mem_map));
-                    },
-                    OpCode(Op::BIT, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&bit, self, mem_map));
-                    },
-
-                    OpCode(Op::BMI, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bmi, self, mem_map));
-                    },
-                    OpCode(Op::BNE, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bne, self, mem_map));
-                    },
-                    OpCode(Op::BPL, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bpl, self, mem_map));
-                    },
-                    OpCode(Op::BVC, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bvc, self, mem_map));
-                    },
-                    OpCode(Op::BVS, AddressingMode::Relative) => {
-                        yield_complete!(relative::branch(&bvs, self, mem_map));
-                    },
-
-                    OpCode(Op::CLC, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&clc, self, mem_map));
-                    },
-                    OpCode(Op::CLD, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&cld, self, mem_map));
-                    },
-                    OpCode(Op::CLI, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&cli, self, mem_map));
-                    },
-                    OpCode(Op::CLV, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&clv, self, mem_map));
-                    },
-
-                    OpCode(Op::LDA, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&lda, self, mem_map));
-                    },
-                    OpCode(Op::LDA, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_read(&lda, self, mem_map));
-                    },
-                    OpCode(Op::LDA, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_read(&lda, self, mem_map));
-                    },
-                    OpCode(Op::LDA, AddressingMode::Immediate) => {
-                        yield_complete!(immediate::read(&lda, self, mem_map));
-                    },
-                    OpCode(Op::LDA, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&lda, self, mem_map));
-                    },
-                    OpCode(Op::LDA, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_read(&lda, self, mem_map));
-                    },
-
-                    OpCode(Op::LDX, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&ldx, self, mem_map));
-                    },
-                    OpCode(Op::LDX, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_read(&ldx, self, mem_map));
-                    },
-                    OpCode(Op::LDX, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map));
-                    },
-                    OpCode(Op::LDX, AddressingMode::Immediate) => {
-                        yield_complete!(immediate::read(&ldx, self, mem_map));
-                    },
-                    OpCode(Op::LDX, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&ldx, self, mem_map));
-                    },
-                    OpCode(Op::LDX, AddressingMode::ZeroPageY) => {
-                        yield_complete!(zero_page_indexed::y_read(&ldx, self, mem_map));
-                    },
-
-                    OpCode(Op::LDY, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::read(&ldy, self, mem_map));
-                    },
-                    OpCode(Op::LDY, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map));
-                    },
-                    OpCode(Op::LDY, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_read(&ldy, self, mem_map));
-                    },
-                    OpCode(Op::LDY, AddressingMode::Immediate) => {
-                        yield_complete!(immediate::read(&ldy, self, mem_map));
-                    },
-                    OpCode(Op::LDY, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::read(&ldy, self, mem_map));
-                    },
-                    OpCode(Op::LDY, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_read(&ldy, self, mem_map));
-                    },
-
-                    OpCode(Op::NOP, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&nop, self, mem_map));
-                    },
-
-                    OpCode(Op::JMP, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::jmp(self, mem_map));
-                    },
-
-                    OpCode(Op::JSR, AddressingMode::Absolute) => {
-                        yield_complete!(stack::jsr(self, mem_map));
-                    },
-
-                    OpCode(Op::PHA, AddressingMode::Implicit) => {
-                        yield_complete!(stack::pha(self, mem_map));
-                    },
-                    OpCode(Op::PHP, AddressingMode::Implicit) => {
-                        yield_complete!(stack::php(self, mem_map));
-                    },
-                    OpCode(Op::PLA, AddressingMode::Implicit) => {
-                        yield_complete!(stack::pla(self, mem_map));
-                    },
-                    OpCode(Op::PLP, AddressingMode::Implicit) => {
-                        yield_complete!(stack::plp(self, mem_map));
-                    },
-
-                    OpCode(Op::RTS, AddressingMode::Implicit) => {
-                        yield_complete!(stack::rts(self, mem_map));
-                    },
-
-                    OpCode(Op::STA, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::write(&sta, self, mem_map));
-                    },
-                    OpCode(Op::STA, AddressingMode::AbsoluteX) => {
-                        yield_complete!(absolute_indexed::x_write(&sta, self, mem_map));
-                    },
-                    OpCode(Op::STA, AddressingMode::AbsoluteY) => {
-                        yield_complete!(absolute_indexed::y_write(&sta, self, mem_map));
-                    },
-                    OpCode(Op::STA, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::write(&sta, self, mem_map));
-                    },
-                    OpCode(Op::STA, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map));
-                    },
-                    OpCode(Op::STA, AddressingMode::ZeroPageY) => {
-                        yield_complete!(zero_page_indexed::y_write(&sta, self, mem_map));
-                    },
-
-                    OpCode(Op::STX, AddressingMode::Absolute) => {
-                        yield_complete!(zero_page::write(&stx, self, mem_map));
-                    },
-                    OpCode(Op::STX, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::write(&stx, self, mem_map));
-                    },
-                    OpCode(Op::STX, AddressingMode::ZeroPageY) => {
-                        yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map));
-                    },
-
-                    OpCode(Op::STY, AddressingMode::Absolute) => {
-                        yield_complete!(absolute::write(&sty, self, mem_map));
-                    },
-                    OpCode(Op::STY, AddressingMode::ZeroPage) => {
-                        yield_complete!(zero_page::write(&sty, self, mem_map));
-                    },
-                    OpCode(Op::STY, AddressingMode::ZeroPageX) => {
-                        yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map));
-                    },
-
-                    OpCode(Op::SEC, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&sec, self, mem_map));
-                    },
-                    OpCode(Op::SED, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&sed, self, mem_map));
-                    },
-                    OpCode(Op::SEI, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&sei, self, mem_map));
-                    },
-                    OpCode(Op::TSX, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&tsx, self, mem_map));
-                    },
-                    OpCode(Op::TXS, AddressingMode::Implicit) => {
-                        yield_complete!(implicit::run(&txs, self, mem_map));
-                    },
+                match opcode {
+                    0x04 => yield_complete!(zero_page::read(&nop, self, mem_map)),
+                    0x06 => yield_complete!(zero_page::modify(&asl, self, mem_map)),
+                    0x08 => yield_complete!(stack::php(self, mem_map)),
+                    0x0A => yield_complete!(accumulator::modify(&asl, self, mem_map)),
+                    0x0C => yield_complete!(absolute::read(&nop, self, mem_map)),
+                    0x0E => yield_complete!(absolute::modify(&asl, self, mem_map)),
+                    0x10 => yield_complete!(relative::branch(&bpl, self, mem_map)),
+                    0x14 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x16 => yield_complete!(zero_page_indexed::x_modify(&asl, self, mem_map)),
+                    0x18 => yield_complete!(implicit::run(&clc, self, mem_map)),
+                    0x1A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x1C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x1E => yield_complete!(absolute_indexed::x_modify(&asl, self, mem_map)),
+                    0x20 => yield_complete!(stack::jsr(self, mem_map)),
+                    0x21 => yield_complete!(indirect_indexed::x_read(&and, self, mem_map)),
+                    0x24 => yield_complete!(zero_page::read(&bit, self, mem_map)),
+                    0x25 => yield_complete!(zero_page::read(&and, self, mem_map)),
+                    0x28 => yield_complete!(stack::plp(self, mem_map)),
+                    0x29 => yield_complete!(immediate::read(&and, self, mem_map)),
+                    0x2C => yield_complete!(absolute::read(&bit, self, mem_map)),
+                    0x2D => yield_complete!(absolute::read(&and, self, mem_map)),
+                    0x30 => yield_complete!(relative::branch(&bmi, self, mem_map)),
+                    0x31 => yield_complete!(indirect_indexed::y_read(&and, self, mem_map)),
+                    0x34 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x35 => yield_complete!(zero_page_indexed::x_read(&and, self, mem_map)),
+                    0x38 => yield_complete!(implicit::run(&sec, self, mem_map)),
+                    0x39 => yield_complete!(absolute_indexed::y_read(&and, self, mem_map)),
+                    0x3A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x3C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x3D => yield_complete!(absolute_indexed::x_read(&and, self, mem_map)),
+                    0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
+                    0x48 => yield_complete!(stack::pha(self, mem_map)),
+                    0x4C => yield_complete!(absolute::jmp(self, mem_map)),
+                    0x50 => yield_complete!(relative::branch(&bvc, self, mem_map)),
+                    0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x58 => yield_complete!(implicit::run(&cli, self, mem_map)),
+                    0x5A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x5C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x60 => yield_complete!(stack::rts(self, mem_map)),
+                    0x61 => yield_complete!(indirect_indexed::x_read(&adc, self, mem_map)),
+                    0x64 => yield_complete!(zero_page::read(&nop, self, mem_map)),
+                    0x65 => yield_complete!(zero_page::read(&adc, self, mem_map)),
+                    0x68 => yield_complete!(stack::pla(self, mem_map)),
+                    0x69 => yield_complete!(immediate::read(&adc, self, mem_map)),
+                    0x6C => yield_complete!(absolute::jmp(self, mem_map)),
+                    0x6D => yield_complete!(absolute::read(&adc, self, mem_map)),
+                    0x70 => yield_complete!(relative::branch(&bvs, self, mem_map)),
+                    0x71 => yield_complete!(indirect_indexed::y_read(&adc, self, mem_map)),
+                    0x74 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x75 => yield_complete!(zero_page_indexed::x_read(&adc, self, mem_map)),
+                    0x78 => yield_complete!(implicit::run(&sei, self, mem_map)),
+                    0x79 => yield_complete!(absolute_indexed::y_read(&adc, self, mem_map)),
+                    0x7A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x7C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x7D => yield_complete!(absolute_indexed::x_read(&adc, self, mem_map)),
+                    0x80 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0x81 => yield_complete!(indirect_indexed::x_write(&sta, self, mem_map)),
+                    0x82 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0x84 => yield_complete!(zero_page::write(&sty, self, mem_map)),
+                    0x85 => yield_complete!(zero_page::write(&sta, self, mem_map)),
+                    0x86 => yield_complete!(zero_page::write(&stx, self, mem_map)),
+                    0x89 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0x8C => yield_complete!(absolute::write(&sty, self, mem_map)),
+                    0x8D => yield_complete!(absolute::write(&sta, self, mem_map)),
+                    0x8E => yield_complete!(absolute::write(&stx, self, mem_map)),
+                    0x90 => yield_complete!(relative::branch(&bcc, self, mem_map)),
+                    0x91 => yield_complete!(indirect_indexed::y_write(&sta, self, mem_map)),
+                    0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map)),
+                    0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map)),
+                    0x96 => yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map)),
+                    0x99 => yield_complete!(absolute_indexed::y_write(&sta, self, mem_map)),
+                    0x9A => yield_complete!(implicit::run(&txs, self, mem_map)),
+                    0x9D => yield_complete!(absolute_indexed::x_write(&sta, self, mem_map)),
+                    0xA0 => yield_complete!(immediate::read(&ldy, self, mem_map)),
+                    0xA1 => yield_complete!(indirect_indexed::x_read(&lda, self, mem_map)),
+                    0xA2 => yield_complete!(immediate::read(&ldx, self, mem_map)),
+                    0xA4 => yield_complete!(zero_page::read(&ldy, self, mem_map)),
+                    0xA5 => yield_complete!(zero_page::read(&lda, self, mem_map)),
+                    0xA6 => yield_complete!(zero_page::read(&ldx, self, mem_map)),
+                    0xA9 => yield_complete!(immediate::read(&lda, self, mem_map)),
+                    0xAC => yield_complete!(absolute::read(&ldy, self, mem_map)),
+                    0xAD => yield_complete!(absolute::read(&lda, self, mem_map)),
+                    0xAE => yield_complete!(absolute::read(&ldx, self, mem_map)),
+                    0xB0 => yield_complete!(relative::branch(&bcs, self, mem_map)),
+                    0xB1 => yield_complete!(indirect_indexed::y_read(&lda, self, mem_map)),
+                    0xB4 => yield_complete!(zero_page_indexed::x_read(&ldy, self, mem_map)),
+                    0xB5 => yield_complete!(zero_page_indexed::x_read(&lda, self, mem_map)),
+                    0xB6 => yield_complete!(zero_page_indexed::y_read(&ldx, self, mem_map)),
+                    0xB8 => yield_complete!(implicit::run(&clv, self, mem_map)),
+                    0xB9 => yield_complete!(absolute_indexed::y_read(&lda, self, mem_map)),
+                    0xBA => yield_complete!(implicit::run(&tsx, self, mem_map)),
+                    0xBC => yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map)),
+                    0xBD => yield_complete!(absolute_indexed::x_read(&lda, self, mem_map)),
+                    0xBE => yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map)),
+                    0xC2 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0xD0 => yield_complete!(relative::branch(&bne, self, mem_map)),
+                    0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0xD8 => yield_complete!(implicit::run(&cld, self, mem_map)),
+                    0xDA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xDC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0xE2 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0xEA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xF0 => yield_complete!(relative::branch(&beq, self, mem_map)),
+                    0xF4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0xF8 => yield_complete!(implicit::run(&sed, self, mem_map)),
+                    0xFA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xFC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     _ => {
-                        println!("{:?} (0x{:02X?}) not implemented", instr, opcode);
-                        unimplemented!();
+                        println!("{:?}", instr);
+                        unimplemented!()
                     }
                 }
 
-                yield CpuCycle::Done { op: instr.0, mode: instr.1 };
+                yield CpuCycle::Done { op: instr.0, mode: instr.1 }
             }
         }
     }
@@ -1001,9 +873,10 @@ impl ImplicitOperation for clv {
 // http://obelisk.me.uk/6502/reference.html#NOP
 struct nop;
 impl ImplicitOperation for nop {
-    fn operate(&self, cpu: &Cpu) {
-
-    }
+    fn operate(&self, cpu: &Cpu) {}
+}
+impl ReadOperation for nop {
+    fn operate(&self, cpu: &Cpu, v: u8) {}
 }
 
 // http://obelisk.me.uk/6502/reference.html#SEC
