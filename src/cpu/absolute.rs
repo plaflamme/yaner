@@ -18,7 +18,7 @@ fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Gener
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  fetch low address byte, increment PC
 //  3    PC     R  copy low address byte to PCL, fetch high address
-//                       byte to PCH
+//                 byte to PCH
 pub(super) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu, mem_map));

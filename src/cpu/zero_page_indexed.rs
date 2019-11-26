@@ -1,7 +1,7 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn indexed_read<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn zp_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -27,7 +27,7 @@ fn indexed_read<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>
 //          i.e. page boundary crossings are not handled.
 fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value) = yield_complete!(indexed_read(index, cpu, mem_map));
+        let (_, value) = yield_complete!(zp_indexed(index, cpu, mem_map));
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }
@@ -55,7 +55,7 @@ pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_m
 //         i.e. page boundary crossings are not handled.
 fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value) = yield_complete!(indexed_read(index, cpu, mem_map));
+        let (addr, value) = yield_complete!(zp_indexed(index, cpu, mem_map));
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
@@ -84,7 +84,7 @@ pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
 //          i.e. page boundary crossings are not handled.
 fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value) = yield_complete!(indexed_read(index, cpu, mem_map));
+        let (addr, value) = yield_complete!(zp_indexed(index, cpu, mem_map));
         yield CpuCycle::Tick;
 
         let value = operation.operate(cpu);
