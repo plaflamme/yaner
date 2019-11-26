@@ -156,9 +156,10 @@ pub fn generate_opcode_table() {
             CLI => ModeOp::read,
             CLV => ModeOp::read,
 
-            CMP => ModeOp::unimplemented,
-            CPX => ModeOp::unimplemented,
-            CPY => ModeOp::unimplemented,
+            CMP => ModeOp::read,
+            CPX => ModeOp::read,
+            CPY => ModeOp::read,
+
             DCP => ModeOp::unimplemented,
             DEC => ModeOp::unimplemented,
             DEX => ModeOp::unimplemented,
@@ -276,6 +277,6 @@ pub fn generate_opcode_table() {
                     }
                 });
         });
-    println!("\t _ => unimplemented!()");
+    println!("\t _ => {{ println!(\"{{:?}}\", instr); unimplemented!() }}");
     println!("}}");
 }

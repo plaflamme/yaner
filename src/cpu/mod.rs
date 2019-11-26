@@ -308,23 +308,34 @@ impl Cpu {
                     0xBC => yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map)),
                     0xBD => yield_complete!(absolute_indexed::x_read(&lda, self, mem_map)),
                     0xBE => yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map)),
+                    0xC0 => yield_complete!(immediate::read(&cpy, self, mem_map)),
+                    0xC1 => yield_complete!(indirect_indexed::x_read(&cmp, self, mem_map)),
                     0xC2 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0xC4 => yield_complete!(zero_page::read(&cpy, self, mem_map)),
+                    0xC5 => yield_complete!(zero_page::read(&cmp, self, mem_map)),
+                    0xC9 => yield_complete!(immediate::read(&cmp, self, mem_map)),
+                    0xCC => yield_complete!(absolute::read(&cpy, self, mem_map)),
+                    0xCD => yield_complete!(absolute::read(&cmp, self, mem_map)),
                     0xD0 => yield_complete!(relative::branch(&bne, self, mem_map)),
+                    0xD1 => yield_complete!(indirect_indexed::y_read(&cmp, self, mem_map)),
                     0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0xD5 => yield_complete!(zero_page_indexed::x_read(&cmp, self, mem_map)),
                     0xD8 => yield_complete!(implicit::run(&cld, self, mem_map)),
+                    0xD9 => yield_complete!(absolute_indexed::y_read(&cmp, self, mem_map)),
                     0xDA => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0xDC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0xDD => yield_complete!(absolute_indexed::x_read(&cmp, self, mem_map)),
+                    0xE0 => yield_complete!(immediate::read(&cpx, self, mem_map)),
                     0xE2 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0xE4 => yield_complete!(zero_page::read(&cpx, self, mem_map)),
                     0xEA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xEC => yield_complete!(absolute::read(&cpx, self, mem_map)),
                     0xF0 => yield_complete!(relative::branch(&beq, self, mem_map)),
                     0xF4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0xF8 => yield_complete!(implicit::run(&sed, self, mem_map)),
                     0xFA => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0xFC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
-                    _ => {
-                        println!("{:?}", instr);
-                        unimplemented!()
-                    }
+                    _ => { println!("{:?}", instr); unimplemented!() }
                 }
 
                 yield CpuCycle::Done { op: instr.0, mode: instr.1 }
@@ -760,6 +771,34 @@ impl ReadOperation for bit {
         cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
     }
 
+}
+
+fn compare(cpu: &Cpu, a: u8, b: u8) {
+    let result = a - b;
+    cpu.set_flag(Flags::C, a >= b);
+    cpu.set_flag(Flags::Z, a == b);
+    cpu.set_flag(Flags::N, (result & 0x80) > 0);
+}
+
+struct cmp;
+impl ReadOperation for cmp {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        compare(cpu, cpu.acc.get(), v);
+    }
+}
+
+struct cpx;
+impl ReadOperation for cpx {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        compare(cpu, cpu.x.get(), v);
+    }
+}
+
+struct cpy;
+impl ReadOperation for cpy {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        compare(cpu, cpu.y.get(), v);
+    }
 }
 
 // http://obelisk.me.uk/6502/reference.html#LDA
