@@ -66,7 +66,7 @@ pub(super) fn rts<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  3  $0100,S  W  push register on stack, decrement S
 fn push<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>, value: u8) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
-        let _ = cpu.pc_read_u8_next(mem_map);
+        let _ = cpu.pc_read_u8(mem_map);
         yield CpuCycle::Tick;
 
         cpu.push_stack(mem_map, value);
@@ -88,10 +88,10 @@ pub(super) fn pha<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  4  $0100,S  R  pull register from stack
 fn pull<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=u8> + 'a {
     move || {
-        let _ = cpu.pc_read_u8_next(mem_map);
+        let _ = cpu.pc_read_u8(mem_map);
         yield CpuCycle::Tick;
 
-        cpu.stack_dec();
+        cpu.stack_inc();
         yield CpuCycle::Tick;
 
         cpu.read_stack(mem_map)

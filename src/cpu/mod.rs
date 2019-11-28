@@ -376,7 +376,7 @@ impl Cpu {
     }
 
     fn flag(&self, f: Flags) -> bool {
-        self.flags.get().contains(Flags::C)
+        self.flags.get().contains(f)
     }
 
     fn set_flag(&self, flag: Flags, v: bool) {
@@ -781,10 +781,10 @@ impl ReadOperation for bit {
 }
 
 fn compare(cpu: &Cpu, a: u8, b: u8) {
-    let result = a - b;
+    let result = a.wrapping_sub(b);
     cpu.set_flag(Flags::C, a >= b);
     cpu.set_flag(Flags::Z, a == b);
-    cpu.set_flag(Flags::N, (result & 0x80) > 0);
+    cpu.set_flag(Flags::N, (result & 0x80) != 0);
 }
 
 struct cmp;
@@ -977,11 +977,10 @@ mod immediate {
     //  2    PC     R  fetch value, increment PC
     pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
-            let addr = cpu.pc_read_u8_next(mem_map) as u16;
+            let value = cpu.pc_read_u8_next(mem_map);
             yield CpuCycle::Tick;
 
-            let value = mem_map.read_u8(addr);
-            operation.operate(cpu, cpu.acc.get());
+            operation.operate(cpu, value);
             yield CpuCycle::Tick;
         }
     }
