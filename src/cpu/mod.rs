@@ -163,9 +163,19 @@ pub struct Cpu {
     pc: Cell<u16>,
 }
 
+impl Cpu {
+    // TODO: move mem_map as a member to Cpu to allow this within Display
+    pub fn write(&self, mem_map: &Box<&dyn AddressSpace>) -> String{
+        let pc = self.pc.get();
+        let addr = mem_map.read_u8(pc);
+        let OpCode(op, _) = &OPCODES[addr as usize];
+        format!("{:02X?} {:?} {}", pc, op, self)
+    }
+}
+
 impl Display for Cpu {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} SP:{:02X?}", self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.sp.get())
+        write!(f, "A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} ({:?}) SP:{:02X?}", self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.flags.get(), self.sp.get())
     }
 }
 

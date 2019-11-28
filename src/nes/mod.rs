@@ -28,13 +28,13 @@ impl Nes {
         let boxed: Box<&dyn AddressSpace> = Box::new(self);
         let mut cycle = 7u32; // start at 7 due to reset interrupt handling
         let mut cpu_cycles = self.cpu.run(&boxed, start_at);
-        let mut cycle_start = cycle;
+
+        trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
         loop {
             match Pin::new(&mut cpu_cycles).resume() {
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cycle = cycle + 1,
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Done { pc, op, mode }) => {
-                    println!("{:02X?} {:?} {} CYC:{}", pc, op, self.cpu, cycle_start);
-                    cycle_start = cycle;
+                    trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
                 },
                 GeneratorState::Complete(_) => unimplemented!()
             };
