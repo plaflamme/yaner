@@ -1,9 +1,7 @@
 use super::*;
-use super::opcode::OpCode;
 use Op::*;
 use AddressingMode::*;
 use std::fmt::Display;
-use bitflags::_core::fmt::{Formatter, Error};
 
 const RAW_CODES: &str = r#"
 0x|BRK7|ORAizx 6|KIL|SLOizx 8|NOPzp 3|ORAzp 3|ASLzp 5|SLOzp 5|PHP3|ORAimm 2|ASL2|ANCimm 2|NOPabs 4|ORAabs 4|ASLabs 6|SLOabs 6|
@@ -46,7 +44,7 @@ impl Display for Code {
             Code(_, ModeOp::unimplemented, _) => write!(f, "unimplemented!()"),
             Code(_, ModeOp::jmp, _) => write!(f, "absolute::jmp(self, mem_map)"),
             Code(AddressingMode::Implicit, ModeOp::read, op) => write!(f, "implicit::run(&{}, self, mem_map)", op),
-            Code(addr, ModeOp::stack, op) => {
+            Code(_, ModeOp::stack, op) => {
                 write!(f, "stack::{}(self, mem_map)", op)
             },
             Code(addr, mode, op) => {
@@ -88,8 +86,6 @@ impl Display for AddressingMode {
 }
 
 pub fn generate_opcode_table() {
-    use std::str::FromStr;
-
     fn parse_code(code: &str) -> Code {
         let (op_str, addr_str) = code.split_at(3);
         let op = match op_str {
@@ -270,7 +266,7 @@ pub fn generate_opcode_table() {
                 })
                 .enumerate()
                 .for_each(|(low_bits, kind)| {
-                    let code = ((high_bits as u8) << 4 | low_bits as u8);
+                    let code = (high_bits as u8) << 4 | low_bits as u8;
                     match kind {
                         Code(_, ModeOp::unimplemented, _) => (),
                         _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind)

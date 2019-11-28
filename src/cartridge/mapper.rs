@@ -1,6 +1,5 @@
 use super::Mapper;
 use super::rom::Rom;
-use std::cell::Cell;
 use crate::memory::AddressSpace;
 
 pub struct Unknown();
@@ -12,11 +11,11 @@ impl Mapper for Unknown {
 }
 
 impl AddressSpace for Unknown {
-    fn read_u8(&self, addr: u16) -> u8 {
+    fn read_u8(&self, _addr: u16) -> u8 {
         unimplemented!()
     }
 
-    fn write_u8(&self, addr: u16, value: u8) {
+    fn write_u8(&self, _addr: u16, _value: u8) {
         unimplemented!()
     }
 }
@@ -55,7 +54,6 @@ impl AddressSpace for NROM {
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
-        let mapped_addr = (addr - 0x6000) as usize;
         match addr {
             0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
             0x8000..=0xFFFF => panic!("tried writing to a read only location 0x{:X?}", addr),

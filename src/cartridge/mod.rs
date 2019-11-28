@@ -56,7 +56,7 @@ impl TryFrom<PathBuf> for Cartridge {
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
         let mut f = File::open(path.clone())?;
         let mut buf = Vec::new();
-        f.read_to_end(&mut buf);
+        f.read_to_end(&mut buf)?;
         let rom = Rom::try_from(buf.as_slice())?;
 
         let mapper: Box<dyn Mapper> = match rom.mapper {

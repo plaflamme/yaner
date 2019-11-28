@@ -24,7 +24,8 @@ pub struct Header {
     flags_7: Flags7,
     mapper: u8,
     prg_ram_size: u8,
-    flags_9: Flags9
+    flags_9: Flags9,
+    flags_10: u8
 }
 
 bitflags! {
@@ -146,7 +147,8 @@ named!(ines_header<&[u8], Header>,
                 flags_7: flags_7.1,
                 mapper: flags_7.0 << 4 | flags_6.0,
                 prg_ram_size: prg_ram_size,
-                flags_9: flags_9
+                flags_9: flags_9,
+                flags_10: flags_10
             }
         )
     )

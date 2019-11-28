@@ -90,6 +90,7 @@ pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
     modify(operation, cpu.x.get(), cpu, mem_map)
 }
 
+#[allow(dead_code)]
 pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     modify(operation, cpu.y.get(), cpu, mem_map)
 }

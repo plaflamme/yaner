@@ -2,9 +2,8 @@
 
 use crate::memory::AddressSpace;
 use bitflags::bitflags;
-use std::ops::{Generator, GeneratorState};
+use std::ops::Generator;
 use std::cell::Cell;
-use std::pin::Pin;
 
 mod absolute;
 mod absolute_indexed;
@@ -410,19 +409,6 @@ impl Cpu {
 // Operations
 impl Cpu {
 
-//    // http://obelisk.me.uk/6502/reference.html#AND
-//    fn and(&mut self, v: u8) {
-//        self.acc = self.acc & v;
-//        self.set_flags_from_acc();
-//    }
-//
-    // http://obelisk.me.uk/6502/reference.html#ASL
-    fn asl(&self, v: u8) -> u8 {
-        let result = v << 1;
-        self.set_flag(Flags::C, (v & 0x80) != 0);
-        self.set_flags_from(result);
-        result
-    }
 //
 //    fn branch_if(&mut self, branch: bool, v: u8) {
 //        if branch {
@@ -929,10 +915,10 @@ impl ImplicitOperation for clv {
 // http://obelisk.me.uk/6502/reference.html#NOP
 struct nop;
 impl ImplicitOperation for nop {
-    fn operate(&self, cpu: &Cpu) {}
+    fn operate(&self, _: &Cpu) {}
 }
 impl ReadOperation for nop {
-    fn operate(&self, cpu: &Cpu, v: u8) {}
+    fn operate(&self, _: &Cpu, _: u8) {}
 }
 
 // http://obelisk.me.uk/6502/reference.html#SEC

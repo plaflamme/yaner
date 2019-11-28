@@ -1,8 +1,6 @@
-use std::cell::Cell;
 use std::pin::Pin;
 use crate::cartridge::Cartridge;
 use crate::memory::AddressSpace;
-use bitflags::_core::ops::Add;
 use std::ops::{Generator, GeneratorState};
 
 pub struct Nes {
@@ -33,7 +31,7 @@ impl Nes {
         loop {
             match Pin::new(&mut cpu_cycles).resume() {
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cycle = cycle + 1,
-                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { pc, op, mode }) => {
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { pc: _, op: _, mode: _ }) => {
                     trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
                 },
                 GeneratorState::Complete(_) => unimplemented!()
@@ -56,7 +54,6 @@ impl crate::memory::AddressSpace for Nes {
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
             0x4020..=0xFFFF => self.cartridge.mapper.read_u8(addr), // PRG ROM/RAM and mapper
-            _ => panic!("invalid address 0x{:X?}", addr)
         }
     }
 
@@ -72,7 +69,6 @@ impl crate::memory::AddressSpace for Nes {
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
             0x4020..=0xFFFF => self.cartridge.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper
-            _ => panic!("invalid address 0x{:X?}", addr)
         }
     }
 }

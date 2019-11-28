@@ -1,11 +1,8 @@
 #![feature(
-    never_type,
     generators, generator_trait
 )]
 
 use std::convert::TryFrom;
-use std::fs::File;
-use std::io::Read;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::cartridge::Cartridge;
