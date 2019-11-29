@@ -230,18 +230,26 @@ impl Cpu {
                 let instr = &OPCODES[opcode as usize];
 
                 match opcode {
+                    0x01 => yield_complete!(indirect_indexed::x_read(&ora, self, mem_map)),
                     0x04 => yield_complete!(zero_page::read(&nop, self, mem_map)),
+                    0x05 => yield_complete!(zero_page::read(&ora, self, mem_map)),
                     0x06 => yield_complete!(zero_page::modify(&asl, self, mem_map)),
                     0x08 => yield_complete!(stack::php(self, mem_map)),
+                    0x09 => yield_complete!(immediate::read(&ora, self, mem_map)),
                     0x0A => yield_complete!(accumulator::modify(&asl, self, mem_map)),
                     0x0C => yield_complete!(absolute::read(&nop, self, mem_map)),
+                    0x0D => yield_complete!(absolute::read(&ora, self, mem_map)),
                     0x0E => yield_complete!(absolute::modify(&asl, self, mem_map)),
                     0x10 => yield_complete!(relative::branch(&bpl, self, mem_map)),
+                    0x11 => yield_complete!(indirect_indexed::y_read(&ora, self, mem_map)),
                     0x14 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x15 => yield_complete!(zero_page_indexed::x_read(&ora, self, mem_map)),
                     0x16 => yield_complete!(zero_page_indexed::x_modify(&asl, self, mem_map)),
                     0x18 => yield_complete!(implicit::run(&clc, self, mem_map)),
+                    0x19 => yield_complete!(absolute_indexed::y_read(&ora, self, mem_map)),
                     0x1A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x1C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x1D => yield_complete!(absolute_indexed::x_read(&ora, self, mem_map)),
                     0x1E => yield_complete!(absolute_indexed::x_modify(&asl, self, mem_map)),
                     0x20 => yield_complete!(stack::jsr(self, mem_map)),
                     0x21 => yield_complete!(indirect_indexed::x_read(&and, self, mem_map)),
@@ -774,6 +782,14 @@ impl ReadOperation for bit {
         cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
     }
 
+}
+
+struct ora;
+impl ReadOperation for ora {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        cpu.acc.set(cpu.acc.get() | v);
+        cpu.set_flags_from_acc();
+    }
 }
 
 fn compare(cpu: &Cpu, a: u8, b: u8) {

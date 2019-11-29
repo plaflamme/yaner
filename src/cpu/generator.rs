@@ -182,7 +182,7 @@ pub fn generate_opcode_table() {
 
             NOP => ModeOp::read,
 
-            ORA => ModeOp::unimplemented,
+            ORA => ModeOp::read,
 
             PHA => ModeOp::stack,
             PHP => ModeOp::stack,
