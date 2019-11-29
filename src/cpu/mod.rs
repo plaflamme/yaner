@@ -974,8 +974,6 @@ mod immediate {
     pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
             let value = cpu.pc_read_u8_next(mem_map);
-            yield CpuCycle::Tick;
-
             operation.operate(cpu, value);
             yield CpuCycle::Tick;
         }
