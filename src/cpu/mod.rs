@@ -190,7 +190,7 @@ impl Cpu {
             acc: Cell::new(0),
             x: Cell::new(0),
             y: Cell::new(0),
-            flags: Cell::new(Flags::from_bits_truncate(0x34)),
+            flags: Cell::new(Flags::from_bits_truncate(0x24)), // The wiki says 0x34, but nestest seems to use 0x24
             sp: Cell::new(0xFD),
             pc: Cell::new(0)
         }
