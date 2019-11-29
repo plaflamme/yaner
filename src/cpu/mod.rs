@@ -991,8 +991,6 @@ mod implicit {
     pub(super) fn run<'a, O: ImplicitOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
         move || {
             let _ = cpu.pc_read_u8(mem_map) as u16;
-            yield CpuCycle::Tick;
-
             operation.operate(cpu);
             yield CpuCycle::Tick;
         }
