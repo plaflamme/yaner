@@ -74,7 +74,10 @@ fn push<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>, value: u8) -> imp
     }
 }
 pub(super) fn php<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
-    push(cpu, mem_map, cpu.flags.get().bits())
+    // PHP sets the B flag
+    let mut flags = cpu.flags.get();
+    flags.set(Flags::B, true);
+    push(cpu, mem_map, flags.bits())
 }
 pub(super) fn pha<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     push(cpu, mem_map, cpu.acc.get())
@@ -101,7 +104,10 @@ fn pull<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator
 pub(super) fn plp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let value = yield_complete!(pull(cpu, mem_map));
-        cpu.flags.set(Flags::from_bits_truncate(value));
+        let mut flags = Flags::from_bits_truncate(value);
+        flags.remove(Flags::B);
+        flags.insert(Flags::U); // this must always be 1
+        cpu.flags.set(flags);
         yield CpuCycle::Tick;
     }
 }
@@ -110,6 +116,7 @@ pub(super) fn pla<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
     move || {
         let value = yield_complete!(pull(cpu, mem_map));
         cpu.acc.set(value);
+        cpu.set_flags_from_acc();
         yield CpuCycle::Tick;
     }
 }
