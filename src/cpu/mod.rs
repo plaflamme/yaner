@@ -268,14 +268,22 @@ impl Cpu {
                     0x3A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x3C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x3D => yield_complete!(absolute_indexed::x_read(&and, self, mem_map)),
+                    0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
+                    0x45 => yield_complete!(zero_page::read(&eor, self, mem_map)),
                     0x48 => yield_complete!(stack::pha(self, mem_map)),
+                    0x49 => yield_complete!(immediate::read(&eor, self, mem_map)),
                     0x4C => yield_complete!(absolute::jmp(self, mem_map)),
+                    0x4D => yield_complete!(absolute::read(&eor, self, mem_map)),
                     0x50 => yield_complete!(relative::branch(&bvc, self, mem_map)),
+                    0x51 => yield_complete!(indirect_indexed::y_read(&eor, self, mem_map)),
                     0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0x55 => yield_complete!(zero_page_indexed::x_read(&eor, self, mem_map)),
                     0x58 => yield_complete!(implicit::run(&cli, self, mem_map)),
+                    0x59 => yield_complete!(absolute_indexed::y_read(&eor, self, mem_map)),
                     0x5A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x5C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0x5D => yield_complete!(absolute_indexed::x_read(&eor, self, mem_map)),
                     0x60 => yield_complete!(stack::rts(self, mem_map)),
                     0x61 => yield_complete!(indirect_indexed::x_read(&adc, self, mem_map)),
                     0x64 => yield_complete!(zero_page::read(&nop, self, mem_map)),
@@ -782,6 +790,14 @@ impl ReadOperation for bit {
         cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
     }
 
+}
+
+struct eor;
+impl ReadOperation for eor {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        cpu.acc.set(cpu.acc.get() ^ v);
+        cpu.set_flags_from_acc();
+    }
 }
 
 struct ora;

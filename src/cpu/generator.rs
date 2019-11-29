@@ -160,7 +160,7 @@ pub fn generate_opcode_table() {
             DEC => ModeOp::unimplemented,
             DEX => ModeOp::unimplemented,
             DEY => ModeOp::unimplemented,
-            EOR => ModeOp::unimplemented,
+            EOR => ModeOp::read,
             INC => ModeOp::unimplemented,
             INX => ModeOp::unimplemented,
             INY => ModeOp::unimplemented,
