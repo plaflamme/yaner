@@ -54,6 +54,7 @@ pub(super) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_m
 //
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
+#[allow(dead_code)]
 pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, value) = yield_complete!(ind_x(cpu, mem_map));
@@ -87,26 +88,108 @@ pub(super) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem
     }
 }
 
-#[allow(dead_code)]
-pub(super) fn y_read<'a, O: ReadOperation>(_operation: &'a O, _cpu: &'a Cpu, _mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+fn ind_y<'a>(eager: bool, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
+        let addr = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
-        unimplemented!()
+
+        let addr_lo = mem_map.read_u8(addr as u16);
+        yield CpuCycle::Tick;
+        let addr_hi = mem_map.read_u8(addr.wrapping_add(1) as u16);
+        yield CpuCycle::Tick;
+
+        let addr_unfixed = ((addr_hi as u16) << 8) | addr_lo.wrapping_add(cpu.y.get()) as u16;
+
+        let addr_effective = (((addr_hi as u16) << 8) | addr_lo as u16).wrapping_add(cpu.y.get() as u16);
+        if eager || addr_unfixed != addr_effective {
+            yield CpuCycle::Tick;
+        }
+
+        (addr_effective, mem_map.read_u8(addr_effective))
     }
 }
 
-#[allow(dead_code)]
-pub(super) fn y_modify<'a, O: ModifyOperation>(_operation: &'a O, _cpu: &'a Cpu, _mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+//  #    address   R/W description
+// --- ----------- --- ------------------------------------------
+//  1      PC       R  fetch opcode, increment PC
+//  2      PC       R  fetch pointer address, increment PC
+//  3    pointer    R  fetch effective address low
+//  4   pointer+1   R  fetch effective address high,
+//                     add Y to low byte of effective address
+//  5   address+Y*  R  read from effective address,
+//                     fix high byte of effective address
+//  6+  address+Y   R  read from effective address
+//
+// Notes: The effective address is always fetched from zero page,
+//        i.e. the zero page boundary crossing is not handled.
+//
+//        * The high byte of the effective address may be invalid
+//          at this time, i.e. it may be smaller by $100.
+//
+//        + This cycle will be executed only if the effective address
+//          was invalid during cycle #5, i.e. page boundary was crossed.
+pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
+        let (_, value) = yield_complete!(ind_y(false, cpu, mem_map));
+        operation.operate(cpu, value);
         yield CpuCycle::Tick;
-        unimplemented!()
     }
 }
 
+//  #    address   R/W description
+// --- ----------- --- ------------------------------------------
+//  1      PC       R  fetch opcode, increment PC
+//  2      PC       R  fetch pointer address, increment PC
+//  3    pointer    R  fetch effective address low
+//  4   pointer+1   R  fetch effective address high,
+//                     add Y to low byte of effective address
+//  5   address+Y*  R  read from effective address,
+//                     fix high byte of effective address
+//  6   address+Y   R  read from effective address
+//  7   address+Y   W  write the value back to effective address,
+//                     and do the operation on it
+//  8   address+Y   W  write the new value to effective address
+//
+// Notes: The effective address is always fetched from zero page,
+//        i.e. the zero page boundary crossing is not handled.
+//
+//        * The high byte of the effective address may be invalid
+//          at this time, i.e. it may be smaller by $100.
 #[allow(dead_code)]
-pub(super) fn y_write<'a, O: WriteOperation>(_operation: &'a O, _cpu: &'a Cpu, _mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
+        let (addr, value) = yield_complete!(ind_y(true, cpu, mem_map));
         yield CpuCycle::Tick;
-        unimplemented!()
+
+        mem_map.write_u8(addr, value);
+        let result = operation.operate(cpu, value);
+        yield CpuCycle::Tick;
+
+        mem_map.write_u8(addr, result);
+        yield CpuCycle::Tick;
+    }
+}
+
+//  #    address   R/W description
+// --- ----------- --- ------------------------------------------
+//  1      PC       R  fetch opcode, increment PC
+//  2      PC       R  fetch pointer address, increment PC
+//  3    pointer    R  fetch effective address low
+//  4   pointer+1   R  fetch effective address high,
+//                     add Y to low byte of effective address
+//  5   address+Y*  R  read from effective address,
+//                     fix high byte of effective address
+//  6   address+Y   W  write to effective address
+//
+// Notes: The effective address is always fetched from zero page,
+//        i.e. the zero page boundary crossing is not handled.
+//
+//        * The high byte of the effective address may be invalid
+//          at this time, i.e. it may be smaller by $100.
+pub(super) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    move || {
+        let (addr, _) = yield_complete!(ind_y(true, cpu, mem_map));
+        mem_map.write_u8(addr, operation.operate(cpu));
+        yield CpuCycle::Tick;
     }
 }
