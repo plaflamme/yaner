@@ -155,7 +155,7 @@ pub fn generate_opcode_table() {
             CPX => ModeOp::read,
             CPY => ModeOp::read,
 
-            DCP => ModeOp::unimplemented,
+            DCP => ModeOp::modify,
             DEC => ModeOp::modify,
             DEX => ModeOp::read,
             DEY => ModeOp::read,

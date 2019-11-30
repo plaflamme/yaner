@@ -375,26 +375,33 @@ impl Cpu {
                     0xC0 => yield_complete!(immediate::read(&cpy, self, mem_map)),
                     0xC1 => yield_complete!(indirect_indexed::x_read(&cmp, self, mem_map)),
                     0xC2 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0xC3 => yield_complete!(indirect_indexed::x_modify(&dcp, self, mem_map)),
                     0xC4 => yield_complete!(zero_page::read(&cpy, self, mem_map)),
                     0xC5 => yield_complete!(zero_page::read(&cmp, self, mem_map)),
                     0xC6 => yield_complete!(zero_page::modify(&dec, self, mem_map)),
+                    0xC7 => yield_complete!(zero_page::modify(&dcp, self, mem_map)),
                     0xC8 => yield_complete!(implicit::run(&iny, self, mem_map)),
                     0xC9 => yield_complete!(immediate::read(&cmp, self, mem_map)),
                     0xCA => yield_complete!(implicit::run(&dex, self, mem_map)),
                     0xCC => yield_complete!(absolute::read(&cpy, self, mem_map)),
                     0xCD => yield_complete!(absolute::read(&cmp, self, mem_map)),
                     0xCE => yield_complete!(absolute::modify(&dec, self, mem_map)),
+                    0xCF => yield_complete!(absolute::modify(&dcp, self, mem_map)),
                     0xD0 => yield_complete!(relative::branch(&bne, self, mem_map)),
                     0xD1 => yield_complete!(indirect_indexed::y_read(&cmp, self, mem_map)),
+                    0xD3 => yield_complete!(indirect_indexed::y_modify(&dcp, self, mem_map)),
                     0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0xD5 => yield_complete!(zero_page_indexed::x_read(&cmp, self, mem_map)),
                     0xD6 => yield_complete!(zero_page_indexed::x_modify(&dec, self, mem_map)),
+                    0xD7 => yield_complete!(zero_page_indexed::x_modify(&dcp, self, mem_map)),
                     0xD8 => yield_complete!(implicit::run(&cld, self, mem_map)),
                     0xD9 => yield_complete!(absolute_indexed::y_read(&cmp, self, mem_map)),
                     0xDA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xDB => yield_complete!(absolute_indexed::y_modify(&dcp, self, mem_map)),
                     0xDC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0xDD => yield_complete!(absolute_indexed::x_read(&cmp, self, mem_map)),
                     0xDE => yield_complete!(absolute_indexed::x_modify(&dec, self, mem_map)),
+                    0xDF => yield_complete!(absolute_indexed::x_modify(&dcp, self, mem_map)),
                     0xE0 => yield_complete!(immediate::read(&cpx, self, mem_map)),
                     0xE1 => yield_complete!(indirect_indexed::x_read(&sbc, self, mem_map)),
                     0xE2 => yield_complete!(immediate::read(&nop, self, mem_map)),
@@ -943,6 +950,15 @@ impl ModifyOperation for asl {
         let result = v << 1;
         cpu.set_flag(Flags::C, (v & 0x80) != 0);
         cpu.set_flags_from(result);
+        result
+    }
+}
+
+struct dcp;
+impl ModifyOperation for dcp {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = dec.operate(cpu, v);
+        cmp.operate(cpu, result);
         result
     }
 }
