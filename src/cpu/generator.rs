@@ -217,7 +217,7 @@ pub fn generate_opcode_table() {
             STX => ModeOp::write,
             STY => ModeOp::write,
 
-            TAS => ModeOp::unimplemented,
+            TAS => ModeOp::modify,
             TAX => ModeOp::read,
             TAY => ModeOp::read,
 

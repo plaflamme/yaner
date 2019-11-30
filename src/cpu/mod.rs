@@ -385,6 +385,7 @@ impl Cpu {
                     0x98 => yield_complete!(implicit::run(&tya, self, mem_map)),
                     0x99 => yield_complete!(absolute_indexed::y_write(&sta, self, mem_map)),
                     0x9A => yield_complete!(implicit::run(&txs, self, mem_map)),
+                    0x9B => yield_complete!(absolute_indexed::y_modify(&tas, self, mem_map)),
                     0x9C => yield_complete!(absolute_indexed::x_modify(&shy, self, mem_map)),
                     0x9D => yield_complete!(absolute_indexed::x_write(&sta, self, mem_map)),
                     0x9E => yield_complete!(absolute_indexed::y_modify(&shx, self, mem_map)),
@@ -942,6 +943,20 @@ impl ModifyOperation for sre {
         let result = lsr.operate(cpu, v);
         eor.operate(cpu, result);
         result
+    }
+}
+
+struct tas;
+impl ModifyOperation for tas {
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
+        // TAS {adr} = stores A&X into S and A&X&H into {adr}
+        let a_x = cpu.acc.get() & cpu.x.get();
+        cpu.sp.set(a_x);
+        a_x & ((addr >> 8) as u8).wrapping_add(1)
+    }
+
+    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
+        unimplemented!()
     }
 }
 
