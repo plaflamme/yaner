@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::cartridge::Cartridge;
 use std::num::ParseIntError;
+use crate::memory::AddressSpace;
 
 #[macro_use]
 extern crate log;
@@ -38,7 +39,12 @@ enum YanerCommand {
     },
     Run {
         #[structopt(short, parse(try_from_str = parse_hex))]
+        /// Sets the initial PC value instead of reading it from the reset vector.
         pc: Option<u16>,
+        #[structopt(short, parse(try_from_str = parse_hex))]
+        /// Outputs a u16 value at this memory location after execution.
+        output: Option<u16>,
+        /// The iNES ROM file.
         rom: PathBuf,
     },
     Generate,
@@ -60,10 +66,14 @@ fn main() {
             let cartridge = Cartridge::try_from(rom).unwrap();
             println!("{}", cartridge);
         },
-        Run { pc, rom  } => {
+        Run { pc, output, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
             nes.run(pc);
+            match output {
+                None => (),
+                Some(addr) => println!("0x{:02X?}", nes.read_u16(addr))
+            }
         },
         Generate => {
             crate::cpu::generator::generate_opcode_table()
