@@ -377,6 +377,7 @@ impl Cpu {
                     0x90 => yield_complete!(relative::branch(&bcc, self, mem_map)),
                     0x91 => yield_complete!(indirect_indexed::y_write(&sta, self, mem_map)),
                     0x92 => yield CpuCycle::Halt,
+                    0x93 => yield_complete!(indirect_indexed::y_modify(&ahx, self, mem_map)),
                     0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map)),
                     0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map)),
                     0x96 => yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map)),
@@ -384,7 +385,10 @@ impl Cpu {
                     0x98 => yield_complete!(implicit::run(&tya, self, mem_map)),
                     0x99 => yield_complete!(absolute_indexed::y_write(&sta, self, mem_map)),
                     0x9A => yield_complete!(implicit::run(&txs, self, mem_map)),
+                    0x9C => yield_complete!(absolute_indexed::x_modify(&shy, self, mem_map)),
                     0x9D => yield_complete!(absolute_indexed::x_write(&sta, self, mem_map)),
+                    0x9E => yield_complete!(absolute_indexed::y_modify(&shx, self, mem_map)),
+                    0x9F => yield_complete!(absolute_indexed::y_modify(&ahx, self, mem_map)),
                     0xA0 => yield_complete!(immediate::read(&ldy, self, mem_map)),
                     0xA1 => yield_complete!(indirect_indexed::x_read(&lda, self, mem_map)),
                     0xA2 => yield_complete!(immediate::read(&ldx, self, mem_map)),
@@ -775,7 +779,20 @@ impl ReadOperation for ldy {
 
 // Read-modify-write operations
 trait ModifyOperation {
+    // this includes addr because AHX, SHX and SHY operate on the high byte of the target address
+    //   instead of the value
+    fn modify(&self, cpu: &Cpu, _addr: u16, value: u8) -> u8 {
+        self.operate(cpu, value)
+    }
+
     fn operate(&self, cpu: &Cpu, value: u8) -> u8;
+}
+
+struct ahx;
+impl ModifyOperation for ahx {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        cpu.acc.get() & cpu.x.get() & v
+    }
 }
 
 // http://obelisk.me.uk/6502/reference.html#ASL
@@ -873,6 +890,28 @@ impl ModifyOperation for rra {
         let result = ror.operate(cpu, v);
         adc.operate(cpu, result);
         result
+    }
+}
+
+struct shx;
+impl ModifyOperation for shx {
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
+        cpu.x.get() & ((addr >> 8) as u8).wrapping_add(1)
+    }
+
+    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
+        unimplemented!()
+    }
+}
+
+struct shy;
+impl ModifyOperation for shy {
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
+        cpu.y.get() & ((addr >> 8) as u8).wrapping_add(1)
+    }
+
+    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
+        unimplemented!()
     }
 }
 

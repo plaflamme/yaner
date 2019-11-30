@@ -123,7 +123,9 @@ pub fn generate_opcode_table() {
 
         let mode = match op {
             ADC => ModeOp::read,
-            AHX => ModeOp::unimplemented,
+
+            AHX => ModeOp::modify,
+
             ANC => ModeOp::read,
             AND => ModeOp::read,
             ALR => ModeOp::read,
@@ -168,7 +170,7 @@ pub fn generate_opcode_table() {
             JMP => ModeOp::read,
 
             JSR => ModeOp::stack,
-            KIL => ModeOp::unimplemented,
+            KIL => ModeOp::read,
 
             LAX => ModeOp::read,
             LAS => ModeOp::unimplemented,
@@ -205,8 +207,9 @@ pub fn generate_opcode_table() {
             SED => ModeOp::read,
             SEI => ModeOp::read,
 
-            SHX => ModeOp::unimplemented,
-            SHY => ModeOp::unimplemented,
+            SHX => ModeOp::modify,
+            SHY => ModeOp::modify,
+
             SLO => ModeOp::modify,
             SRE => ModeOp::modify,
 

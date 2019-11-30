@@ -34,7 +34,7 @@ pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
-        let result = operation.operate(cpu, value);
+        let result = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, result);

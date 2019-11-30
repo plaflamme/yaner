@@ -59,7 +59,7 @@ fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
-        let value = operation.operate(cpu, value);
+        let value = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
