@@ -193,8 +193,8 @@ pub fn generate_opcode_table() {
             ROL => ModeOp::unimplemented,
             ROR => ModeOp::unimplemented,
             RRA => ModeOp::unimplemented,
-            RTI => ModeOp::unimplemented,
 
+            RTI => ModeOp::stack,
             RTS => ModeOp::stack,
 
             SAX => ModeOp::unimplemented,

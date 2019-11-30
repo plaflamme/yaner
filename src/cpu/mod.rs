@@ -268,6 +268,7 @@ impl Cpu {
                     0x3A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x3C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x3D => yield_complete!(absolute_indexed::x_read(&and, self, mem_map)),
+                    0x40 => yield_complete!(stack::rti(self, mem_map)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x45 => yield_complete!(zero_page::read(&eor, self, mem_map)),

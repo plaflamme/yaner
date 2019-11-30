@@ -36,6 +36,37 @@ pub(super) fn jsr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  read next instruction byte (and throw it away)
 //  3  $0100,S  R  increment S
+//  4  $0100,S  R  pull P from stack, increment S
+//  5  $0100,S  R  pull PCL from stack, increment S
+//  6  $0100,S  R  pull PCH from stack
+pub(super) fn rti<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    move || {
+        let _ = cpu.pc_read_u8_next(mem_map);
+        yield CpuCycle::Tick;
+
+        cpu.stack_inc();
+        yield CpuCycle::Tick;
+
+        let status = cpu.pop_stack(mem_map);
+        let mut flags = Flags::from_bits_truncate(status);
+        flags.insert(Flags::U); // this should always be set
+        cpu.flags.set(flags);
+        yield CpuCycle::Tick;
+
+        let pc_lo = cpu.pop_stack(mem_map) as u16;
+        yield CpuCycle::Tick;
+
+        let pc_hi = cpu.read_stack(mem_map) as u16;
+        cpu.pc.set((pc_hi << 8) | pc_lo);
+        yield CpuCycle::Tick;
+    }
+}
+
+//  #  address R/W description
+// --- ------- --- -----------------------------------------------
+//  1    PC     R  fetch opcode, increment PC
+//  2    PC     R  read next instruction byte (and throw it away)
+//  3  $0100,S  R  increment S
 //  4  $0100,S  R  pull PCL from stack, increment S
 //  5  $0100,S  R  pull PCH from stack
 //  6    PC     R  increment PC
