@@ -269,6 +269,7 @@ pub fn generate_opcode_table() {
                 .for_each(|(low_bits, kind)| {
                     let code = (high_bits as u8) << 4 | low_bits as u8;
                     match kind {
+                        Code(_, _, Op::KIL) => println!("\t0x{:02X?} => yield CpuCycle::Halt,", code),
                         Code(_, ModeOp::unimplemented, _) => (),
                         _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind)
                     }

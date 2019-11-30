@@ -180,7 +180,8 @@ impl Display for Cpu {
 
 pub enum CpuCycle {
     Tick,
-    Done { pc: u16, op: Op, mode: AddressingMode }
+    OpComplete { pc: u16, op: Op, mode: AddressingMode },
+    Halt
 }
 
 impl Cpu {
@@ -232,6 +233,7 @@ impl Cpu {
                 match opcode {
                     0x00 => yield_complete!(stack::brk(self, mem_map)),
                     0x01 => yield_complete!(indirect_indexed::x_read(&ora, self, mem_map)),
+                    0x02 => yield CpuCycle::Halt,
                     0x03 => yield_complete!(indirect_indexed::x_modify(&slo, self, mem_map)),
                     0x04 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x05 => yield_complete!(zero_page::read(&ora, self, mem_map)),
@@ -246,6 +248,7 @@ impl Cpu {
                     0x0F => yield_complete!(absolute::modify(&slo, self, mem_map)),
                     0x10 => yield_complete!(relative::branch(&bpl, self, mem_map)),
                     0x11 => yield_complete!(indirect_indexed::y_read(&ora, self, mem_map)),
+                    0x12 => yield CpuCycle::Halt,
                     0x13 => yield_complete!(indirect_indexed::y_modify(&slo, self, mem_map)),
                     0x14 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x15 => yield_complete!(zero_page_indexed::x_read(&ora, self, mem_map)),
@@ -261,6 +264,7 @@ impl Cpu {
                     0x1F => yield_complete!(absolute_indexed::x_modify(&slo, self, mem_map)),
                     0x20 => yield_complete!(stack::jsr(self, mem_map)),
                     0x21 => yield_complete!(indirect_indexed::x_read(&and, self, mem_map)),
+                    0x22 => yield CpuCycle::Halt,
                     0x23 => yield_complete!(indirect_indexed::x_modify(&rla, self, mem_map)),
                     0x24 => yield_complete!(zero_page::read(&bit, self, mem_map)),
                     0x25 => yield_complete!(zero_page::read(&and, self, mem_map)),
@@ -275,6 +279,7 @@ impl Cpu {
                     0x2F => yield_complete!(absolute::modify(&rla, self, mem_map)),
                     0x30 => yield_complete!(relative::branch(&bmi, self, mem_map)),
                     0x31 => yield_complete!(indirect_indexed::y_read(&and, self, mem_map)),
+                    0x32 => yield CpuCycle::Halt,
                     0x33 => yield_complete!(indirect_indexed::y_modify(&rla, self, mem_map)),
                     0x34 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x35 => yield_complete!(zero_page_indexed::x_read(&and, self, mem_map)),
@@ -290,6 +295,7 @@ impl Cpu {
                     0x3F => yield_complete!(absolute_indexed::x_modify(&rla, self, mem_map)),
                     0x40 => yield_complete!(stack::rti(self, mem_map)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
+                    0x42 => yield CpuCycle::Halt,
                     0x43 => yield_complete!(indirect_indexed::x_modify(&sre, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x45 => yield_complete!(zero_page::read(&eor, self, mem_map)),
@@ -304,6 +310,7 @@ impl Cpu {
                     0x4F => yield_complete!(absolute::modify(&sre, self, mem_map)),
                     0x50 => yield_complete!(relative::branch(&bvc, self, mem_map)),
                     0x51 => yield_complete!(indirect_indexed::y_read(&eor, self, mem_map)),
+                    0x52 => yield CpuCycle::Halt,
                     0x53 => yield_complete!(indirect_indexed::y_modify(&sre, self, mem_map)),
                     0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x55 => yield_complete!(zero_page_indexed::x_read(&eor, self, mem_map)),
@@ -319,6 +326,7 @@ impl Cpu {
                     0x5F => yield_complete!(absolute_indexed::x_modify(&sre, self, mem_map)),
                     0x60 => yield_complete!(stack::rts(self, mem_map)),
                     0x61 => yield_complete!(indirect_indexed::x_read(&adc, self, mem_map)),
+                    0x62 => yield CpuCycle::Halt,
                     0x63 => yield_complete!(indirect_indexed::x_modify(&rra, self, mem_map)),
                     0x64 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x65 => yield_complete!(zero_page::read(&adc, self, mem_map)),
@@ -333,6 +341,7 @@ impl Cpu {
                     0x6F => yield_complete!(absolute::modify(&rra, self, mem_map)),
                     0x70 => yield_complete!(relative::branch(&bvs, self, mem_map)),
                     0x71 => yield_complete!(indirect_indexed::y_read(&adc, self, mem_map)),
+                    0x72 => yield CpuCycle::Halt,
                     0x73 => yield_complete!(indirect_indexed::y_modify(&rra, self, mem_map)),
                     0x74 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x75 => yield_complete!(zero_page_indexed::x_read(&adc, self, mem_map)),
@@ -363,6 +372,7 @@ impl Cpu {
                     0x8F => yield_complete!(absolute::write(&sax, self, mem_map)),
                     0x90 => yield_complete!(relative::branch(&bcc, self, mem_map)),
                     0x91 => yield_complete!(indirect_indexed::y_write(&sta, self, mem_map)),
+                    0x92 => yield CpuCycle::Halt,
                     0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map)),
                     0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map)),
                     0x96 => yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map)),
@@ -389,6 +399,7 @@ impl Cpu {
                     0xAF => yield_complete!(absolute::read(&lax, self, mem_map)),
                     0xB0 => yield_complete!(relative::branch(&bcs, self, mem_map)),
                     0xB1 => yield_complete!(indirect_indexed::y_read(&lda, self, mem_map)),
+                    0xB2 => yield CpuCycle::Halt,
                     0xB3 => yield_complete!(indirect_indexed::y_read(&lax, self, mem_map)),
                     0xB4 => yield_complete!(zero_page_indexed::x_read(&ldy, self, mem_map)),
                     0xB5 => yield_complete!(zero_page_indexed::x_read(&lda, self, mem_map)),
@@ -418,6 +429,7 @@ impl Cpu {
                     0xCF => yield_complete!(absolute::modify(&dcp, self, mem_map)),
                     0xD0 => yield_complete!(relative::branch(&bne, self, mem_map)),
                     0xD1 => yield_complete!(indirect_indexed::y_read(&cmp, self, mem_map)),
+                    0xD2 => yield CpuCycle::Halt,
                     0xD3 => yield_complete!(indirect_indexed::y_modify(&dcp, self, mem_map)),
                     0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0xD5 => yield_complete!(zero_page_indexed::x_read(&cmp, self, mem_map)),
@@ -449,6 +461,7 @@ impl Cpu {
                     0xEF => yield_complete!(absolute::modify(&isc, self, mem_map)),
                     0xF0 => yield_complete!(relative::branch(&beq, self, mem_map)),
                     0xF1 => yield_complete!(indirect_indexed::y_read(&sbc, self, mem_map)),
+                    0xF2 => yield CpuCycle::Halt,
                     0xF3 => yield_complete!(indirect_indexed::y_modify(&isc, self, mem_map)),
                     0xF4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0xF5 => yield_complete!(zero_page_indexed::x_read(&sbc, self, mem_map)),
@@ -465,7 +478,7 @@ impl Cpu {
                     _ => { println!("{:?}", instr); unimplemented!() }
                 }
 
-                yield CpuCycle::Done { pc: this_pc, op: instr.0, mode: instr.1 }
+                yield CpuCycle::OpComplete { pc: this_pc, op: instr.0, mode: instr.1 }
             }
         }
     }

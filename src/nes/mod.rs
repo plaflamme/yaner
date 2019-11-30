@@ -31,8 +31,12 @@ impl Nes {
         loop {
             match Pin::new(&mut cpu_cycles).resume() {
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cycle = cycle + 1,
-                GeneratorState::Yielded(crate::cpu::CpuCycle::Done { pc: _, op: _, mode: _ }) => {
+                GeneratorState::Yielded(crate::cpu::CpuCycle::OpComplete { pc: _, op: _, mode: _ }) => {
                     trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
+                },
+                GeneratorState::Yielded(crate::cpu::CpuCycle::Halt) => {
+                    trace!("HALT");
+                    break;
                 },
                 GeneratorState::Complete(_) => unimplemented!()
             };
