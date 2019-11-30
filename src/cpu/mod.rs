@@ -542,6 +542,9 @@ impl Cpu {
 }
 
 // http://nesdev.com/6502_cpu.txt
+// http://nesdev.com/undocumented_opcodes.txt
+// http://www.oxyron.de/html/opcodes02.html
+
 trait BranchOperation {
     fn branch(&self, cpu: &Cpu) -> bool;
 }
