@@ -307,6 +307,7 @@ impl Cpu {
                     0x84 => yield_complete!(zero_page::write(&sty, self, mem_map)),
                     0x85 => yield_complete!(zero_page::write(&sta, self, mem_map)),
                     0x86 => yield_complete!(zero_page::write(&stx, self, mem_map)),
+                    0x88 => yield_complete!(implicit::run(&dey, self, mem_map)),
                     0x89 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0x8C => yield_complete!(absolute::write(&sty, self, mem_map)),
                     0x8D => yield_complete!(absolute::write(&sta, self, mem_map)),
@@ -345,19 +346,24 @@ impl Cpu {
                     0xC2 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0xC4 => yield_complete!(zero_page::read(&cpy, self, mem_map)),
                     0xC5 => yield_complete!(zero_page::read(&cmp, self, mem_map)),
+                    0xC6 => yield_complete!(zero_page::modify(&dec, self, mem_map)),
                     0xC8 => yield_complete!(implicit::run(&iny, self, mem_map)),
                     0xC9 => yield_complete!(immediate::read(&cmp, self, mem_map)),
+                    0xCA => yield_complete!(implicit::run(&dex, self, mem_map)),
                     0xCC => yield_complete!(absolute::read(&cpy, self, mem_map)),
                     0xCD => yield_complete!(absolute::read(&cmp, self, mem_map)),
+                    0xCE => yield_complete!(absolute::modify(&dec, self, mem_map)),
                     0xD0 => yield_complete!(relative::branch(&bne, self, mem_map)),
                     0xD1 => yield_complete!(indirect_indexed::y_read(&cmp, self, mem_map)),
                     0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0xD5 => yield_complete!(zero_page_indexed::x_read(&cmp, self, mem_map)),
+                    0xD6 => yield_complete!(zero_page_indexed::x_modify(&dec, self, mem_map)),
                     0xD8 => yield_complete!(implicit::run(&cld, self, mem_map)),
                     0xD9 => yield_complete!(absolute_indexed::y_read(&cmp, self, mem_map)),
                     0xDA => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0xDC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0xDD => yield_complete!(absolute_indexed::x_read(&cmp, self, mem_map)),
+                    0xDE => yield_complete!(absolute_indexed::x_modify(&dec, self, mem_map)),
                     0xE0 => yield_complete!(immediate::read(&cpx, self, mem_map)),
                     0xE1 => yield_complete!(indirect_indexed::x_read(&sbc, self, mem_map)),
                     0xE2 => yield_complete!(immediate::read(&nop, self, mem_map)),
@@ -901,6 +907,15 @@ impl ModifyOperation for asl {
     }
 }
 
+struct dec;
+impl ModifyOperation for dec {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = v.wrapping_sub(1);
+        cpu.set_flags_from(result);
+        result
+    }
+}
+
 struct inc;
 impl ModifyOperation for inc {
     fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
@@ -909,6 +924,7 @@ impl ModifyOperation for inc {
         result
     }
 }
+
 // Write operations
 trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
@@ -971,6 +987,20 @@ struct clv;
 impl ImplicitOperation for clv {
     fn operate(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::V, false);
+    }
+}
+
+struct dex;
+impl ImplicitOperation for dex {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.x.set(dec.operate(cpu, cpu.x.get()));
+    }
+}
+
+struct dey;
+impl ImplicitOperation for dey {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.y.set(dec.operate(cpu, cpu.y.get()));
     }
 }
 
