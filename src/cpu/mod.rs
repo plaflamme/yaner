@@ -358,15 +358,24 @@ impl Cpu {
                     0xDC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0xDD => yield_complete!(absolute_indexed::x_read(&cmp, self, mem_map)),
                     0xE0 => yield_complete!(immediate::read(&cpx, self, mem_map)),
+                    0xE1 => yield_complete!(indirect_indexed::x_read(&sbc, self, mem_map)),
                     0xE2 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0xE4 => yield_complete!(zero_page::read(&cpx, self, mem_map)),
+                    0xE5 => yield_complete!(zero_page::read(&sbc, self, mem_map)),
+                    0xE9 => yield_complete!(immediate::read(&sbc, self, mem_map)),
                     0xEA => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0xEB => yield_complete!(immediate::read(&sbc, self, mem_map)),
                     0xEC => yield_complete!(absolute::read(&cpx, self, mem_map)),
+                    0xED => yield_complete!(absolute::read(&sbc, self, mem_map)),
                     0xF0 => yield_complete!(relative::branch(&beq, self, mem_map)),
+                    0xF1 => yield_complete!(indirect_indexed::y_read(&sbc, self, mem_map)),
                     0xF4 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
+                    0xF5 => yield_complete!(zero_page_indexed::x_read(&sbc, self, mem_map)),
                     0xF8 => yield_complete!(implicit::run(&sed, self, mem_map)),
+                    0xF9 => yield_complete!(absolute_indexed::y_read(&sbc, self, mem_map)),
                     0xFA => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0xFC => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
+                    0xFD => yield_complete!(absolute_indexed::x_read(&sbc, self, mem_map)),
                     _ => { println!("{:?}", instr); unimplemented!() }
                 }
 
@@ -805,6 +814,13 @@ impl ReadOperation for ora {
     fn operate(&self, cpu: &Cpu, v: u8) {
         cpu.acc.set(cpu.acc.get() | v);
         cpu.set_flags_from_acc();
+    }
+}
+
+struct sbc;
+impl ReadOperation for sbc {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        adc.operate(cpu, !v);
     }
 }
 

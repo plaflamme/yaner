@@ -198,7 +198,7 @@ pub fn generate_opcode_table() {
             RTS => ModeOp::stack,
 
             SAX => ModeOp::unimplemented,
-            SBC => ModeOp::unimplemented,
+            SBC => ModeOp::read,
 
             SEC => ModeOp::read,
             SED => ModeOp::read,
