@@ -163,7 +163,7 @@ pub fn generate_opcode_table() {
             INC => ModeOp::modify,
             INX => ModeOp::read,
             INY => ModeOp::read,
-            ISC => ModeOp::unimplemented,
+            ISC => ModeOp::modify,
 
             JMP => ModeOp::read,
 
