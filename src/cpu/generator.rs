@@ -208,7 +208,7 @@ pub fn generate_opcode_table() {
             SHX => ModeOp::unimplemented,
             SHY => ModeOp::unimplemented,
             SLO => ModeOp::modify,
-            SRE => ModeOp::unimplemented,
+            SRE => ModeOp::modify,
 
             STA => ModeOp::write,
             STX => ModeOp::write,

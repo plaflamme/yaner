@@ -289,26 +289,33 @@ impl Cpu {
                     0x3F => yield_complete!(absolute_indexed::x_modify(&rla, self, mem_map)),
                     0x40 => yield_complete!(stack::rti(self, mem_map)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
+                    0x43 => yield_complete!(indirect_indexed::x_modify(&sre, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x45 => yield_complete!(zero_page::read(&eor, self, mem_map)),
                     0x46 => yield_complete!(zero_page::modify(&lsr, self, mem_map)),
+                    0x47 => yield_complete!(zero_page::modify(&sre, self, mem_map)),
                     0x48 => yield_complete!(stack::pha(self, mem_map)),
                     0x49 => yield_complete!(immediate::read(&eor, self, mem_map)),
                     0x4A => yield_complete!(accumulator::modify(&lsr, self, mem_map)),
                     0x4C => yield_complete!(absolute::jmp(self, mem_map)),
                     0x4D => yield_complete!(absolute::read(&eor, self, mem_map)),
                     0x4E => yield_complete!(absolute::modify(&lsr, self, mem_map)),
+                    0x4F => yield_complete!(absolute::modify(&sre, self, mem_map)),
                     0x50 => yield_complete!(relative::branch(&bvc, self, mem_map)),
                     0x51 => yield_complete!(indirect_indexed::y_read(&eor, self, mem_map)),
+                    0x53 => yield_complete!(indirect_indexed::y_modify(&sre, self, mem_map)),
                     0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x55 => yield_complete!(zero_page_indexed::x_read(&eor, self, mem_map)),
                     0x56 => yield_complete!(zero_page_indexed::x_modify(&lsr, self, mem_map)),
+                    0x57 => yield_complete!(zero_page_indexed::x_modify(&sre, self, mem_map)),
                     0x58 => yield_complete!(implicit::run(&cli, self, mem_map)),
                     0x59 => yield_complete!(absolute_indexed::y_read(&eor, self, mem_map)),
                     0x5A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x5B => yield_complete!(absolute_indexed::y_modify(&sre, self, mem_map)),
                     0x5C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x5D => yield_complete!(absolute_indexed::x_read(&eor, self, mem_map)),
                     0x5E => yield_complete!(absolute_indexed::x_modify(&lsr, self, mem_map)),
+                    0x5F => yield_complete!(absolute_indexed::x_modify(&sre, self, mem_map)),
                     0x60 => yield_complete!(stack::rts(self, mem_map)),
                     0x61 => yield_complete!(indirect_indexed::x_read(&adc, self, mem_map)),
                     0x64 => yield_complete!(zero_page::read(&nop, self, mem_map)),
@@ -1058,6 +1065,15 @@ impl ModifyOperation for slo {
     fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
         let result = asl.operate(cpu, v);
         ora.operate(cpu, result);
+        result
+    }
+}
+
+struct sre;
+impl ModifyOperation for sre {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = lsr.operate(cpu, v);
+        eor.operate(cpu, result);
         result
     }
 }
