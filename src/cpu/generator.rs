@@ -124,12 +124,12 @@ pub fn generate_opcode_table() {
         let mode = match op {
             ADC => ModeOp::read,
             AHX => ModeOp::unimplemented,
-            ANC => ModeOp::unimplemented,
+            ANC => ModeOp::read,
             AND => ModeOp::read,
-            ALR => ModeOp::unimplemented,
-            ARR => ModeOp::unimplemented,
+            ALR => ModeOp::read,
+            ARR => ModeOp::read,
             ASL => ModeOp::modify,
-            AXS => ModeOp::unimplemented,
+            AXS => ModeOp::read,
 
             BCC => ModeOp::branch,
             BCS => ModeOp::branch,

@@ -242,6 +242,7 @@ impl Cpu {
                     0x08 => yield_complete!(stack::php(self, mem_map)),
                     0x09 => yield_complete!(immediate::read(&ora, self, mem_map)),
                     0x0A => yield_complete!(accumulator::modify(&asl, self, mem_map)),
+                    0x0B => yield_complete!(immediate::read(&anc, self, mem_map)),
                     0x0C => yield_complete!(absolute::read(&nop, self, mem_map)),
                     0x0D => yield_complete!(absolute::read(&ora, self, mem_map)),
                     0x0E => yield_complete!(absolute::modify(&asl, self, mem_map)),
@@ -273,6 +274,7 @@ impl Cpu {
                     0x28 => yield_complete!(stack::plp(self, mem_map)),
                     0x29 => yield_complete!(immediate::read(&and, self, mem_map)),
                     0x2A => yield_complete!(accumulator::modify(&rol, self, mem_map)),
+                    0x2B => yield_complete!(immediate::read(&anc, self, mem_map)),
                     0x2C => yield_complete!(absolute::read(&bit, self, mem_map)),
                     0x2D => yield_complete!(absolute::read(&and, self, mem_map)),
                     0x2E => yield_complete!(absolute::modify(&rol, self, mem_map)),
@@ -304,6 +306,7 @@ impl Cpu {
                     0x48 => yield_complete!(stack::pha(self, mem_map)),
                     0x49 => yield_complete!(immediate::read(&eor, self, mem_map)),
                     0x4A => yield_complete!(accumulator::modify(&lsr, self, mem_map)),
+                    0x4B => yield_complete!(immediate::read(&alr, self, mem_map)),
                     0x4C => yield_complete!(absolute::jmp(self, mem_map)),
                     0x4D => yield_complete!(absolute::read(&eor, self, mem_map)),
                     0x4E => yield_complete!(absolute::modify(&lsr, self, mem_map)),
@@ -335,6 +338,7 @@ impl Cpu {
                     0x68 => yield_complete!(stack::pla(self, mem_map)),
                     0x69 => yield_complete!(immediate::read(&adc, self, mem_map)),
                     0x6A => yield_complete!(accumulator::modify(&ror, self, mem_map)),
+                    0x6B => yield_complete!(immediate::read(&arr, self, mem_map)),
                     0x6C => yield_complete!(indirect::jmp(self, mem_map)),
                     0x6D => yield_complete!(absolute::read(&adc, self, mem_map)),
                     0x6E => yield_complete!(absolute::modify(&ror, self, mem_map)),
@@ -423,6 +427,7 @@ impl Cpu {
                     0xC8 => yield_complete!(implicit::run(&iny, self, mem_map)),
                     0xC9 => yield_complete!(immediate::read(&cmp, self, mem_map)),
                     0xCA => yield_complete!(implicit::run(&dex, self, mem_map)),
+                    0xCB => yield_complete!(immediate::read(&axs, self, mem_map)),
                     0xCC => yield_complete!(absolute::read(&cpy, self, mem_map)),
                     0xCD => yield_complete!(absolute::read(&cmp, self, mem_map)),
                     0xCE => yield_complete!(absolute::modify(&dec, self, mem_map)),
@@ -596,18 +601,47 @@ trait ReadOperation {
     fn operate(&self, cpu: &Cpu, value: u8);
 }
 
+struct AdcResult {
+    r: u8,
+    c: bool,
+    v: bool
+}
+fn do_adc(a: u8, b: u8, c: u8) -> AdcResult {
+    let (v1, o1) = a.overflowing_add(b);
+    let (v2, o2) = v1.overflowing_add(c);
+
+    AdcResult { r: v2, c: o1 | o2, v: (b^v2) & (a^v2) & 0x80 != 0 }
+}
+
 // http://obelisk.me.uk/6502/reference.html#ADC
 struct adc;
 impl ReadOperation for adc {
     fn operate(&self, cpu: &Cpu, v: u8) {
-        let acc = cpu.acc.get();
-        let (v1, o1) = acc.overflowing_add(v);
-        let (v2, o2) = v1.overflowing_add(cpu.flag(Flags::C) as u8);
+        let AdcResult { r, c, v} = do_adc(cpu.acc.get(), v, cpu.flag(Flags::C) as u8);
+        cpu.set_flag(Flags::C, c);
+        cpu.set_flag(Flags::V, v);
 
-        cpu.set_flag(Flags::C, o1 | o2);
-        cpu.set_flag(Flags::V, (v^v2) & (acc^v2) & 0x80 != 0);
-        cpu.acc.set(v2);
+        cpu.acc.set(r);
         cpu.set_flags_from_acc();
+    }
+}
+
+struct alr;
+impl ReadOperation for alr {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        // ALR #{imm} = AND #{imm} + LSR
+        and.operate(cpu, v);
+        cpu.acc.set(lsr.operate(cpu, cpu.acc.get()));
+    }
+}
+
+struct anc;
+impl ReadOperation for anc {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        // ANC #{imm} = AND #{imm} + (ASL)
+        and.operate(cpu, v);
+        let result = cpu.acc.get();
+        cpu.set_flag(Flags::C, (result & 0x80) != 0);
     }
 }
 
@@ -616,6 +650,27 @@ impl ReadOperation for and {
     fn operate(&self, cpu: &Cpu, v: u8) {
         cpu.acc.set(cpu.acc.get() & v);
         cpu.set_flags_from_acc();
+    }
+}
+
+struct arr;
+impl ReadOperation for arr {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        // ARR #{imm} = AND #{imm} + ROR
+        and.operate(cpu, v);
+        cpu.acc.set(ror.operate(cpu, cpu.acc.get()));
+    }
+}
+
+struct axs;
+impl ReadOperation for axs {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        // AXS #{imm} = A&X minus #{imm} into X
+        let a_x = cpu.acc.get() & cpu.x.get();
+        let AdcResult { r, c, v: _ } = do_adc(a_x, !v, cpu.flag(Flags::C) as u8);
+        cpu.x.set(r);
+        cpu.set_flags_from(r);
+        cpu.set_flag(Flags::C, c);
     }
 }
 
