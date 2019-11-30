@@ -320,20 +320,24 @@ impl Cpu {
                     0x80 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0x81 => yield_complete!(indirect_indexed::x_write(&sta, self, mem_map)),
                     0x82 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0x83 => yield_complete!(indirect_indexed::x_write(&sax, self, mem_map)),
                     0x84 => yield_complete!(zero_page::write(&sty, self, mem_map)),
                     0x85 => yield_complete!(zero_page::write(&sta, self, mem_map)),
                     0x86 => yield_complete!(zero_page::write(&stx, self, mem_map)),
+                    0x87 => yield_complete!(zero_page::write(&sax, self, mem_map)),
                     0x88 => yield_complete!(implicit::run(&dey, self, mem_map)),
                     0x89 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0x8A => yield_complete!(implicit::run(&txa, self, mem_map)),
                     0x8C => yield_complete!(absolute::write(&sty, self, mem_map)),
                     0x8D => yield_complete!(absolute::write(&sta, self, mem_map)),
                     0x8E => yield_complete!(absolute::write(&stx, self, mem_map)),
+                    0x8F => yield_complete!(absolute::write(&sax, self, mem_map)),
                     0x90 => yield_complete!(relative::branch(&bcc, self, mem_map)),
                     0x91 => yield_complete!(indirect_indexed::y_write(&sta, self, mem_map)),
                     0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map)),
                     0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map)),
                     0x96 => yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map)),
+                    0x97 => yield_complete!(zero_page_indexed::y_write(&sax, self, mem_map)),
                     0x98 => yield_complete!(implicit::run(&tya, self, mem_map)),
                     0x99 => yield_complete!(absolute_indexed::y_write(&sta, self, mem_map)),
                     0x9A => yield_complete!(implicit::run(&txs, self, mem_map)),
@@ -997,6 +1001,13 @@ impl ModifyOperation for ror {
 // Write operations
 trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
+}
+
+struct sax;
+impl WriteOperation for sax {
+    fn operate(&self, cpu: &Cpu) -> u8 {
+        cpu.acc.get() & cpu.x.get()
+    }
 }
 
 // http://obelisk.me.uk/6502/reference.html#STA
