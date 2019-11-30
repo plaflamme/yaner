@@ -1,24 +1,20 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8, bool)> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
+        let addr_lo = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
 
         let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
-        let addr_pre = addr_lo + index as u16;
+        let addr_pre = (addr_hi << 8) | addr_lo.wrapping_add(index) as u16;
         yield CpuCycle::Tick;
 
         let _ = mem_map.read_u8(addr_pre);
-        let addr = (addr_hi << 8 | addr_lo).wrapping_add(index as u16);
-
-        if addr != addr_pre {
-            yield CpuCycle::Tick;
-        }
+        let addr = (addr_hi << 8 | addr_lo as u16).wrapping_add(index as u16);
 
         let value = mem_map.read_u8(addr);
-        (addr, value)
+        (addr, value, addr != addr_pre)
     }
 }
 
@@ -42,7 +38,10 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>)
 //          was invalid during cycle #4, i.e. page boundary was crossed.
 fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (_, value, oops) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        if oops {
+            yield CpuCycle::Tick;
+        }
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }
@@ -74,7 +73,10 @@ pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_m
 //          at this time, i.e. it may be smaller by $100.
 fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (addr, value, _) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        yield CpuCycle::Tick;
+
+        mem_map.read_u8(addr);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
@@ -114,7 +116,7 @@ pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
 //          address, it always reads from the address first.
 fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, _) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (addr, _, _) = yield_complete!(abs_indexed(index, cpu, mem_map));
         yield CpuCycle::Tick;
 
         let value = operation.operate(cpu);

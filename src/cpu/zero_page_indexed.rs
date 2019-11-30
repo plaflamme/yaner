@@ -85,8 +85,6 @@ pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
 fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, _) = yield_complete!(zp_indexed(index, cpu, mem_map));
-        yield CpuCycle::Tick;
-
         let value = operation.operate(cpu);
         mem_map.write_u8(addr, value);
         yield CpuCycle::Tick;
