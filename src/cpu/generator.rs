@@ -188,7 +188,7 @@ pub fn generate_opcode_table() {
             PLA => ModeOp::stack,
             PLP => ModeOp::stack,
 
-            RLA => ModeOp::unimplemented,
+            RLA => ModeOp::modify,
 
             ROL => ModeOp::modify,
             ROR => ModeOp::modify,

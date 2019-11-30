@@ -260,26 +260,33 @@ impl Cpu {
                     0x1F => yield_complete!(absolute_indexed::x_modify(&slo, self, mem_map)),
                     0x20 => yield_complete!(stack::jsr(self, mem_map)),
                     0x21 => yield_complete!(indirect_indexed::x_read(&and, self, mem_map)),
+                    0x23 => yield_complete!(indirect_indexed::x_modify(&rla, self, mem_map)),
                     0x24 => yield_complete!(zero_page::read(&bit, self, mem_map)),
                     0x25 => yield_complete!(zero_page::read(&and, self, mem_map)),
                     0x26 => yield_complete!(zero_page::modify(&rol, self, mem_map)),
+                    0x27 => yield_complete!(zero_page::modify(&rla, self, mem_map)),
                     0x28 => yield_complete!(stack::plp(self, mem_map)),
                     0x29 => yield_complete!(immediate::read(&and, self, mem_map)),
                     0x2A => yield_complete!(accumulator::modify(&rol, self, mem_map)),
                     0x2C => yield_complete!(absolute::read(&bit, self, mem_map)),
                     0x2D => yield_complete!(absolute::read(&and, self, mem_map)),
                     0x2E => yield_complete!(absolute::modify(&rol, self, mem_map)),
+                    0x2F => yield_complete!(absolute::modify(&rla, self, mem_map)),
                     0x30 => yield_complete!(relative::branch(&bmi, self, mem_map)),
                     0x31 => yield_complete!(indirect_indexed::y_read(&and, self, mem_map)),
+                    0x33 => yield_complete!(indirect_indexed::y_modify(&rla, self, mem_map)),
                     0x34 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x35 => yield_complete!(zero_page_indexed::x_read(&and, self, mem_map)),
                     0x36 => yield_complete!(zero_page_indexed::x_modify(&rol, self, mem_map)),
+                    0x37 => yield_complete!(zero_page_indexed::x_modify(&rla, self, mem_map)),
                     0x38 => yield_complete!(implicit::run(&sec, self, mem_map)),
                     0x39 => yield_complete!(absolute_indexed::y_read(&and, self, mem_map)),
                     0x3A => yield_complete!(implicit::run(&nop, self, mem_map)),
+                    0x3B => yield_complete!(absolute_indexed::y_modify(&rla, self, mem_map)),
                     0x3C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x3D => yield_complete!(absolute_indexed::x_read(&and, self, mem_map)),
                     0x3E => yield_complete!(absolute_indexed::x_modify(&rol, self, mem_map)),
+                    0x3F => yield_complete!(absolute_indexed::x_modify(&rla, self, mem_map)),
                     0x40 => yield_complete!(stack::rti(self, mem_map)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
@@ -1011,6 +1018,15 @@ impl ModifyOperation for lsr {
         cpu.set_flag(Flags::C, (v & 0x01) != 0);
         let result = v >> 1;
         cpu.set_flags_from(result);
+        result
+    }
+}
+
+struct rla;
+impl ModifyOperation for rla {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = rol.operate(cpu, v);
+        and.operate(cpu, result);
         result
     }
 }
