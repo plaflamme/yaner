@@ -173,7 +173,7 @@ pub fn generate_opcode_table() {
             KIL => ModeOp::read,
 
             LAX => ModeOp::read,
-            LAS => ModeOp::unimplemented,
+            LAS => ModeOp::read,
 
             LDA => ModeOp::read,
             LDX => ModeOp::read,

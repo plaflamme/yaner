@@ -416,6 +416,7 @@ impl Cpu {
                     0xB8 => yield_complete!(implicit::run(&clv, self, mem_map)),
                     0xB9 => yield_complete!(absolute_indexed::y_read(&lda, self, mem_map)),
                     0xBA => yield_complete!(implicit::run(&tsx, self, mem_map)),
+                    0xBB => yield_complete!(absolute_indexed::y_read(&las, self, mem_map)),
                     0xBC => yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map)),
                     0xBD => yield_complete!(absolute_indexed::x_read(&lda, self, mem_map)),
                     0xBE => yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map)),
@@ -703,6 +704,17 @@ impl ReadOperation for lax {
     fn operate(&self, cpu: &Cpu, v: u8) {
         cpu.acc.set(v);
         cpu.x.set(v);
+        cpu.set_flags_from_acc();
+    }
+}
+
+struct las;
+impl ReadOperation for las {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        let value = cpu.sp.get() & v;
+        cpu.acc.set(value);
+        cpu.x.set(value);
+        cpu.sp.set(value);
         cpu.set_flags_from_acc();
     }
 }
