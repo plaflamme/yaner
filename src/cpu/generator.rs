@@ -31,7 +31,6 @@ enum ModeOp {
     write,
 
     stack,
-    jmp,
 
     unimplemented
 }
@@ -42,7 +41,7 @@ impl Display for Code {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
             Code(_, ModeOp::unimplemented, _) => write!(f, "unimplemented!()"),
-            Code(_, ModeOp::jmp, _) => write!(f, "absolute::jmp(self, mem_map)"),
+            Code(mode, _, Op::JMP) => write!(f, "{}jmp(self, mem_map)", mode),
             Code(AddressingMode::Implicit, ModeOp::read, op) => write!(f, "implicit::run(&{}, self, mem_map)", op),
             Code(_, ModeOp::stack, op) => {
                 write!(f, "stack::{}(self, mem_map)", op)
@@ -166,7 +165,7 @@ pub fn generate_opcode_table() {
             INY => ModeOp::read,
             ISC => ModeOp::unimplemented,
 
-            JMP => ModeOp::jmp,
+            JMP => ModeOp::read,
 
             JSR => ModeOp::stack,
             KIL => ModeOp::unimplemented,

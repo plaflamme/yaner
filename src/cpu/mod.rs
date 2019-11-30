@@ -303,7 +303,7 @@ impl Cpu {
                     0x68 => yield_complete!(stack::pla(self, mem_map)),
                     0x69 => yield_complete!(immediate::read(&adc, self, mem_map)),
                     0x6A => yield_complete!(accumulator::modify(&ror, self, mem_map)),
-                    0x6C => yield_complete!(absolute::jmp(self, mem_map)),
+                    0x6C => yield_complete!(indirect::jmp(self, mem_map)),
                     0x6D => yield_complete!(absolute::read(&adc, self, mem_map)),
                     0x6E => yield_complete!(absolute::modify(&ror, self, mem_map)),
                     0x70 => yield_complete!(relative::branch(&bvs, self, mem_map)),
