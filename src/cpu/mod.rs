@@ -341,26 +341,33 @@ impl Cpu {
                     0xA0 => yield_complete!(immediate::read(&ldy, self, mem_map)),
                     0xA1 => yield_complete!(indirect_indexed::x_read(&lda, self, mem_map)),
                     0xA2 => yield_complete!(immediate::read(&ldx, self, mem_map)),
+                    0xA3 => yield_complete!(indirect_indexed::x_read(&lax, self, mem_map)),
                     0xA4 => yield_complete!(zero_page::read(&ldy, self, mem_map)),
                     0xA5 => yield_complete!(zero_page::read(&lda, self, mem_map)),
                     0xA6 => yield_complete!(zero_page::read(&ldx, self, mem_map)),
+                    0xA7 => yield_complete!(zero_page::read(&lax, self, mem_map)),
                     0xA8 => yield_complete!(implicit::run(&tay, self, mem_map)),
                     0xA9 => yield_complete!(immediate::read(&lda, self, mem_map)),
                     0xAA => yield_complete!(implicit::run(&tax, self, mem_map)),
+                    0xAB => yield_complete!(immediate::read(&lax, self, mem_map)),
                     0xAC => yield_complete!(absolute::read(&ldy, self, mem_map)),
                     0xAD => yield_complete!(absolute::read(&lda, self, mem_map)),
                     0xAE => yield_complete!(absolute::read(&ldx, self, mem_map)),
+                    0xAF => yield_complete!(absolute::read(&lax, self, mem_map)),
                     0xB0 => yield_complete!(relative::branch(&bcs, self, mem_map)),
                     0xB1 => yield_complete!(indirect_indexed::y_read(&lda, self, mem_map)),
+                    0xB3 => yield_complete!(indirect_indexed::y_read(&lax, self, mem_map)),
                     0xB4 => yield_complete!(zero_page_indexed::x_read(&ldy, self, mem_map)),
                     0xB5 => yield_complete!(zero_page_indexed::x_read(&lda, self, mem_map)),
                     0xB6 => yield_complete!(zero_page_indexed::y_read(&ldx, self, mem_map)),
+                    0xB7 => yield_complete!(zero_page_indexed::y_read(&lax, self, mem_map)),
                     0xB8 => yield_complete!(implicit::run(&clv, self, mem_map)),
                     0xB9 => yield_complete!(absolute_indexed::y_read(&lda, self, mem_map)),
                     0xBA => yield_complete!(implicit::run(&tsx, self, mem_map)),
                     0xBC => yield_complete!(absolute_indexed::x_read(&ldy, self, mem_map)),
                     0xBD => yield_complete!(absolute_indexed::x_read(&lda, self, mem_map)),
                     0xBE => yield_complete!(absolute_indexed::y_read(&ldx, self, mem_map)),
+                    0xBF => yield_complete!(absolute_indexed::y_read(&lax, self, mem_map)),
                     0xC0 => yield_complete!(immediate::read(&cpy, self, mem_map)),
                     0xC1 => yield_complete!(indirect_indexed::x_read(&cmp, self, mem_map)),
                     0xC2 => yield_complete!(immediate::read(&nop, self, mem_map)),
@@ -837,6 +844,15 @@ struct eor;
 impl ReadOperation for eor {
     fn operate(&self, cpu: &Cpu, v: u8) {
         cpu.acc.set(cpu.acc.get() ^ v);
+        cpu.set_flags_from_acc();
+    }
+}
+
+struct lax;
+impl ReadOperation for lax {
+    fn operate(&self, cpu: &Cpu, v: u8) {
+        cpu.acc.set(v);
+        cpu.x.set(v);
         cpu.set_flags_from_acc();
     }
 }

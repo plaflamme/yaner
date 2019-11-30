@@ -170,7 +170,7 @@ pub fn generate_opcode_table() {
             JSR => ModeOp::stack,
             KIL => ModeOp::unimplemented,
 
-            LAX => ModeOp::unimplemented,
+            LAX => ModeOp::read,
             LAS => ModeOp::unimplemented,
 
             LDA => ModeOp::read,
