@@ -255,53 +255,68 @@ impl Cpu {
                     0x21 => yield_complete!(indirect_indexed::x_read(&and, self, mem_map)),
                     0x24 => yield_complete!(zero_page::read(&bit, self, mem_map)),
                     0x25 => yield_complete!(zero_page::read(&and, self, mem_map)),
+                    0x26 => yield_complete!(zero_page::modify(&rol, self, mem_map)),
                     0x28 => yield_complete!(stack::plp(self, mem_map)),
                     0x29 => yield_complete!(immediate::read(&and, self, mem_map)),
+                    0x2A => yield_complete!(accumulator::modify(&rol, self, mem_map)),
                     0x2C => yield_complete!(absolute::read(&bit, self, mem_map)),
                     0x2D => yield_complete!(absolute::read(&and, self, mem_map)),
+                    0x2E => yield_complete!(absolute::modify(&rol, self, mem_map)),
                     0x30 => yield_complete!(relative::branch(&bmi, self, mem_map)),
                     0x31 => yield_complete!(indirect_indexed::y_read(&and, self, mem_map)),
                     0x34 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x35 => yield_complete!(zero_page_indexed::x_read(&and, self, mem_map)),
+                    0x36 => yield_complete!(zero_page_indexed::x_modify(&rol, self, mem_map)),
                     0x38 => yield_complete!(implicit::run(&sec, self, mem_map)),
                     0x39 => yield_complete!(absolute_indexed::y_read(&and, self, mem_map)),
                     0x3A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x3C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x3D => yield_complete!(absolute_indexed::x_read(&and, self, mem_map)),
+                    0x3E => yield_complete!(absolute_indexed::x_modify(&rol, self, mem_map)),
                     0x40 => yield_complete!(stack::rti(self, mem_map)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self, mem_map)),
                     0x44 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x45 => yield_complete!(zero_page::read(&eor, self, mem_map)),
+                    0x46 => yield_complete!(zero_page::modify(&lsr, self, mem_map)),
                     0x48 => yield_complete!(stack::pha(self, mem_map)),
                     0x49 => yield_complete!(immediate::read(&eor, self, mem_map)),
+                    0x4A => yield_complete!(accumulator::modify(&lsr, self, mem_map)),
                     0x4C => yield_complete!(absolute::jmp(self, mem_map)),
                     0x4D => yield_complete!(absolute::read(&eor, self, mem_map)),
+                    0x4E => yield_complete!(absolute::modify(&lsr, self, mem_map)),
                     0x50 => yield_complete!(relative::branch(&bvc, self, mem_map)),
                     0x51 => yield_complete!(indirect_indexed::y_read(&eor, self, mem_map)),
                     0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x55 => yield_complete!(zero_page_indexed::x_read(&eor, self, mem_map)),
+                    0x56 => yield_complete!(zero_page_indexed::x_modify(&lsr, self, mem_map)),
                     0x58 => yield_complete!(implicit::run(&cli, self, mem_map)),
                     0x59 => yield_complete!(absolute_indexed::y_read(&eor, self, mem_map)),
                     0x5A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x5C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x5D => yield_complete!(absolute_indexed::x_read(&eor, self, mem_map)),
+                    0x5E => yield_complete!(absolute_indexed::x_modify(&lsr, self, mem_map)),
                     0x60 => yield_complete!(stack::rts(self, mem_map)),
                     0x61 => yield_complete!(indirect_indexed::x_read(&adc, self, mem_map)),
                     0x64 => yield_complete!(zero_page::read(&nop, self, mem_map)),
                     0x65 => yield_complete!(zero_page::read(&adc, self, mem_map)),
+                    0x66 => yield_complete!(zero_page::modify(&ror, self, mem_map)),
                     0x68 => yield_complete!(stack::pla(self, mem_map)),
                     0x69 => yield_complete!(immediate::read(&adc, self, mem_map)),
+                    0x6A => yield_complete!(accumulator::modify(&ror, self, mem_map)),
                     0x6C => yield_complete!(absolute::jmp(self, mem_map)),
                     0x6D => yield_complete!(absolute::read(&adc, self, mem_map)),
+                    0x6E => yield_complete!(absolute::modify(&ror, self, mem_map)),
                     0x70 => yield_complete!(relative::branch(&bvs, self, mem_map)),
                     0x71 => yield_complete!(indirect_indexed::y_read(&adc, self, mem_map)),
                     0x74 => yield_complete!(zero_page_indexed::x_read(&nop, self, mem_map)),
                     0x75 => yield_complete!(zero_page_indexed::x_read(&adc, self, mem_map)),
+                    0x76 => yield_complete!(zero_page_indexed::x_modify(&ror, self, mem_map)),
                     0x78 => yield_complete!(implicit::run(&sei, self, mem_map)),
                     0x79 => yield_complete!(absolute_indexed::y_read(&adc, self, mem_map)),
                     0x7A => yield_complete!(implicit::run(&nop, self, mem_map)),
                     0x7C => yield_complete!(absolute_indexed::x_read(&nop, self, mem_map)),
                     0x7D => yield_complete!(absolute_indexed::x_read(&adc, self, mem_map)),
+                    0x7E => yield_complete!(absolute_indexed::x_modify(&ror, self, mem_map)),
                     0x80 => yield_complete!(immediate::read(&nop, self, mem_map)),
                     0x81 => yield_complete!(indirect_indexed::x_write(&sta, self, mem_map)),
                     0x82 => yield_complete!(immediate::read(&nop, self, mem_map)),
@@ -930,6 +945,39 @@ impl ModifyOperation for inc {
     }
 }
 
+// http://obelisk.me.uk/6502/reference.html#LSR
+struct lsr;
+impl ModifyOperation for lsr {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        cpu.set_flag(Flags::C, (v & 0x01) != 0);
+        let result = v >> 1;
+        cpu.set_flags_from(result);
+        result
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#ROL
+struct rol;
+impl ModifyOperation for rol {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = (v << 1) | cpu.flag(Flags::C) as u8;
+        cpu.set_flag(Flags::C, v & 0x80 != 0);
+        cpu.set_flags_from(result);
+        result
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#ROR
+struct ror;
+impl ModifyOperation for ror {
+    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
+        let result = (v >> 1) | ((cpu.flag(Flags::C) as u8) << 7);
+        cpu.set_flag(Flags::C, v & 0x01 != 0);
+        cpu.set_flags_from(result);
+        result
+    }
+}
+
 // Write operations
 trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
@@ -1153,8 +1201,6 @@ mod accumulator {
     pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
         move || {
             let _ = cpu.pc_read_u8(mem_map) as u16;
-            yield CpuCycle::Tick;
-
             let result = operation.operate(cpu, cpu.acc.get());
             cpu.acc.set(result);
             yield CpuCycle::Tick;

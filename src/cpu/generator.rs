@@ -178,7 +178,7 @@ pub fn generate_opcode_table() {
             LDX => ModeOp::read,
             LDY => ModeOp::read,
 
-            LSR => ModeOp::unimplemented,
+            LSR => ModeOp::modify,
 
             NOP => ModeOp::read,
 
@@ -190,8 +190,10 @@ pub fn generate_opcode_table() {
             PLP => ModeOp::stack,
 
             RLA => ModeOp::unimplemented,
-            ROL => ModeOp::unimplemented,
-            ROR => ModeOp::unimplemented,
+
+            ROL => ModeOp::modify,
+            ROR => ModeOp::modify,
+
             RRA => ModeOp::unimplemented,
 
             RTI => ModeOp::stack,
