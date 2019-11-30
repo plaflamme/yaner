@@ -50,9 +50,8 @@ impl crate::memory::AddressSpace for Nes {
             0x0000..=0x07FF => self.ram.read_u8(addr),
             0x0800..=0x1FFF => self.ram.read_u8(addr % 0x0800),
 
-            0x2002 => self.ppu.status(),
-            0x2000..=0x2007 => unimplemented!(), // PPU
-            0x2008..=0x3FFF => unimplemented!(), // PPU mirror
+            0x2000..=0x2007 => self.ppu.read_u8(addr), // PPU
+            0x2008..=0x3FFF => self.ppu.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
             0x4000..=0x4017 => unimplemented!(), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
@@ -66,8 +65,8 @@ impl crate::memory::AddressSpace for Nes {
             0x0000..=0x07FF => self.ram.write_u8(addr, value),
             0x0800..=0x1FFF => self.ram.write_u8(addr % 0x8000, value),
 
-            0x2000..=0x2007 => unimplemented!(), // PPU
-            0x2008..=0x3FFF => unimplemented!(), // PPU mirror
+            0x2000..=0x2007 => self.ppu.write_u8(addr, value), // PPU
+            0x2008..=0x3FFF => self.ppu.write_u8(0x2000 + (addr % 8), value), // PPU mirror
 
             0x4000..=0x4017 => (), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
