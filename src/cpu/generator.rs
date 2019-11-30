@@ -214,14 +214,14 @@ pub fn generate_opcode_table() {
             STY => ModeOp::write,
 
             TAS => ModeOp::unimplemented,
-            TAX => ModeOp::unimplemented,
-            TAY => ModeOp::unimplemented,
+            TAX => ModeOp::read,
+            TAY => ModeOp::read,
 
             TSX => ModeOp::read,
-            TXA => ModeOp::unimplemented,
+            TXA => ModeOp::read,
             TXS => ModeOp::read,
 
-            TYA => ModeOp::unimplemented,
+            TYA => ModeOp::read,
             XAA => ModeOp::unimplemented,
         };
 

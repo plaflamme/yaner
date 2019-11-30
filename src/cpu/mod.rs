@@ -309,6 +309,7 @@ impl Cpu {
                     0x86 => yield_complete!(zero_page::write(&stx, self, mem_map)),
                     0x88 => yield_complete!(implicit::run(&dey, self, mem_map)),
                     0x89 => yield_complete!(immediate::read(&nop, self, mem_map)),
+                    0x8A => yield_complete!(implicit::run(&txa, self, mem_map)),
                     0x8C => yield_complete!(absolute::write(&sty, self, mem_map)),
                     0x8D => yield_complete!(absolute::write(&sta, self, mem_map)),
                     0x8E => yield_complete!(absolute::write(&stx, self, mem_map)),
@@ -317,6 +318,7 @@ impl Cpu {
                     0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self, mem_map)),
                     0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self, mem_map)),
                     0x96 => yield_complete!(zero_page_indexed::y_write(&stx, self, mem_map)),
+                    0x98 => yield_complete!(implicit::run(&tya, self, mem_map)),
                     0x99 => yield_complete!(absolute_indexed::y_write(&sta, self, mem_map)),
                     0x9A => yield_complete!(implicit::run(&txs, self, mem_map)),
                     0x9D => yield_complete!(absolute_indexed::x_write(&sta, self, mem_map)),
@@ -326,7 +328,9 @@ impl Cpu {
                     0xA4 => yield_complete!(zero_page::read(&ldy, self, mem_map)),
                     0xA5 => yield_complete!(zero_page::read(&lda, self, mem_map)),
                     0xA6 => yield_complete!(zero_page::read(&ldx, self, mem_map)),
+                    0xA8 => yield_complete!(implicit::run(&tay, self, mem_map)),
                     0xA9 => yield_complete!(immediate::read(&lda, self, mem_map)),
+                    0xAA => yield_complete!(implicit::run(&tax, self, mem_map)),
                     0xAC => yield_complete!(absolute::read(&ldy, self, mem_map)),
                     0xAD => yield_complete!(absolute::read(&lda, self, mem_map)),
                     0xAE => yield_complete!(absolute::read(&ldx, self, mem_map)),
@@ -1051,6 +1055,24 @@ impl ImplicitOperation for sei {
     }
 }
 
+// http://obelisk.me.uk/6502/reference.html#TAY
+struct tay;
+impl ImplicitOperation for tay {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.y.set(cpu.acc.get());
+        cpu.set_flags_from(cpu.y.get());
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#TAX
+struct tax;
+impl ImplicitOperation for tax {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.x.set(cpu.acc.get());
+        cpu.set_flags_from(cpu.x.get());
+    }
+}
+
 // http://obelisk.me.uk/6502/reference.html#TSX
 struct tsx;
 impl ImplicitOperation for tsx {
@@ -1061,12 +1083,29 @@ impl ImplicitOperation for tsx {
     }
 }
 
+// http://obelisk.me.uk/6502/reference.html#TXA
+struct txa;
+impl ImplicitOperation for txa {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.acc.set(cpu.x.get());
+        cpu.set_flags_from_acc();
+    }
+}
+
 // http://obelisk.me.uk/6502/reference.html#TXS
 struct txs;
 impl ImplicitOperation for txs {
     fn operate(&self, cpu: &Cpu) {
-        let sp = cpu.x.get();
-        cpu.sp.set(sp);
+        cpu.sp.set(cpu.x.get());
+    }
+}
+
+// http://obelisk.me.uk/6502/reference.html#TYA
+struct tya;
+impl ImplicitOperation for tya {
+    fn operate(&self, cpu: &Cpu) {
+        cpu.acc.set(cpu.y.get());
+        cpu.set_flags_from_acc();
     }
 }
 
