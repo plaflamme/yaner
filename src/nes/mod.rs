@@ -65,7 +65,7 @@ impl crate::memory::AddressSpace for Nes {
             0x2000..=0x2007 => unimplemented!(), // PPU
             0x2008..=0x3FFF => unimplemented!(), // PPU mirror
 
-            0x4000..=0x4017 => unimplemented!(), // APU
+            0x4000..=0x4017 => (), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
             0x4020..=0xFFFF => self.cartridge.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper

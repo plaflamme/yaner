@@ -141,7 +141,7 @@ pub fn generate_opcode_table() {
             BNE => ModeOp::branch,
             BPL => ModeOp::branch,
 
-            BRK => ModeOp::unimplemented,
+            BRK => ModeOp::stack,
 
             BVC => ModeOp::branch,
             BVS => ModeOp::branch,

@@ -1,6 +1,43 @@
 use super::*;
 
 //  #  address R/W description
+// --- ------- --- -----------------------------------------------
+//  1    PC     R  fetch opcode, increment PC
+//  2    PC     R  read next instruction byte (and throw it away),
+//                 increment PC
+//  3  $0100,S  W  push PCH on stack (with B flag set), decrement S
+//  4  $0100,S  W  push PCL on stack, decrement S
+//  5  $0100,S  W  push P on stack, decrement S
+//  6   $FFFE   R  fetch PCL
+//  7   $FFFF   R  fetch PCH
+pub(super) fn brk<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+    move || {
+        let _ = cpu.pc_read_u8_next(mem_map);
+        yield CpuCycle::Tick;
+
+        let pc_hi = (cpu.pc.get() >> 8) as u8;
+        cpu.push_stack(mem_map, pc_hi);
+        yield CpuCycle::Tick;
+
+        let pc_lo = (cpu.pc.get() & 0x00FF) as u8;
+        cpu.push_stack(mem_map, pc_lo);
+        yield CpuCycle::Tick;
+
+        cpu.set_flag(Flags::B, true);
+        cpu.push_stack(mem_map, cpu.flags.get().bits());
+        yield CpuCycle::Tick;
+
+        let pc_lo = mem_map.read_u8(0xFFFE) as u16;
+        yield CpuCycle::Tick;
+
+        let pc_hi = mem_map.read_u8(0xFFFF) as u16;
+        let pc = pc_hi << 8 | pc_lo;
+        cpu.pc.set(pc);
+        yield CpuCycle::Tick;
+    }
+}
+
+//  #  address R/W description
 // --- ------- --- -------------------------------------------------
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  fetch low address byte, increment PC

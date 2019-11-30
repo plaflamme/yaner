@@ -230,6 +230,7 @@ impl Cpu {
                 let instr = &OPCODES[opcode as usize];
 
                 match opcode {
+                    0x00 => yield_complete!(stack::brk(self, mem_map)),
                     0x01 => yield_complete!(indirect_indexed::x_read(&ora, self, mem_map)),
                     0x03 => yield_complete!(indirect_indexed::x_modify(&slo, self, mem_map)),
                     0x04 => yield_complete!(zero_page::read(&nop, self, mem_map)),
