@@ -365,10 +365,19 @@ impl ModifyOperation for shx {
     }
 }
 
+// TODO: this is broken, not sure how it's supposed to work
+//   http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
+//   https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
+//   https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
 pub struct shy;
 impl ModifyOperation for shy {
     fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        cpu.y.get() & ((addr >> 8) as u8).wrapping_add(1)
+        let addr_orig = addr - cpu.x.get() as u16;
+        let addr_fixed = if addr & 0xFF00 != addr_orig & 0xFF00 {
+            addr & ((cpu.y.get() as u16) << 8)
+        } else { addr };
+
+        cpu.y.get() & ((addr_fixed >> 8) as u8 + 1)
     }
 
     fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
