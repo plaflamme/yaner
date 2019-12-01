@@ -6,19 +6,10 @@ use std::cell::Cell;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::Generator;
 
-mod absolute;
-mod absolute_indexed;
-mod accumulator;
-mod immediate;
-mod implicit;
-mod indirect;
-mod indirect_indexed;
+mod mode;
+use mode::*;
 mod instr;
 mod opcode;
-mod relative;
-mod stack;
-mod zero_page;
-mod zero_page_indexed;
 
 pub mod generator;
 

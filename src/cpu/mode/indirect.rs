@@ -11,7 +11,7 @@ use super::*;
 //
 // Note: * The PCH will always be fetched from the same page
 //         than PCL, i.e. page boundary crossing is not handled.
-pub(super) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let addr_lo = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;

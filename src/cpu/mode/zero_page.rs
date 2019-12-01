@@ -6,7 +6,7 @@ use super::*;
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  fetch address, increment PC
 //  3  address  R  read from effective address
-pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map) as u16;
         yield CpuCycle::Tick;
@@ -25,7 +25,7 @@ pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map
 //  4  address  W  write the value back to effective address,
 //                 and do the operation on it
 //  5  address  W  write the new value to effective address
-pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map) as u16;
         yield CpuCycle::Tick;
@@ -47,7 +47,7 @@ pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  fetch address, increment PC
 //  3  address  W  write register to effective address
-pub(super) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map) as u16;
         yield CpuCycle::Tick;
