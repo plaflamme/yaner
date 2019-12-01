@@ -1,15 +1,21 @@
 #![allow(non_camel_case_types)]
 
-use crate::memory::AddressSpace;
 use bitflags::bitflags;
-use std::ops::Generator;
+use crate::memory::AddressSpace;
 use std::cell::Cell;
+use std::fmt::{Display, Formatter, Error};
+use std::ops::Generator;
 
 mod absolute;
 mod absolute_indexed;
+mod accumulator;
+mod immediate;
+mod implicit;
 mod indirect;
 mod indirect_indexed;
+mod instr;
 mod opcode;
+mod relative;
 mod stack;
 mod zero_page;
 mod zero_page_indexed;
@@ -18,7 +24,7 @@ pub mod generator;
 
 use opcode::OPCODES;
 use opcode::OpCode;
-use std::fmt::{Display, Formatter, Error};
+use instr::*;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy)]
@@ -214,6 +220,51 @@ impl Cpu {
     fn pc_read_u8(&self, mem_map: &dyn AddressSpace) -> u8 {
         let pc = self.pc.get();
         mem_map.read_u8(pc)
+    }
+
+    fn stack_addr(&self) -> u16 {
+        let sp = self.sp.get() as u16;
+        0x0100 | sp
+    }
+    fn stack_inc(&self) {
+        self.sp.set(self.sp.get().wrapping_add(1));
+    }
+    fn stack_dec(&self) {
+        self.sp.set(self.sp.get().wrapping_sub(1));
+    }
+    fn push_stack(&self, mem_map: &dyn AddressSpace, v: u8) {
+        let addr = self.stack_addr();
+        mem_map.write_u8(addr, v);
+        self.stack_dec();
+    }
+    fn pop_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
+        let v = self.read_stack(mem_map);
+        self.stack_inc();
+        v
+    }
+    fn read_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
+        let addr = self.stack_addr();
+        mem_map.read_u8(addr)
+    }
+
+    fn flag(&self, f: Flags) -> bool {
+        self.flags.get().contains(f)
+    }
+
+    fn set_flag(&self, flag: Flags, v: bool) {
+        let mut flags = self.flags.get();
+        flags.set(flag, v);
+        self.flags.set(flags);
+    }
+
+    // sets the negative and zero flags
+    fn set_flags_from(&self, v: u8) {
+        self.set_flag(Flags::N, (v & 0x80) != 0);
+        self.set_flag(Flags::Z, v == 0);
+    }
+
+    fn set_flags_from_acc(&self) {
+        self.set_flags_from(self.acc.get())
     }
 
     pub fn run<'a>(&'a self, mem_map: &'a dyn AddressSpace, start_at: Option<u16>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
@@ -494,306 +545,16 @@ impl Cpu {
         }
     }
 
-    fn stack_addr(&self) -> u16 {
-        let sp = self.sp.get() as u16;
-        0x0100 | sp
-    }
-    fn stack_inc(&self) {
-        self.sp.set(self.sp.get().wrapping_add(1));
-    }
-    fn stack_dec(&self) {
-        self.sp.set(self.sp.get().wrapping_sub(1));
-    }
-    fn push_stack(&self, mem_map: &dyn AddressSpace, v: u8) {
-        let addr = self.stack_addr();
-        mem_map.write_u8(addr, v);
-        self.stack_dec();
-    }
-    fn pop_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
-        let v = self.read_stack(mem_map);
-        self.stack_inc();
-        v
-    }
-    fn read_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
-        let addr = self.stack_addr();
-        mem_map.read_u8(addr)
-    }
-
-    fn flag(&self, f: Flags) -> bool {
-        self.flags.get().contains(f)
-    }
-
-    fn set_flag(&self, flag: Flags, v: bool) {
-        let mut flags = self.flags.get();
-        flags.set(flag, v);
-        self.flags.set(flags);
-    }
-
-    // sets the negative and zero flags
-    fn set_flags_from(&self, v: u8) {
-        self.set_flag(Flags::N, (v & 0x80) != 0);
-        self.set_flag(Flags::Z, v == 0);
-    }
-
-    fn set_flags_from_acc(&self) {
-        self.set_flags_from(self.acc.get())
-    }
-
 }
-
-// http://nesdev.com/6502_cpu.txt
-// http://nesdev.com/undocumented_opcodes.txt
-// http://www.oxyron.de/html/opcodes02.html
 
 trait BranchOperation {
     fn branch(&self, cpu: &Cpu) -> bool;
 }
 
-struct bcc;
-impl BranchOperation for bcc {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        !cpu.flag(Flags::C)
-    }
+trait ImplicitOperation {
+    fn operate(&self, cpu: &Cpu);
 }
 
-struct bcs;
-impl BranchOperation for bcs {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        cpu.flag(Flags::C)
-    }
-}
-
-struct beq;
-impl BranchOperation for beq {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        cpu.flag(Flags::Z)
-    }
-}
-
-struct bmi;
-impl BranchOperation for bmi {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        cpu.flag(Flags::N)
-    }
-}
-
-struct bne;
-impl BranchOperation for bne {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        !cpu.flag(Flags::Z)
-    }
-}
-
-struct bpl;
-impl BranchOperation for bpl {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        !cpu.flag(Flags::N)
-    }
-}
-
-struct bvc;
-impl BranchOperation for bvc {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        !cpu.flag(Flags::V)
-    }
-}
-
-struct bvs;
-impl BranchOperation for bvs {
-    fn branch(&self, cpu: &Cpu) -> bool {
-        cpu.flag(Flags::V)
-    }
-}
-
-// Read operations
-trait ReadOperation {
-    fn operate(&self, cpu: &Cpu, value: u8);
-}
-
-struct AdcResult {
-    r: u8,
-    c: bool,
-    v: bool
-}
-fn do_adc(a: u8, b: u8, c: u8) -> AdcResult {
-    let (v1, o1) = a.overflowing_add(b);
-    let (v2, o2) = v1.overflowing_add(c);
-
-    AdcResult { r: v2, c: o1 | o2, v: (b^v2) & (a^v2) & 0x80 != 0 }
-}
-
-// http://obelisk.me.uk/6502/reference.html#ADC
-struct adc;
-impl ReadOperation for adc {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        let AdcResult { r, c, v} = do_adc(cpu.acc.get(), v, cpu.flag(Flags::C) as u8);
-        cpu.set_flag(Flags::C, c);
-        cpu.set_flag(Flags::V, v);
-
-        cpu.acc.set(r);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct alr;
-impl ReadOperation for alr {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        // ALR #{imm} = AND #{imm} + LSR
-        and.operate(cpu, v);
-        cpu.acc.set(lsr.operate(cpu, cpu.acc.get()));
-    }
-}
-
-struct anc;
-impl ReadOperation for anc {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        // ANC #{imm} = AND #{imm} + (ASL)
-        and.operate(cpu, v);
-        let result = cpu.acc.get();
-        cpu.set_flag(Flags::C, (result & 0x80) != 0);
-    }
-}
-
-struct and;
-impl ReadOperation for and {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        cpu.acc.set(cpu.acc.get() & v);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct arr;
-impl ReadOperation for arr {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        // ARR #{imm} = AND #{imm} + ROR
-        and.operate(cpu, v);
-        cpu.acc.set(ror.operate(cpu, cpu.acc.get()));
-    }
-}
-
-struct axs;
-impl ReadOperation for axs {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        // AXS #{imm} = A&X minus #{imm} into X
-        let a_x = cpu.acc.get() & cpu.x.get();
-        let AdcResult { r, c, v: _ } = do_adc(a_x, !v, cpu.flag(Flags::C) as u8);
-        cpu.x.set(r);
-        cpu.set_flags_from(r);
-        cpu.set_flag(Flags::C, c);
-    }
-}
-
-struct bit;
-impl ReadOperation for bit {
-
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        let r = cpu.acc.get() & v;
-        cpu.set_flag(Flags::Z, r == 0);
-        cpu.set_flag(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
-        cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
-    }
-
-}
-
-struct eor;
-impl ReadOperation for eor {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        cpu.acc.set(cpu.acc.get() ^ v);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct lax;
-impl ReadOperation for lax {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        cpu.acc.set(v);
-        cpu.x.set(v);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct las;
-impl ReadOperation for las {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        let value = cpu.sp.get() & v;
-        cpu.acc.set(value);
-        cpu.x.set(value);
-        cpu.sp.set(value);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct ora;
-impl ReadOperation for ora {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        cpu.acc.set(cpu.acc.get() | v);
-        cpu.set_flags_from_acc();
-    }
-}
-
-struct sbc;
-impl ReadOperation for sbc {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        adc.operate(cpu, !v);
-    }
-}
-
-fn compare(cpu: &Cpu, a: u8, b: u8) {
-    let result = a.wrapping_sub(b);
-    cpu.set_flag(Flags::C, a >= b);
-    cpu.set_flag(Flags::Z, a == b);
-    cpu.set_flag(Flags::N, (result & 0x80) != 0);
-}
-
-struct cmp;
-impl ReadOperation for cmp {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        compare(cpu, cpu.acc.get(), v);
-    }
-}
-
-struct cpx;
-impl ReadOperation for cpx {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        compare(cpu, cpu.x.get(), v);
-    }
-}
-
-struct cpy;
-impl ReadOperation for cpy {
-    fn operate(&self, cpu: &Cpu, v: u8) {
-        compare(cpu, cpu.y.get(), v);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#LDA
-struct lda;
-impl ReadOperation for lda {
-    fn operate(&self, cpu: &Cpu, value: u8) {
-        cpu.acc.set(value);
-        cpu.set_flags_from_acc();
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#LDX
-struct ldx;
-impl ReadOperation for ldx {
-    fn operate(&self, cpu: &Cpu, value: u8) {
-        cpu.x.set(value);
-        cpu.set_flags_from(value);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#LDY
-struct ldy;
-impl ReadOperation for ldy {
-    fn operate(&self, cpu: &Cpu, value: u8) {
-        cpu.y.set(value);
-        cpu.set_flags_from(value);
-    }
-}
-
-// Read-modify-write operations
 trait ModifyOperation {
     // this includes addr because AHX, SHX and SHY operate on the high byte of the target address
     //   instead of the value
@@ -804,446 +565,11 @@ trait ModifyOperation {
     fn operate(&self, cpu: &Cpu, value: u8) -> u8;
 }
 
-struct ahx;
-impl ModifyOperation for ahx {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        cpu.acc.get() & cpu.x.get() & v
-    }
+trait ReadOperation {
+    fn operate(&self, cpu: &Cpu, value: u8);
 }
 
-// http://obelisk.me.uk/6502/reference.html#ASL
-struct asl;
-impl ModifyOperation for asl {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = v << 1;
-        cpu.set_flag(Flags::C, (v & 0x80) != 0);
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-struct dcp;
-impl ModifyOperation for dcp {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = dec.operate(cpu, v);
-        cmp.operate(cpu, result);
-        result
-    }
-}
-
-struct dec;
-impl ModifyOperation for dec {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = v.wrapping_sub(1);
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-struct inc;
-impl ModifyOperation for inc {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = v.wrapping_add(1);
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-struct isc;
-impl ModifyOperation for isc {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = inc.operate(cpu, v);
-        sbc.operate(cpu, result);
-        result
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#LSR
-struct lsr;
-impl ModifyOperation for lsr {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        cpu.set_flag(Flags::C, (v & 0x01) != 0);
-        let result = v >> 1;
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-struct rla;
-impl ModifyOperation for rla {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = rol.operate(cpu, v);
-        and.operate(cpu, result);
-        result
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#ROL
-struct rol;
-impl ModifyOperation for rol {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = (v << 1) | cpu.flag(Flags::C) as u8;
-        cpu.set_flag(Flags::C, v & 0x80 != 0);
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#ROR
-struct ror;
-impl ModifyOperation for ror {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = (v >> 1) | ((cpu.flag(Flags::C) as u8) << 7);
-        cpu.set_flag(Flags::C, v & 0x01 != 0);
-        cpu.set_flags_from(result);
-        result
-    }
-}
-
-struct rra;
-impl ModifyOperation for rra {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = ror.operate(cpu, v);
-        adc.operate(cpu, result);
-        result
-    }
-}
-
-struct shx;
-impl ModifyOperation for shx {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        cpu.x.get() & ((addr >> 8) as u8).wrapping_add(1)
-    }
-
-    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
-        unimplemented!()
-    }
-}
-
-struct shy;
-impl ModifyOperation for shy {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        cpu.y.get() & ((addr >> 8) as u8).wrapping_add(1)
-    }
-
-    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
-        unimplemented!()
-    }
-}
-
-struct slo;
-impl ModifyOperation for slo {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = asl.operate(cpu, v);
-        ora.operate(cpu, result);
-        result
-    }
-}
-
-struct sre;
-impl ModifyOperation for sre {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        let result = lsr.operate(cpu, v);
-        eor.operate(cpu, result);
-        result
-    }
-}
-
-struct tas;
-impl ModifyOperation for tas {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        // TAS {adr} = stores A&X into S and A&X&H into {adr}
-        let a_x = cpu.acc.get() & cpu.x.get();
-        cpu.sp.set(a_x);
-        a_x & ((addr >> 8) as u8).wrapping_add(1)
-    }
-
-    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
-        unimplemented!()
-    }
-}
-
-// Write operations
 trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
 }
 
-struct sax;
-impl WriteOperation for sax {
-    fn operate(&self, cpu: &Cpu) -> u8 {
-        cpu.acc.get() & cpu.x.get()
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#STA
-struct sta;
-impl WriteOperation for sta {
-    fn operate(&self, cpu: &Cpu) -> u8 {
-        cpu.acc.get()
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#STX
-struct stx;
-impl WriteOperation for stx {
-    fn operate(&self, cpu: &Cpu) -> u8 {
-        cpu.x.get()
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#STY
-struct sty;
-impl WriteOperation for sty {
-    fn operate(&self, cpu: &Cpu) -> u8 {
-        cpu.y.get()
-    }
-}
-
-trait ImplicitOperation {
-    fn operate(&self, cpu: &Cpu);
-}
-
-// http://obelisk.me.uk/6502/reference.html#CLC
-struct clc;
-impl ImplicitOperation for clc {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::C, false);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#CLD
-struct cld;
-impl ImplicitOperation for cld {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::D, false);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#CLI
-struct cli;
-impl ImplicitOperation for cli {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::I, false);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#CLV
-struct clv;
-impl ImplicitOperation for clv {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::V, false);
-    }
-}
-
-struct dex;
-impl ImplicitOperation for dex {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.x.set(dec.operate(cpu, cpu.x.get()));
-    }
-}
-
-struct dey;
-impl ImplicitOperation for dey {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.y.set(dec.operate(cpu, cpu.y.get()));
-    }
-}
-
-struct inx;
-impl ImplicitOperation for inx {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.x.set(inc.operate(cpu, cpu.x.get()));
-    }
-}
-
-struct iny;
-impl ImplicitOperation for iny {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.y.set(inc.operate(cpu, cpu.y.get()));
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#NOP
-struct nop;
-impl ImplicitOperation for nop {
-    fn operate(&self, _: &Cpu) {}
-}
-impl ReadOperation for nop {
-    fn operate(&self, _: &Cpu, _: u8) {}
-}
-
-// http://obelisk.me.uk/6502/reference.html#SEC
-struct sec;
-impl ImplicitOperation for sec {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::C, true);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#SED
-struct sed;
-impl ImplicitOperation for sed {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::D, true);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#SEI
-struct sei;
-impl ImplicitOperation for sei {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.set_flag(Flags::I, true);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TAY
-struct tay;
-impl ImplicitOperation for tay {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.y.set(cpu.acc.get());
-        cpu.set_flags_from(cpu.y.get());
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TAX
-struct tax;
-impl ImplicitOperation for tax {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.x.set(cpu.acc.get());
-        cpu.set_flags_from(cpu.x.get());
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TSX
-struct tsx;
-impl ImplicitOperation for tsx {
-    fn operate(&self, cpu: &Cpu) {
-        let sp = cpu.sp.get();
-        cpu.x.set(sp);
-        cpu.set_flags_from(sp);
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TXA
-struct txa;
-impl ImplicitOperation for txa {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.acc.set(cpu.x.get());
-        cpu.set_flags_from_acc();
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TXS
-struct txs;
-impl ImplicitOperation for txs {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.sp.set(cpu.x.get());
-    }
-}
-
-// http://obelisk.me.uk/6502/reference.html#TYA
-struct tya;
-impl ImplicitOperation for tya {
-    fn operate(&self, cpu: &Cpu) {
-        cpu.acc.set(cpu.y.get());
-        cpu.set_flags_from_acc();
-    }
-}
-
-mod immediate {
-    use super::*;
-
-    //  #  address R/W description
-    // --- ------- --- ------------------------------------------
-    //  1    PC     R  fetch opcode, increment PC
-    //  2    PC     R  fetch value, increment PC
-    pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-        move || {
-            let value = cpu.pc_read_u8_next(mem_map);
-            operation.operate(cpu, value);
-            yield CpuCycle::Tick;
-        }
-    }
-
-}
-
-mod implicit {
-    use super::*;
-
-    //  #  address R/W description
-    // --- ------- --- -----------------------------------------------
-    //  1    PC     R  fetch opcode, increment PC
-    //  2    PC     R  read next instruction byte (and throw it away)
-    pub(super) fn run<'a, O: ImplicitOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
-        move || {
-            let _ = cpu.pc_read_u8(mem_map) as u16;
-            operation.operate(cpu);
-            yield CpuCycle::Tick;
-        }
-    }
-}
-
-mod accumulator {
-    use super::*;
-
-    //  #  address R/W description
-    // --- ------- --- -----------------------------------------------
-    //  1    PC     R  fetch opcode, increment PC
-    //  2    PC     R  read next instruction byte (and throw it away)
-    pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
-        move || {
-            let _ = cpu.pc_read_u8(mem_map) as u16;
-            let result = operation.operate(cpu, cpu.acc.get());
-            cpu.acc.set(result);
-            yield CpuCycle::Tick;
-        }
-    }
-}
-
-mod relative {
-    use super::*;
-    //  #   address  R/W description
-    // --- --------- --- ---------------------------------------------
-    //  1     PC      R  fetch opcode, increment PC
-    //  2     PC      R  fetch operand, increment PC
-    //  3     PC      R  Fetch opcode of next instruction,
-    //                   If branch is taken, add operand to PCL.
-    //                   Otherwise increment PC.
-    //  4+    PC*     R  Fetch opcode of next instruction.
-    //                   Fix PCH. If it did not change, increment PC.
-    //  5!    PC      R  Fetch opcode of next instruction,
-    //                   increment PC.
-    //
-    // Notes: The opcode fetch of the next instruction is included to
-    //        this diagram for illustration purposes. When determining
-    //        real execution times, remember to subtract the last
-    //        cycle.
-    //
-    //        * The high byte of Program Counter (PCH) may be invalid
-    //          at this time, i.e. it may be smaller or bigger by $100.
-    //
-    //        + If branch is taken, this cycle will be executed.
-    //
-    //        ! If branch occurs to different page, this cycle will be
-    //          executed.
-    pub(super) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
-        move || {
-            let operand = cpu.pc_read_u8_next(mem_map) as i8;
-            yield CpuCycle::Tick;
-
-            if operation.branch(cpu) {
-                let pc = cpu.pc.get() as i16;
-                let addr = pc.wrapping_add(operand as i16) as u16;
-
-                if ((pc as u16) & 0xFF00) != (addr & 0xFF00) {
-                    // crossing page boundary incurs an additional cycle
-                    yield CpuCycle::Tick;
-                }
-
-                cpu.pc.set(addr);
-                yield CpuCycle::Tick;
-            }
-
-        }
-    }
-}
