@@ -134,12 +134,12 @@ impl Ppu {
         let current = target.get();
 
         let addr = if latch {
-            let addr_lo = current & 0x00FF;
-            let addr_hi = (value as u16) << 8;
-            addr_hi | addr_lo
-        } else {
             let addr_lo = value as u16;
             let addr_hi = current & 0xFF00;
+            addr_hi | addr_lo
+        } else {
+            let addr_lo = current & 0x00FF;
+            let addr_hi = (value as u16) << 8;
             addr_hi | addr_lo
         };
 
