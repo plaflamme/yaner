@@ -115,9 +115,15 @@ impl ReadOperation for and {
 pub struct arr;
 impl ReadOperation for arr {
     fn operate(&self, cpu: &Cpu, v: u8) {
-        // ARR #{imm} = AND #{imm} + ROR
-        and.operate(cpu, v);
-        cpu.acc.set(ror.operate(cpu, cpu.acc.get()));
+        // ARR #{imm} = AND #{imm} + ROR (but not exactly)
+        let result = ((cpu.acc.get() & v) >> 1) | (cpu.flag(Flags::C) as u8) << 7;
+
+        let bit_6 = (result >> 6) & 1;
+        let bit_5 = (result >> 5) & 1;
+        cpu.set_flag(Flags::C, bit_6 == 1);
+        cpu.set_flag(Flags::V, bit_6 ^ bit_5 == 1);
+        cpu.acc.set(result);
+        cpu.set_flags_from_acc();
     }
 }
 
