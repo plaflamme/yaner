@@ -197,7 +197,7 @@ impl<'a> AddressSpace for PpuAddressSpace<'a> {
             0x0000..=0x1FFF => self.mapper.read_u8(addr),
             0x2000..=0x3EFF => self.ppu_ram.read_u8(addr),
             0x3F00..=0x3FFF => self.palette_ctrl.read_u8(addr),
-            _ => unimplemented!()
+            _ => invalid_address!(addr)
         }
     }
 
@@ -206,7 +206,7 @@ impl<'a> AddressSpace for PpuAddressSpace<'a> {
             0x0000..=0x1FFF => self.mapper.write_u8(addr, value),
             0x2000..=0x3EFF => self.ppu_ram.write_u8(addr, value),
             0x3F00..=0x3FFF => self.palette_ctrl.write_u8(addr, value),
-            _ => unimplemented!()
+            _ => invalid_address!(addr)
         }
     }
 }
@@ -232,7 +232,7 @@ impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
             0x2003 => self.ppu.oam_addr.get(),
             0x2004 => self.ppu.oam_data.read_u8(self.ppu.oam_addr.get() as u16),
             0x2007 => self.ppu.vram_read_u8(self.ppu_addr_space),
-            _ => unimplemented!()
+            _ => invalid_address!(addr)
         }
     }
 
@@ -240,6 +240,7 @@ impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
         match addr {
             0x2000 => self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value)),
             0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
+            0x2002 => (),
             0x2003 => self.ppu.oam_addr.set(value),
             0x2004 => {
                 self.ppu.oam_data.write_u8(self.ppu.oam_addr.get() as u16, value);
@@ -249,7 +250,7 @@ impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
             0x2005 => self.ppu.latched_write(&self.ppu.scroll_addr, value),
             0x2006 => self.ppu.latched_write(&self.ppu.data_addr, value),
             0x2007 => self.ppu.vram_write_u8(self.ppu_addr_space, value),
-            _ => unimplemented!()
+            _ => invalid_address!(addr)
         }
     }
 }

@@ -15,3 +15,11 @@ macro_rules! yield_complete {
         }
     }
 }
+
+macro_rules! invalid_address {
+    ($addr:expr) => {
+        {
+            panic!("accessed invalid address at 0x{:02X?}", $addr);
+        }
+    }
+}
