@@ -6,6 +6,8 @@ use crate::ppu::{Ppu, PpuAddressSpace};
 use std::ops::{Generator, GeneratorState};
 use std::fmt::{Display, Error, Formatter};
 
+mod dma;
+
 pub struct Nes {
     ram: Ram2KB,
     cartridge: Cartridge,
@@ -29,11 +31,14 @@ impl Nes {
         let cpu_addr_space = CpuAddressSpace::new(&self.ram, &self.ppu, self.cartridge.mapper.as_addr_space());
         let ppu_addr_space = PpuAddressSpace::new(&self.ppu, self.cartridge.mapper.as_addr_space());
 
+        let oam_dma = dma::Dma::new();
+
         let mut clock = 0u64;
         let mut cpu_clock = CpuClock::new();
         let mut ppu_clock = PpuClock::new();
         let mut cpu = self.cpu.run(&cpu_addr_space, start_at);
         let mut ppu = self.ppu.run(&ppu_addr_space);
+        let mut dma = oam_dma.run(&cpu_addr_space);
 
         trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
         loop {
@@ -51,6 +56,18 @@ impl Nes {
                     },
                     GeneratorState::Complete(_) => unimplemented!()
                 };
+            }
+
+            match Pin::new(&mut dma).resume() {
+                GeneratorState::Yielded(dma::DmaCycle::NoDma) => (),
+                GeneratorState::Yielded(dma::DmaCycle::Tick) => (),
+                GeneratorState::Yielded(dma::DmaCycle::Done) => cpu_clock.resume(),
+                GeneratorState::Complete(_) => (),
+            };
+
+            if let Some(addr) = cpu_addr_space.dma_latch() {
+                oam_dma.start(addr, cpu_clock.cycle);
+                cpu_clock.suspend();
             }
 
             if clock % ppu_clock.divisor == 0 {
@@ -85,6 +102,14 @@ impl CpuClock {
     fn new() -> Self {
         // start at 7 due to reset interrupt handling
         CpuClock { divisor: 12, cycle: 7, suspended: false }
+    }
+
+    fn suspend(&mut self) {
+        self.suspended = true;
+    }
+
+    fn resume(&mut self) {
+        self.suspended = false;
     }
 }
 

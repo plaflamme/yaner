@@ -568,11 +568,19 @@ pub struct CpuAddressSpace<'a> {
     ram: &'a dyn AddressSpace,
     ppu: &'a dyn AddressSpace,
     mapper: &'a dyn AddressSpace,
+    oam_dma: Cell<Option<u8>>
 }
 
 impl<'a> CpuAddressSpace<'a> {
     pub fn new(ram: &'a dyn AddressSpace, ppu: &'a dyn AddressSpace, mapper: &'a dyn AddressSpace) -> Self {
-        CpuAddressSpace { ram, ppu, mapper, }
+        CpuAddressSpace { ram, ppu, mapper, oam_dma: Cell::new(None) }
+    }
+
+    // This will return last write to OAM DMA and then None until the next write
+    pub fn dma_latch(&self) -> Option<u8> {
+        let v = self.oam_dma.get();
+        if v.is_some() { self.oam_dma.set(None) };
+        v
     }
 }
 
@@ -599,6 +607,8 @@ impl<'a> crate::memory::AddressSpace for CpuAddressSpace<'a> {
 
             0x2000..=0x2007 => self.ppu.write_u8(addr, value), // PPU
             0x2008..=0x3FFF => self.ppu.write_u8(0x2000 + (addr % 8), value), // PPU mirror
+
+            0x4014 => self.oam_dma.set(Some(value)),
 
             0x4000..=0x4017 => (), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
