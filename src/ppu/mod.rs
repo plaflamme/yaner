@@ -147,17 +147,17 @@ impl Ppu {
         self.addr_latch.set(!latch);
     }
 
-    fn vram_read_u8(&self) -> u8 {
+    fn vram_read_u8(&self, addr_space: &dyn AddressSpace) -> u8 {
         let addr = self.data_addr.get();
-        let data = self.ppu_ram.read_u8(addr);
+        let data = addr_space.read_u8(addr);
         let step = self.ctrl.get().vram_inc_step();
         self.data_addr.set(addr.wrapping_add(step));
         data
     }
 
-    fn vram_write_u8(&self, value: u8) {
+    fn vram_write_u8(&self, addr_space: &dyn AddressSpace, value: u8) {
         let addr = self.data_addr.get();
-        self.ppu_ram.write_u8(addr, value);
+        addr_space.write_u8(addr, value);
         let step = self.ctrl.get().vram_inc_step();
         self.data_addr.set(addr.wrapping_add(step));
     }
@@ -173,38 +173,6 @@ impl Ppu {
 
 pub enum PpuCycle {
     Tick
-}
-
-// TODO: this is the Cpu's address space. This should probably be exposed as public methods to CpuAddressSpace
-impl AddressSpace for Ppu {
-    fn read_u8(&self, addr: u16) -> u8 {
-        match addr {
-            0x2000 => self.ctrl.get().bits(),
-            0x2001 => self.mask.get().bits(),
-            0x2002 => self.status(),
-            0x2003 => self.oam_addr.get(),
-            0x2004 => self.oam_data.read_u8(self.oam_addr.get() as u16),
-            0x2007 => self.vram_read_u8(),
-            _ => unimplemented!()
-        }
-    }
-
-    fn write_u8(&self, addr: u16, value: u8) {
-        match addr {
-            0x2000 => self.ctrl.set(PpuCtrl::from_bits_truncate(value)),
-            0x2001 => self.mask.set(PpuMask::from_bits_truncate(value)),
-            0x2003 => self.oam_addr.set(value),
-            0x2004 => {
-                self.oam_data.write_u8(self.oam_addr.get() as u16, value);
-                let addr = self.oam_addr.get();
-                self.oam_addr.set(addr.wrapping_add(1));
-            },
-            0x2005 => self.latched_write(&self.scroll_addr, value),
-            0x2006 => self.latched_write(&self.data_addr, value),
-            0x2007 => self.vram_write_u8(value),
-            _ => unimplemented!()
-        }
-    }
 }
 
 pub struct PpuAddressSpace<'a> {
@@ -238,6 +206,49 @@ impl<'a> AddressSpace for PpuAddressSpace<'a> {
             0x0000..=0x1FFF => self.mapper.write_u8(addr, value),
             0x2000..=0x3EFF => self.ppu_ram.write_u8(addr, value),
             0x3F00..=0x3FFF => self.palette_ctrl.write_u8(addr, value),
+            _ => unimplemented!()
+        }
+    }
+}
+
+pub struct MemoryMappedRegisters<'a> {
+    ppu_addr_space: &'a dyn AddressSpace,
+    ppu: &'a Ppu
+}
+
+impl<'a> MemoryMappedRegisters<'a> {
+    pub fn new(ppu: &'a Ppu, ppu_addr_space: &'a dyn AddressSpace) -> Self {
+        MemoryMappedRegisters { ppu_addr_space, ppu }
+    }
+}
+
+impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
+
+    fn read_u8(&self, addr: u16) -> u8 {
+        match addr {
+            0x2000 => self.ppu.ctrl.get().bits(),
+            0x2001 => self.ppu.mask.get().bits(),
+            0x2002 => self.ppu.status(),
+            0x2003 => self.ppu.oam_addr.get(),
+            0x2004 => self.ppu.oam_data.read_u8(self.ppu.oam_addr.get() as u16),
+            0x2007 => self.ppu.vram_read_u8(self.ppu_addr_space),
+            _ => unimplemented!()
+        }
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        match addr {
+            0x2000 => self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value)),
+            0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
+            0x2003 => self.ppu.oam_addr.set(value),
+            0x2004 => {
+                self.ppu.oam_data.write_u8(self.ppu.oam_addr.get() as u16, value);
+                let addr = self.ppu.oam_addr.get();
+                self.ppu.oam_addr.set(addr.wrapping_add(1));
+            },
+            0x2005 => self.ppu.latched_write(&self.ppu.scroll_addr, value),
+            0x2006 => self.ppu.latched_write(&self.ppu.data_addr, value),
+            0x2007 => self.ppu.vram_write_u8(self.ppu_addr_space, value),
             _ => unimplemented!()
         }
     }

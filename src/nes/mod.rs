@@ -2,7 +2,7 @@ use std::pin::Pin;
 use crate::cartridge::Cartridge;
 use crate::memory::Ram2KB;
 use crate::cpu::{Cpu, CpuAddressSpace};
-use crate::ppu::{Ppu, PpuAddressSpace};
+use crate::ppu::{Ppu, PpuAddressSpace, MemoryMappedRegisters};
 use std::ops::{Generator, GeneratorState};
 use std::fmt::{Display, Error, Formatter};
 
@@ -28,8 +28,9 @@ impl Nes {
     }
 
     pub fn run(&self, start_at: Option<u16>) {
-        let cpu_addr_space = CpuAddressSpace::new(&self.ram, &self.ppu, self.cartridge.mapper.as_addr_space());
         let ppu_addr_space = PpuAddressSpace::new(&self.ppu, self.cartridge.mapper.as_addr_space());
+        let ppu_mem_registers = MemoryMappedRegisters::new(&self.ppu, &ppu_addr_space);
+        let cpu_addr_space = CpuAddressSpace::new(&self.ram, &ppu_mem_registers, self.cartridge.mapper.as_addr_space());
 
         let oam_dma = dma::Dma::new();
 

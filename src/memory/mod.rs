@@ -95,10 +95,10 @@ impl<'a> AddressSpace for Mirrored<'a> {
 pub struct NullAddressSpace;
 impl AddressSpace for NullAddressSpace {
     fn read_u8(&self, _: u16) -> u8 {
-        panic!("read from uninitialized memory")
+        0x00
     }
 
     fn write_u8(&self, _: u16, _: u8) {
-        panic!("write to uninitialized memory")
+        ()
     }
 }
