@@ -8,6 +8,10 @@ impl Mapper for Unknown {
     fn name(&self) -> String {
         "Unknown".to_string()
     }
+
+    fn as_addr_space(&self) -> &dyn AddressSpace {
+        self
+    }
 }
 
 impl AddressSpace for Unknown {
@@ -38,6 +42,10 @@ impl From<&Rom> for NROM {
 impl Mapper for NROM {
     fn name(&self) -> String {
         "NROM".to_string()
+    }
+
+    fn as_addr_space(&self) -> &dyn AddressSpace {
+        self
     }
 }
 

@@ -10,7 +10,7 @@ use super::*;
 //  5  $0100,S  W  push P on stack, decrement S
 //  6   $FFFE   R  fetch PCL
 //  7   $FFFF   R  fetch PCH
-pub(super) fn brk<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn brk<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let _ = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -46,7 +46,7 @@ pub(super) fn brk<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  5  $0100,S  W  push PCL on stack, decrement S
 //  6    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(super) fn jsr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn jsr<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
         yield CpuCycle::Tick;
@@ -76,7 +76,7 @@ pub(super) fn jsr<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  4  $0100,S  R  pull P from stack, increment S
 //  5  $0100,S  R  pull PCL from stack, increment S
 //  6  $0100,S  R  pull PCH from stack
-pub(super) fn rti<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn rti<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let _ = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -107,7 +107,7 @@ pub(super) fn rti<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  4  $0100,S  R  pull PCL from stack, increment S
 //  5  $0100,S  R  pull PCH from stack
 //  6    PC     R  increment PC
-pub(super) fn rts<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn rts<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let _ = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -132,7 +132,7 @@ pub(super) fn rts<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  read next instruction byte (and throw it away)
 //  3  $0100,S  W  push register on stack, decrement S
-fn push<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>, value: u8) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+fn push<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace, value: u8) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let _ = cpu.pc_read_u8(mem_map);
         yield CpuCycle::Tick;
@@ -141,13 +141,13 @@ fn push<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>, value: u8) -> imp
         yield CpuCycle::Tick;
     }
 }
-pub(super) fn php<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn php<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     // PHP sets the B flag
     let mut flags = cpu.flags.get();
     flags.set(Flags::B, true);
     push(cpu, mem_map, flags.bits())
 }
-pub(super) fn pha<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn pha<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     push(cpu, mem_map, cpu.acc.get())
 }
 
@@ -157,7 +157,7 @@ pub(super) fn pha<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
 //  2    PC     R  read next instruction byte (and throw it away)
 //  3  $0100,S  R  increment S
 //  4  $0100,S  R  pull register from stack
-fn pull<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=u8> + 'a {
+fn pull<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=u8> + 'a {
     move || {
         let _ = cpu.pc_read_u8(mem_map);
         yield CpuCycle::Tick;
@@ -169,7 +169,7 @@ fn pull<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator
     }
 }
 
-pub(super) fn plp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn plp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let value = yield_complete!(pull(cpu, mem_map));
         let mut flags = Flags::from_bits_truncate(value);
@@ -180,7 +180,7 @@ pub(super) fn plp<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl
     }
 }
 
-pub(super) fn pla<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(super) fn pla<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
         let value = yield_complete!(pull(cpu, mem_map));
         cpu.acc.set(value);

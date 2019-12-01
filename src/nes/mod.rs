@@ -1,13 +1,15 @@
 use std::pin::Pin;
 use crate::cartridge::Cartridge;
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, Ram2KB};
+use crate::cpu::Cpu;
+use crate::ppu::Ppu;
 use std::ops::{Generator, GeneratorState};
 
 pub struct Nes {
-    ram: crate::memory::Ram2KB,
-    cartridge: crate::cartridge::Cartridge,
-    cpu: crate::cpu::Cpu,
-    ppu: crate::ppu::Ppu,
+    ram: Ram2KB,
+    cartridge: Cartridge,
+    cpu: Cpu,
+    ppu: Ppu,
     // TODO: apu
     // TODO: input
 }
@@ -15,24 +17,25 @@ pub struct Nes {
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
         Nes {
-            ram: crate::memory::Ram2KB::new(),
+            ram: Ram2KB::new(),
             cartridge,
-            cpu: crate::cpu::Cpu::new(),
-            ppu: crate::ppu::Ppu::new(),
+            cpu: Cpu::new(),
+            ppu: Ppu::new(),
         }
     }
 
     pub fn run(&self, start_at: Option<u16>) {
-        let boxed: Box<&dyn AddressSpace> = Box::new(self);
-        let mut cycle = 7u32; // start at 7 due to reset interrupt handling
-        let mut cpu_cycles = self.cpu.run(&boxed, start_at);
+        let cpu_addr_space = CpuAddressSpace::new(self);
 
-        trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
+        let mut cycle = 7u32; // start at 7 due to reset interrupt handling
+        let mut cpu_cycles = self.cpu.run(&cpu_addr_space, start_at);
+
+        trace!("{} CYC:{}", self.cpu.write(&cpu_addr_space), cycle);
         loop {
             match Pin::new(&mut cpu_cycles).resume() {
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cycle = cycle + 1,
                 GeneratorState::Yielded(crate::cpu::CpuCycle::OpComplete { pc: _, op: _, mode: _ }) => {
-                    trace!("{} CYC:{}", self.cpu.write(&boxed), cycle);
+                    trace!("{} CYC:{}", self.cpu.write(&cpu_addr_space), cycle);
                 },
                 GeneratorState::Yielded(crate::cpu::CpuCycle::Halt) => {
                     trace!("HALT");
@@ -44,7 +47,23 @@ impl Nes {
     }
 }
 
-impl crate::memory::AddressSpace for Nes {
+struct CpuAddressSpace<'a> {
+    ram: &'a dyn AddressSpace,
+    ppu: &'a dyn AddressSpace,
+    mapper: &'a dyn AddressSpace,
+}
+
+impl<'a> CpuAddressSpace<'a> {
+    fn new(nes: &'a Nes) -> Self {
+        CpuAddressSpace {
+            ram: &nes.ram,
+            ppu: &nes.ppu,
+            mapper: nes.cartridge.mapper.as_addr_space(),
+        }
+    }
+}
+
+impl<'a> crate::memory::AddressSpace for CpuAddressSpace<'a> {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x07FF => self.ram.read_u8(addr),
@@ -56,7 +75,7 @@ impl crate::memory::AddressSpace for Nes {
             0x4000..=0x4017 => unimplemented!(), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
-            0x4020..=0xFFFF => self.cartridge.mapper.read_u8(addr), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.mapper.read_u8(addr), // PRG ROM/RAM and mapper
         }
     }
 
@@ -71,7 +90,7 @@ impl crate::memory::AddressSpace for Nes {
             0x4000..=0x4017 => (), // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
-            0x4020..=0xFFFF => self.cartridge.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper
         }
     }
 }

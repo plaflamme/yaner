@@ -3,14 +3,18 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::Read;
 use std::fmt::{Display, Formatter, Error};
+use crate::memory::AddressSpace;
 
 mod mapper;
 mod rom;
 
 use rom::{Rom, RomError};
 
-pub trait Mapper: crate::memory::AddressSpace {
+pub trait Mapper: AddressSpace {
     fn name(&self) -> String;
+
+    // upcast
+    fn as_addr_space(&self) -> &dyn AddressSpace;
 }
 
 pub struct Cartridge {

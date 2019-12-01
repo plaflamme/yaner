@@ -164,7 +164,7 @@ pub struct Cpu {
 
 impl Cpu {
     // TODO: move mem_map as a member to Cpu to allow this within Display
-    pub fn write(&self, mem_map: &Box<&dyn AddressSpace>) -> String{
+    pub fn write(&self, mem_map: &dyn AddressSpace) -> String{
         let pc = self.pc.get();
         let addr = mem_map.read_u8(pc);
         let OpCode(op, _) = &OPCODES[addr as usize];
@@ -205,18 +205,18 @@ impl Cpu {
     }
 
     // reads u8 at pc and advances by one
-    fn pc_read_u8_next(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+    fn pc_read_u8_next(&self, mem_map: &dyn AddressSpace) -> u8 {
         let pc = self.next_pc();
         mem_map.read_u8(pc)
     }
 
     // reads u8 at pc
-    fn pc_read_u8(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+    fn pc_read_u8(&self, mem_map: &dyn AddressSpace) -> u8 {
         let pc = self.pc.get();
         mem_map.read_u8(pc)
     }
 
-    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>, start_at: Option<u16>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    pub fn run<'a>(&'a self, mem_map: &'a dyn AddressSpace, start_at: Option<u16>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
 
         let pc = start_at.unwrap_or_else(|| mem_map.read_u16(0xFFFC));
         self.pc.set(pc);
@@ -504,17 +504,17 @@ impl Cpu {
     fn stack_dec(&self) {
         self.sp.set(self.sp.get().wrapping_sub(1));
     }
-    fn push_stack(&self, mem_map: &Box<&dyn AddressSpace>, v: u8) {
+    fn push_stack(&self, mem_map: &dyn AddressSpace, v: u8) {
         let addr = self.stack_addr();
         mem_map.write_u8(addr, v);
         self.stack_dec();
     }
-    fn pop_stack(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+    fn pop_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
         let v = self.read_stack(mem_map);
         self.stack_inc();
         v
     }
-    fn read_stack(&self, mem_map: &Box<&dyn AddressSpace>) -> u8 {
+    fn read_stack(&self, mem_map: &dyn AddressSpace) -> u8 {
         let addr = self.stack_addr();
         mem_map.read_u8(addr)
     }
@@ -1157,7 +1157,7 @@ mod immediate {
     // --- ------- --- ------------------------------------------
     //  1    PC     R  fetch opcode, increment PC
     //  2    PC     R  fetch value, increment PC
-    pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    pub(super) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         move || {
             let value = cpu.pc_read_u8_next(mem_map);
             operation.operate(cpu, value);
@@ -1174,7 +1174,7 @@ mod implicit {
     // --- ------- --- -----------------------------------------------
     //  1    PC     R  fetch opcode, increment PC
     //  2    PC     R  read next instruction byte (and throw it away)
-    pub(super) fn run<'a, O: ImplicitOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+    pub(super) fn run<'a, O: ImplicitOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
         move || {
             let _ = cpu.pc_read_u8(mem_map) as u16;
             operation.operate(cpu);
@@ -1190,7 +1190,7 @@ mod accumulator {
     // --- ------- --- -----------------------------------------------
     //  1    PC     R  fetch opcode, increment PC
     //  2    PC     R  read next instruction byte (and throw it away)
-    pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+    pub(super) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
         move || {
             let _ = cpu.pc_read_u8(mem_map) as u16;
             let result = operation.operate(cpu, cpu.acc.get());
@@ -1226,7 +1226,7 @@ mod relative {
     //
     //        ! If branch occurs to different page, this cycle will be
     //          executed.
-    pub(super) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+    pub(super) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
         move || {
             let operand = cpu.pc_read_u8_next(mem_map) as i8;
             yield CpuCycle::Tick;

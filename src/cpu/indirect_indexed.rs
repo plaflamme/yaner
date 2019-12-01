@@ -1,7 +1,7 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn ind_x<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn ind_x<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -32,7 +32,7 @@ fn ind_x<'a>(cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generato
 //
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
-pub(super) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (_, value) = yield_complete!(ind_x(cpu, mem_map));
         operation.operate(cpu, value);
@@ -55,7 +55,7 @@ pub(super) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_m
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
 #[allow(dead_code)]
-pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, value) = yield_complete!(ind_x(cpu, mem_map));
         yield CpuCycle::Tick;
@@ -80,7 +80,7 @@ pub(super) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
 //
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
-pub(super) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, _) = yield_complete!(ind_x(cpu, mem_map));
         mem_map.write_u8(addr, operation.operate(cpu));
@@ -88,7 +88,7 @@ pub(super) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem
     }
 }
 
-fn ind_y<'a>(eager: bool, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn ind_y<'a>(eager: bool, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
@@ -128,7 +128,7 @@ fn ind_y<'a>(eager: bool, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> 
 //
 //        + This cycle will be executed only if the effective address
 //          was invalid during cycle #5, i.e. page boundary was crossed.
-pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (_, value) = yield_complete!(ind_y(false, cpu, mem_map));
         operation.operate(cpu, value);
@@ -156,7 +156,7 @@ pub(super) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_m
 //        * The high byte of the effective address may be invalid
 //          at this time, i.e. it may be smaller by $100.
 #[allow(dead_code)]
-pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, value) = yield_complete!(ind_y(true, cpu, mem_map));
         yield CpuCycle::Tick;
@@ -186,7 +186,7 @@ pub(super) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, m
 //
 //        * The high byte of the effective address may be invalid
 //          at this time, i.e. it may be smaller by $100.
-pub(super) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a Box<&dyn AddressSpace>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(super) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
         let (addr, _) = yield_complete!(ind_y(true, cpu, mem_map));
         mem_map.write_u8(addr, operation.operate(cpu));
