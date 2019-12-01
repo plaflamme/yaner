@@ -71,7 +71,7 @@ fn main() {
         Run { pc, output, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
-            nes.run(pc);
+            nes.run(pc, |_| false);
             match output {
                 None => (),
                 Some(addr) => println!("0x{:02X?}", nes.ram().read_u16(addr))
