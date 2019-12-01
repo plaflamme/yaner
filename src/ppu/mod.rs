@@ -79,7 +79,13 @@ pub struct Ppu {
     status: Cell<PpuStatus>,
     oam_addr: Cell<u8>,
 
-    oam_data: Ram256
+    scroll_addr: Cell<u16>,
+    data_addr: Cell<u16>,
+
+    // shared by scroll and data
+    addr_latch: Cell<bool>,
+
+    oam_data: Ram256,
 }
 
 impl Ppu {
@@ -90,6 +96,11 @@ impl Ppu {
             status: Cell::new(PpuStatus::default()),
             oam_addr: Cell::new(0x00),
 
+            scroll_addr: Cell::new(0),
+            data_addr: Cell::new(0),
+
+            addr_latch: Cell::new(false),
+
             oam_data: Ram256::new(),
         }
     }
@@ -99,7 +110,29 @@ impl Ppu {
         let mut cleared = PpuStatus::from(status);
         cleared.remove(PpuStatus::V);
         self.status.set(cleared);
+
+        // reading PPUSTATUS resets the address latch
+        self.addr_latch.set(false);
+
         status.bits()
+    }
+
+    fn latched_write(&self, target: &Cell<u16>, value: u8) {
+        let latch = self.addr_latch.get();
+        let current = target.get();
+
+        let addr = if latch {
+            let addr_lo = current & 0x00FF;
+            let addr_hi = (value as u16) << 8;
+            addr_hi | addr_lo
+        } else {
+            let addr_lo = value as u16;
+            let addr_hi = current & 0xFF00;
+            addr_hi | addr_lo
+        };
+
+        target.set(addr);
+        self.addr_latch.set(!latch);
     }
 }
 
@@ -121,10 +154,12 @@ impl AddressSpace for Ppu {
             0x2001 => self.mask.set(PpuMask::from_bits_truncate(value)),
             0x2003 => self.oam_addr.set(value),
             0x2004 => {
-                self.oam_data.write_u8(self.oam_addr.get() as u16, value)
+                self.oam_data.write_u8(self.oam_addr.get() as u16, value);
                 let addr = self.oam_addr.get();
                 self.oam_addr.set(addr.wrapping_add(1));
             },
+            0x2005 => self.latched_write(&self.scroll_addr, value),
+            0x2006 => self.latched_write(&self.data_addr, value),
             _ => unimplemented!()
         }
     }
