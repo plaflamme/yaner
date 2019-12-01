@@ -3,6 +3,7 @@
 use bitflags::bitflags;
 use std::cell::Cell;
 use crate::memory::AddressSpace;
+use crate::memory::Ram256;
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
@@ -76,6 +77,9 @@ pub struct Ppu {
     ctrl: Cell<PpuCtrl>,
     mask: Cell<PpuMask>,
     status: Cell<PpuStatus>,
+    oam_addr: Cell<u8>,
+
+    oam_data: Ram256
 }
 
 impl Ppu {
@@ -84,6 +88,9 @@ impl Ppu {
             ctrl: Cell::new(PpuCtrl::default()),
             mask: Cell::new(PpuMask::default()),
             status: Cell::new(PpuStatus::default()),
+            oam_addr: Cell::new(0x00),
+
+            oam_data: Ram256::new(),
         }
     }
 
@@ -102,6 +109,8 @@ impl AddressSpace for Ppu {
             0x2000 => self.ctrl.get().bits(),
             0x2001 => self.mask.get().bits(),
             0x2002 => self.status(),
+            0x2003 => self.oam_addr.get(),
+            0x2004 => self.oam_data.read_u8(self.oam_addr.get() as u16),
             _ => unimplemented!()
         }
     }
@@ -110,6 +119,12 @@ impl AddressSpace for Ppu {
         match addr {
             0x2000 => self.ctrl.set(PpuCtrl::from_bits_truncate(value)),
             0x2001 => self.mask.set(PpuMask::from_bits_truncate(value)),
+            0x2003 => self.oam_addr.set(value),
+            0x2004 => {
+                self.oam_data.write_u8(self.oam_addr.get() as u16, value)
+                let addr = self.oam_addr.get();
+                self.oam_addr.set(addr.wrapping_add(1));
+            },
             _ => unimplemented!()
         }
     }

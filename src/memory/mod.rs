@@ -18,6 +18,12 @@ pub trait AddressSpace {
     }
 }
 
+fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
+    // TODO: for some reason as_slice_of_cells can only be invoked on &Cell<[u8]>
+    let cells = data.as_slice_of_cells();
+    cells[addr as usize].set(value);
+}
+
 // https://github.com/rust-lang/rust/issues/43408
 pub struct Ram2KB {
     data: Cell<[u8; 0x0800]>
@@ -35,9 +41,26 @@ impl AddressSpace for Ram2KB {
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
-        // TODO: for some reason as_slice_of_cells can only be invoked on &Cell<[u8]>
-        let ram: &Cell<[u8]> = &self.data;
-        let cells = ram.as_slice_of_cells();
-        cells[addr as usize].set(value);
+        write_u8(&self.data, addr, value);
+    }
+}
+
+pub struct Ram256 {
+    data: Cell<[u8; 0x0100]>
+}
+
+impl Ram256 {
+    pub fn new() -> Self {
+        Ram256 { data: Cell::new([0; 0x0100]) }
+    }
+}
+
+impl AddressSpace for Ram256 {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data.get()[addr as usize]
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        write_u8(&self.data, addr, value);
     }
 }

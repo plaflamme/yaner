@@ -1,7 +1,6 @@
 #![feature(
     generators, generator_trait
 )]
-
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
