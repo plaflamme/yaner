@@ -31,6 +31,13 @@ impl Default for PpuCtrl {
     }
 }
 
+impl PpuCtrl {
+    fn vram_inc_step(&self) -> u16 {
+        // (0: add 1, going across; 1: add 32, going down)
+        if self.contains(PpuCtrl::I) { 32 } else { 0 }
+    }
+}
+
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
     struct PpuMask: u8 {
@@ -140,6 +147,21 @@ impl Ppu {
         self.addr_latch.set(!latch);
     }
 
+    fn vram_read_u8(&self) -> u8 {
+        let addr = self.data_addr.get();
+        let data = self.ppu_ram.read_u8(addr);
+        let step = self.ctrl.get().vram_inc_step();
+        self.data_addr.set(addr.wrapping_add(step));
+        data
+    }
+
+    fn vram_write_u8(&self, value: u8) {
+        let addr = self.data_addr.get();
+        self.ppu_ram.write_u8(addr, value);
+        let step = self.ctrl.get().vram_inc_step();
+        self.data_addr.set(addr.wrapping_add(step));
+    }
+
     pub fn run<'a>(&'a self, _addr_space: &'a dyn AddressSpace) -> impl Generator<Yield=PpuCycle, Return=()> + 'a {
         move || {
             loop {
@@ -162,6 +184,7 @@ impl AddressSpace for Ppu {
             0x2002 => self.status(),
             0x2003 => self.oam_addr.get(),
             0x2004 => self.oam_data.read_u8(self.oam_addr.get() as u16),
+            0x2007 => self.vram_read_u8(),
             _ => unimplemented!()
         }
     }
@@ -178,6 +201,7 @@ impl AddressSpace for Ppu {
             },
             0x2005 => self.latched_write(&self.scroll_addr, value),
             0x2006 => self.latched_write(&self.data_addr, value),
+            0x2007 => self.vram_write_u8(value),
             _ => unimplemented!()
         }
     }
