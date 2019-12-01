@@ -4,7 +4,7 @@ use crate::memory::Ram2KB;
 use crate::cpu::{Cpu, CpuAddressSpace};
 use crate::ppu::{Ppu, PpuAddressSpace};
 use std::ops::{Generator, GeneratorState};
-use std::fmt::Display;
+use std::fmt::{Display, Error, Formatter};
 
 pub struct Nes {
     ram: Ram2KB,
@@ -62,6 +62,10 @@ impl Nes {
 
             clock += 1;
         }
+    }
+
+    pub fn ram(&self) -> &Ram2KB {
+        &self.ram
     }
 }
 

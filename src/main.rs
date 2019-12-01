@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::cartridge::Cartridge;
 use std::num::ParseIntError;
+use crate::memory::AddressSpace;
 
 #[macro_use]
 extern crate log;
@@ -70,7 +71,7 @@ fn main() {
             nes.run(pc);
             match output {
                 None => (),
-                Some(_addr) => unimplemented!()// println!("0x{:02X?}", nes.read_u16(addr))
+                Some(addr) => println!("0x{:02X?}", nes.ram().read_u16(addr))
             }
         },
         Generate => {
