@@ -47,7 +47,7 @@ impl Nes {
             if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
                 match Pin::new(&mut cpu).resume() {
                     GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cpu_clock.tick(),
-                    GeneratorState::Yielded(crate::cpu::CpuCycle::OpComplete { pc: _, op: _, mode: _ }) => {
+                    GeneratorState::Yielded(crate::cpu::CpuCycle::OpComplete) => {
                         trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
                         continue;
                     },

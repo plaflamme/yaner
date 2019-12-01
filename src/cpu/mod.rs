@@ -177,7 +177,7 @@ impl Display for Cpu {
 
 pub enum CpuCycle {
     Tick,
-    OpComplete { pc: u16, op: Op, mode: AddressingMode },
+    OpComplete,
     Halt
 }
 
@@ -265,12 +265,8 @@ impl Cpu {
 
         move || {
             loop {
-                let this_pc = self.pc.get();
                 let opcode = self.pc_read_u8_next(mem_map);
                 yield CpuCycle::Tick;
-
-                // TODO
-                let instr = &OPCODES[opcode as usize];
 
                 match opcode {
                     0x00 => yield_complete!(stack::brk(self, mem_map)),
@@ -528,10 +524,12 @@ impl Cpu {
                     0xFD => yield_complete!(absolute_indexed::x_read(&sbc, self, mem_map)),
                     0xFE => yield_complete!(absolute_indexed::x_modify(&inc, self, mem_map)),
                     0xFF => yield_complete!(absolute_indexed::x_modify(&isc, self, mem_map)),
-                    _ => { println!("{:?}", instr); unimplemented!() }
+                    _ => {
+                        println!("{:?}", &OPCODES[opcode as usize]); unimplemented!()
+                    }
                 }
 
-                yield CpuCycle::OpComplete { pc: this_pc, op: instr.0, mode: instr.1 }
+                yield CpuCycle::OpComplete
             }
         }
     }

@@ -278,6 +278,6 @@ pub fn generate_opcode_table() {
                     }
                 });
         });
-    println!("\t _ => {{ println!(\"{{:?}}\", instr); unimplemented!() }}");
+    println!("\t _ => {{ println!(\"{{:?}}\", &OPCODES[opcode as usize]); unimplemented!() }}");
     println!("}}");
 }
