@@ -216,7 +216,7 @@ impl Cpu {
         mem_map.read_u8(pc)
     }
 
-    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>, start_at: Option<u16>) -> impl Generator<Yield = CpuCycle, Return = !> + 'a {
+    pub fn run<'a>(&'a self, mem_map: &'a Box<&dyn AddressSpace>, start_at: Option<u16>) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
 
         let pc = start_at.unwrap_or_else(|| mem_map.read_u16(0xFFFC));
         self.pc.set(pc);
