@@ -64,3 +64,41 @@ impl AddressSpace for Ram256 {
         write_u8(&self.data, addr, value);
     }
 }
+
+pub struct Mirrored<'a> {
+    addr_space: &'a dyn AddressSpace,
+    size: u16,
+    base_addr: u16,
+}
+
+impl<'a> Mirrored<'a> {
+    pub fn new(addr_space: &'a dyn AddressSpace, size: u16, base_addr: u16) -> Self {
+        Mirrored { addr_space, size, base_addr }
+    }
+
+    fn translate(&self, addr: u16) -> u16 {
+        (addr - self.base_addr) % self.size
+    }
+}
+
+impl<'a> AddressSpace for Mirrored<'a> {
+
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.addr_space.read_u8(self.translate(addr))
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        self.addr_space.write_u8(self.translate(addr), value);
+    }
+}
+
+pub struct NullAddressSpace;
+impl AddressSpace for NullAddressSpace {
+    fn read_u8(&self, _: u16) -> u8 {
+        panic!("read from uninitialized memory")
+    }
+
+    fn write_u8(&self, _: u16, _: u8) {
+        panic!("write to uninitialized memory")
+    }
+}

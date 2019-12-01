@@ -2,8 +2,9 @@
 
 use bitflags::bitflags;
 use std::cell::Cell;
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, Ram2KB, Mirrored, NullAddressSpace};
 use crate::memory::Ram256;
+use std::ops::Generator;
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
@@ -86,6 +87,8 @@ pub struct Ppu {
     addr_latch: Cell<bool>,
 
     oam_data: Ram256,
+
+    ppu_ram: Ram2KB, // VRAM
 }
 
 impl Ppu {
@@ -102,6 +105,8 @@ impl Ppu {
             addr_latch: Cell::new(false),
 
             oam_data: Ram256::new(),
+
+            ppu_ram: Ram2KB::new(),
         }
     }
 
@@ -134,8 +139,21 @@ impl Ppu {
         target.set(addr);
         self.addr_latch.set(!latch);
     }
+
+    pub fn run<'a>(&'a self, _addr_space: &'a dyn AddressSpace) -> impl Generator<Yield=PpuCycle, Return=()> + 'a {
+        move || {
+            loop {
+                yield PpuCycle::Tick;
+            }
+        }
+    }
 }
 
+pub enum PpuCycle {
+    Tick
+}
+
+// TODO: this is the Cpu's address space. This should probably be exposed as public methods to CpuAddressSpace
 impl AddressSpace for Ppu {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
@@ -160,6 +178,42 @@ impl AddressSpace for Ppu {
             },
             0x2005 => self.latched_write(&self.scroll_addr, value),
             0x2006 => self.latched_write(&self.data_addr, value),
+            _ => unimplemented!()
+        }
+    }
+}
+
+pub struct PpuAddressSpace<'a> {
+    ppu_ram: Box<dyn AddressSpace + 'a>,
+    mapper: &'a dyn AddressSpace,
+    palette_ctrl: &'a dyn AddressSpace
+}
+
+impl<'a> PpuAddressSpace<'a> {
+    pub fn new(ppu: &'a Ppu, mapper: &'a dyn AddressSpace) -> Self {
+        PpuAddressSpace {
+            ppu_ram: Box::new(Mirrored::new(&ppu.ppu_ram, 0x800, 0x2000)),
+            mapper,
+            palette_ctrl: &NullAddressSpace
+        }
+    }
+}
+
+impl<'a> AddressSpace for PpuAddressSpace<'a> {
+    fn read_u8(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => self.mapper.read_u8(addr),
+            0x2000..=0x3EFF => self.ppu_ram.read_u8(addr),
+            0x3F00..=0x3FFF => self.palette_ctrl.read_u8(addr),
+            _ => unimplemented!()
+        }
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x1FFF => self.mapper.write_u8(addr, value),
+            0x2000..=0x3EFF => self.ppu_ram.write_u8(addr, value),
+            0x3F00..=0x3FFF => self.palette_ctrl.write_u8(addr, value),
             _ => unimplemented!()
         }
     }
