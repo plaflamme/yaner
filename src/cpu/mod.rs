@@ -564,3 +564,46 @@ trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
 }
 
+pub struct CpuAddressSpace<'a> {
+    ram: &'a dyn AddressSpace,
+    ppu: &'a dyn AddressSpace,
+    mapper: &'a dyn AddressSpace,
+}
+
+impl<'a> CpuAddressSpace<'a> {
+    pub fn new(ram: &'a dyn AddressSpace, ppu: &'a dyn AddressSpace, mapper: &'a dyn AddressSpace) -> Self {
+        CpuAddressSpace { ram, ppu, mapper, }
+    }
+}
+
+impl<'a> crate::memory::AddressSpace for CpuAddressSpace<'a> {
+    fn read_u8(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x07FF => self.ram.read_u8(addr),
+            0x0800..=0x1FFF => self.ram.read_u8(addr % 0x0800),
+
+            0x2000..=0x2007 => self.ppu.read_u8(addr), // PPU
+            0x2008..=0x3FFF => self.ppu.read_u8(0x2000 + (addr % 8)), // PPU mirror
+
+            0x4000..=0x4017 => unimplemented!(), // APU
+            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+
+            0x4020..=0xFFFF => self.mapper.read_u8(addr), // PRG ROM/RAM and mapper
+        }
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x07FF => self.ram.write_u8(addr, value),
+            0x0800..=0x1FFF => self.ram.write_u8(addr % 0x8000, value),
+
+            0x2000..=0x2007 => self.ppu.write_u8(addr, value), // PPU
+            0x2008..=0x3FFF => self.ppu.write_u8(0x2000 + (addr % 8), value), // PPU mirror
+
+            0x4000..=0x4017 => (), // APU
+            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+
+            0x4020..=0xFFFF => self.mapper.write_u8(addr, value), // PRG ROM/RAM and mapper
+        }
+    }
+}
