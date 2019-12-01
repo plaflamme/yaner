@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_success() -> Result<(), RomError> {
-        let nestest_bytes: &[u8] = include_bytes!("../../roms/nestest.nes");
+        let nestest_bytes: &[u8] = include_bytes!("../../roms/nes-test-roms/other/nestest.nes");
         let nestest_rom = Rom::try_from(nestest_bytes)?;
 
         assert_eq!(None, nestest_rom.title);
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_invalid_magic_header() {
-        let nestest_bytes: &[u8] = include_bytes!("../../roms/nestest.nes");
+        let nestest_bytes: &[u8] = include_bytes!("../../roms/nes-test-roms/other/nestest.nes");
         match Rom::try_from(&nestest_bytes[1..]) {
             Ok(_) => panic!("unexpected success"),
             Err(error) => assert_eq!(RomError::InvalidFormat, error)
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_invalid_truncated() {
-        let nestest_bytes: &[u8] = include_bytes!("../../roms/nestest.nes");
+        let nestest_bytes: &[u8] = include_bytes!("../../roms/nes-test-roms/other/nestest.nes");
         match Rom::try_from(&nestest_bytes[..100]) {
             Ok(_) => panic!("unexpected success"),
             Err(error) => assert_eq!(RomError::UnexpectedEof, error)

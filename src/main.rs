@@ -18,6 +18,9 @@ mod cpu;
 mod ppu;
 mod nes;
 
+#[cfg(test)]
+mod tests;
+
 fn parse_hex(input: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(input, 16)
 }
