@@ -126,7 +126,7 @@ impl ReadOperation for axs {
     fn operate(&self, cpu: &Cpu, v: u8) {
         // AXS #{imm} = A&X minus #{imm} into X
         let a_x = cpu.acc.get() & cpu.x.get();
-        let AdcResult { r, c, v: _ } = do_adc(a_x, !v, cpu.flag(Flags::C) as u8);
+        let AdcResult { r, c, v: _ } = do_adc(a_x, !v, 1); // carry is always included
         cpu.x.set(r);
         cpu.set_flags_from(r);
         cpu.set_flag(Flags::C, c);
