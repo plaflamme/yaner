@@ -45,6 +45,28 @@ impl AddressSpace for Ram2KB {
     }
 }
 
+// https://github.com/rust-lang/rust/issues/43408
+pub struct Ram8KB {
+    data: Cell<[u8; 0x2000]>
+}
+
+impl Ram8KB {
+    pub fn new() -> Self {
+        Ram8KB { data: Cell::new([0; 0x2000]) }
+    }
+}
+
+impl AddressSpace for Ram8KB {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data.get()[addr as usize]
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        write_u8(&self.data, addr, value);
+    }
+}
+
+
 pub struct Ram256 {
     data: Cell<[u8; 0x0100]>
 }
