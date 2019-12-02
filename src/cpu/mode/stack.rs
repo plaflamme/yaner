@@ -23,12 +23,15 @@ pub(in crate::cpu) fn brk<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> im
         cpu.push_stack(mem_map, pc_lo);
         yield CpuCycle::Tick;
 
-        cpu.set_flag(Flags::B, true);
-        cpu.push_stack(mem_map, cpu.flags.get().bits());
+        let mut p = cpu.flags.get();
+        p.insert(Flags::B | Flags::U);
+        cpu.push_stack(mem_map, p.bits());
         yield CpuCycle::Tick;
 
         let pc_lo = mem_map.read_u8(0xFFFE) as u16;
         yield CpuCycle::Tick;
+
+        cpu.set_flag(Flags::I, true);
 
         let pc_hi = mem_map.read_u8(0xFFFF) as u16;
         let pc = pc_hi << 8 | pc_lo;
