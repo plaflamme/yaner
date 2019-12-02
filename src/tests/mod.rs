@@ -82,6 +82,11 @@ fn test_oam_read() {
     run_blargg_test(&Path::new("roms/nes-test-roms/oam_read/oam_read.nes"));
 }
 
+#[test] #[ignore] // slow, run with cargo test -- --ignore
+fn test_oam_stress() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/oam_stress/oam_stress.nes"));
+}
+
 fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
     let mut str_vec = Vec::new();
