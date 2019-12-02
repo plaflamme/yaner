@@ -80,6 +80,10 @@ impl Nes {
 
             clock += 1;
 
+            if clock % 10_000 == 0 {
+                self.ppu.decay_open_bus()
+            }
+
             if halt(&cpu_addr_space) {
                 break;
             }

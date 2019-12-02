@@ -5,6 +5,7 @@ use std::cell::Cell;
 use crate::memory::{AddressSpace, Ram2KB, Mirrored, NullAddressSpace};
 use crate::memory::Ram256;
 use std::ops::Generator;
+use rand::{thread_rng, Rng};
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
@@ -167,6 +168,15 @@ impl Ppu {
         self.data_addr.set(addr.wrapping_add(step));
     }
 
+    pub fn decay_open_bus(&self) {
+        let mut rng = thread_rng();
+        for i in 0..8 {
+            if rng.gen_bool(0.25) {
+                self.open_bus.set(self.open_bus.get() & !(1 << i));
+            }
+        }
+    }
+
     pub fn run<'a>(&'a self, _addr_space: &'a dyn AddressSpace) -> impl Generator<Yield=PpuCycle, Return=()> + 'a {
         move || {
             loop {
@@ -237,7 +247,13 @@ impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
             0x2003 => self.ppu.open_bus.get(),
             0x2005 => self.ppu.open_bus.get(),
             0x2006 => self.ppu.open_bus.get(),
-            0x2004 => self.ppu.oam_data.read_u8(self.ppu.oam_addr.get() as u16),
+            0x2004 => {
+                // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_2
+                // bits 2-4 of byte 2 are "unimplemented" and thus, should be cleared
+                let addr = self.ppu.oam_addr.get() as u16;
+                let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
+                self.ppu.oam_data.read_u8(addr) & mask
+            },
             0x2007 => {
                 let bus_mask = match self.ppu.data_addr.get() {
                     0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
