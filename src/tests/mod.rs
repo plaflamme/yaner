@@ -72,6 +72,11 @@ fn test_nes_instr_11() {
     run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/11-special.nes"));
 }
 
+#[test]
+fn test_ppu_open_bus() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/ppu_open_bus/ppu_open_bus.nes"));
+}
+
 fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
     let mut str_vec = Vec::new();

@@ -96,6 +96,9 @@ pub struct Ppu {
     oam_data: Ram256,
 
     ppu_ram: Ram2KB, // VRAM
+
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
+    open_bus: Cell<u8>,
 }
 
 impl Ppu {
@@ -114,6 +117,8 @@ impl Ppu {
             oam_data: Ram256::new(),
 
             ppu_ram: Ram2KB::new(),
+
+            open_bus: Cell::new(0)
         }
     }
 
@@ -225,18 +230,29 @@ impl<'a> MemoryMappedRegisters<'a> {
 impl<'a> AddressSpace for MemoryMappedRegisters<'a> {
 
     fn read_u8(&self, addr: u16) -> u8 {
-        match addr {
-            0x2000 => self.ppu.ctrl.get().bits(),
-            0x2001 => self.ppu.mask.get().bits(),
-            0x2002 => self.ppu.status(),
-            0x2003 => self.ppu.oam_addr.get(),
+        let result = match addr {
+            0x2000 => self.ppu.open_bus.get(),
+            0x2001 => self.ppu.open_bus.get(),
+            0x2002 => self.ppu.status() | (self.ppu.open_bus.get() & 0b0001_1111),
+            0x2003 => self.ppu.open_bus.get(),
+            0x2005 => self.ppu.open_bus.get(),
+            0x2006 => self.ppu.open_bus.get(),
             0x2004 => self.ppu.oam_data.read_u8(self.ppu.oam_addr.get() as u16),
-            0x2007 => self.ppu.vram_read_u8(self.ppu_addr_space),
+            0x2007 => {
+                let bus_mask = match self.ppu.data_addr.get() {
+                    0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
+                    _ => 0x00
+                };
+                self.ppu.vram_read_u8(self.ppu_addr_space) | bus_mask
+            },
             _ => invalid_address!(addr)
-        }
+        };
+        self.ppu.open_bus.set(result);
+        result
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
+        self.ppu.open_bus.set(value);
         match addr {
             0x2000 => self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value)),
             0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
