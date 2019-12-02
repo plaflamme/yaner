@@ -61,7 +61,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
-        let result = operation.modify(cpu, addr, value);
+        let (_, result) = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, result);
@@ -162,7 +162,7 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
-        let result = operation.modify(cpu, addr, value);
+        let (_, result) = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, result);

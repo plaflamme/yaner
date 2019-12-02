@@ -6,12 +6,12 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> im
         let addr_lo = cpu.pc_read_u8_next(mem_map);
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
-        let addr_pre = (addr_hi << 8) | addr_lo.wrapping_add(index) as u16;
+        let addr_hi = (cpu.pc_read_u8_next(mem_map) as u16) << 8;
+        let addr_pre = addr_hi | addr_lo.wrapping_add(index) as u16;
         yield CpuCycle::Tick;
 
         let _ = mem_map.read_u8(addr_pre);
-        let addr = (addr_hi << 8 | addr_lo as u16).wrapping_add(index as u16);
+        let addr = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
 
         let value = mem_map.read_u8(addr);
         (addr, value, addr != addr_pre)
@@ -80,7 +80,9 @@ fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);
-        let value = operation.modify(cpu, addr, value);
+
+        // SHX and SHY may override the address to write to.
+        let (addr, value) = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
         mem_map.write_u8(addr, value);

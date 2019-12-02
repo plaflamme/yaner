@@ -545,12 +545,11 @@ trait ImplicitOperation {
 }
 
 trait ModifyOperation {
-    // this includes addr because AHX, SHX and SHY operate on the high byte of the target address
+    // this includes addr because TAS, SHX and SHY operate on the high byte of the target address
     //   instead of the value
-    fn modify(&self, cpu: &Cpu, _addr: u16, value: u8) -> u8 {
-        self.operate(cpu, value)
+    fn modify(&self, cpu: &Cpu, addr: u16, value: u8) -> (u16, u8) {
+        (addr, self.operate(cpu, value))
     }
-
     fn operate(&self, cpu: &Cpu, value: u8) -> u8;
 }
 

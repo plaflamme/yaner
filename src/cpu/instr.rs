@@ -354,33 +354,46 @@ impl ModifyOperation for rra {
     }
 }
 
+//  http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
+//  https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
+//  https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
+//  http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes
 pub struct shx;
 impl ModifyOperation for shx {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        cpu.x.get() & ((addr >> 8) as u8).wrapping_add(1)
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> (u16, u8) {
+        let addr_orig = addr - (cpu.y.get() as u16);
+        let oops = (addr_orig & 0xFF00) != (addr & 0xFF00);
+        let addr_fixed = if !oops { addr } else {
+            addr & ((cpu.x.get() as u16) << 8)
+        };
+
+        let value = cpu.x.get() & ((addr_fixed >> 8) as u8 + 1);
+        (addr_fixed, value)
     }
 
-    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
+    fn operate(&self, _: &Cpu, _: u8) -> u8 {
         unimplemented!()
     }
 }
 
-// TODO: this is broken, not sure how it's supposed to work
-//   http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
-//   https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
-//   https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
+//  http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
+//  https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
+//  https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
+//  http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes
 pub struct shy;
 impl ModifyOperation for shy {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
-        let addr_orig = addr - cpu.x.get() as u16;
-        let addr_fixed = if addr & 0xFF00 != addr_orig & 0xFF00 {
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> (u16, u8) {
+        let addr_orig = addr - (cpu.x.get() as u16);
+        let oops = (addr_orig & 0xFF00) != (addr & 0xFF00);
+        let addr_fixed = if !oops { addr } else {
             addr & ((cpu.y.get() as u16) << 8)
-        } else { addr };
+        };
 
-        cpu.y.get() & ((addr_fixed >> 8) as u8 + 1)
+        let value = cpu.y.get() & ((addr_fixed >> 8) as u8 + 1);
+        (addr_fixed, value)
     }
 
-    fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
+    fn operate(&self, _: &Cpu, _: u8) -> u8 {
         unimplemented!()
     }
 }
@@ -405,11 +418,13 @@ impl ModifyOperation for sre {
 
 pub struct tas;
 impl ModifyOperation for tas {
-    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> u8 {
+    fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> (u16, u8) {
         // TAS {adr} = stores A&X into S and A&X&H into {adr}
         let a_x = cpu.acc.get() & cpu.x.get();
         cpu.sp.set(a_x);
-        a_x & ((addr >> 8) as u8).wrapping_add(1)
+        let result = a_x & ((addr >> 8) as u8).wrapping_add(1);
+
+        (addr, result)
     }
 
     fn operate(&self, _cpu: &Cpu, _value: u8) -> u8 {
