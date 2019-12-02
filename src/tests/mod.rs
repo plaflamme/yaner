@@ -77,6 +77,11 @@ fn test_ppu_open_bus() {
     run_blargg_test(&Path::new("roms/nes-test-roms/ppu_open_bus/ppu_open_bus.nes"));
 }
 
+#[test]
+fn test_oam_read() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/oam_read/oam_read.nes"));
+}
+
 fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
     let mut str_vec = Vec::new();
@@ -90,22 +95,24 @@ fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String
 }
 
 fn run_blargg_test(rom_path: &Path) {
-    let mut started = false;
     let mut result = 0xFF;
     let mut result_str = String::new();
     run_test(
         rom_path,
         None,
         |addr_space| {
-            match (addr_space.read_u8(0x6000), started) {
-                (0x80, _) => {
-                    started = true;
-                    false
-                },
-                (other, true) => {
-                    result = other;
-                    result_str = read_zero_terminated_string(addr_space, 0x6004);
-                    true
+            let marker = (addr_space.read_u8(0x6001), addr_space.read_u8(0x6002), addr_space.read_u8(0x6003));
+            match marker {
+                // this marker indicates that 0x6000 is useful
+                (0xDE, 0xB0, 0x61) => {
+                    match addr_space.read_u8(0x6000) {
+                        0x80 => false, // test is running
+                        done => {
+                            result = done;
+                            result_str = read_zero_terminated_string(addr_space, 0x6004);
+                            true
+                        }
+                    }
                 },
                 _ => false
             }

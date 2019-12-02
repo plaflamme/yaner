@@ -180,7 +180,23 @@ impl Ppu {
     pub fn run<'a>(&'a self, _addr_space: &'a dyn AddressSpace) -> impl Generator<Yield=PpuCycle, Return=()> + 'a {
         move || {
             loop {
-                yield PpuCycle::Tick;
+                for scanline in 0..262u16 {
+                    for dot in 0..341u16 {
+
+                        if scanline == 241 && dot == 1 {
+                            let mut status = self.status.get();
+                            status.insert(PpuStatus::V);
+                            self.status.set(status);
+                        }
+                        if scanline == 261 && dot == 1 {
+                            let mut status = self.status.get();
+                            status.remove(PpuStatus::V);
+                            self.status.set(status);
+                        }
+
+                        yield PpuCycle::Tick;
+                    }
+                }
             }
         }
     }
