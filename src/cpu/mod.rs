@@ -590,7 +590,7 @@ impl<'a> crate::memory::AddressSpace for CpuAddressSpace<'a> {
             0x2000..=0x2007 => self.ppu.read_u8(addr), // PPU
             0x2008..=0x3FFF => self.ppu.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
-            0x4000..=0x4017 => unimplemented!(), // APU
+            0x4000..=0x4017 => 0x00, // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
 
             0x4020..=0xFFFF => self.mapper.read_u8(addr), // PRG ROM/RAM and mapper

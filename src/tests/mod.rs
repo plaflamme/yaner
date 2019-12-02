@@ -19,57 +19,82 @@ fn test_nestest() {
 
 #[test]
 fn test_nes_instr_01() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/01-implied.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/01-basics.nes"));
 }
 
 #[test]
 fn test_nes_instr_02() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/02-immediate.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/02-implied.nes"));
 }
 
 #[test]
 fn test_nes_instr_03() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/03-zero_page.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/03-immediate.nes"));
 }
 
 #[test]
 fn test_nes_instr_04() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/04-zp_xy.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/04-zero_page.nes"));
 }
 
 #[test]
 fn test_nes_instr_05() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/05-absolute.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/05-zp_xy.nes"));
 }
 
 #[test]
 fn test_nes_instr_06() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/06-abs_xy.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/06-absolute.nes"));
 }
 
 #[test]
 fn test_nes_instr_07() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/07-ind_x.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/07-abs_xy.nes"));
 }
 
 #[test]
 fn test_nes_instr_08() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/08-ind_y.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/08-ind_x.nes"));
 }
 
 #[test]
 fn test_nes_instr_09() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/09-branches.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/09-ind_y.nes"));
 }
 
 #[test]
 fn test_nes_instr_10() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/10-stack.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/10-branches.nes"));
 }
 
 #[test]
 fn test_nes_instr_11() {
-    run_blargg_test(&Path::new("roms/nes-test-roms/nes_instr_test/rom_singles/11-special.nes"));
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/11-stack.nes"));
+}
+
+#[test]
+fn test_nes_instr_12() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/12-jmp_jsr.nes"));
+}
+
+#[test]
+fn test_nes_instr_13() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/13-rts.nes"));
+}
+
+#[test]
+fn test_nes_instr_14() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/14-rti.nes"));
+}
+
+#[test]
+fn test_nes_instr_15() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/15-brk.nes"));
+}
+
+#[test]
+fn test_nes_instr_16() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_test-v5/rom_singles/16-special.nes"));
 }
 
 #[test]
