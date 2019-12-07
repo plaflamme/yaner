@@ -110,6 +110,7 @@ struct CpuClock {
 impl CpuClock {
     fn new() -> Self {
         // start at 7 due to reset interrupt handling
+        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
         CpuClock { divisor: 12, cycle: 7, suspended: false }
     }
 
