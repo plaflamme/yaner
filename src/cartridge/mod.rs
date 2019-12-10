@@ -7,7 +7,6 @@ use crate::memory::AddressSpace;
 
 mod mapper;
 mod rom;
-mod sxrom;
 
 use rom::{Rom, RomError};
 
@@ -64,11 +63,7 @@ impl TryFrom<PathBuf> for Cartridge {
         f.read_to_end(&mut buf)?;
         let rom = Rom::try_from(buf.as_slice())?;
 
-        let mapper: Box<dyn Mapper> = match rom.mapper {
-            0 => Box::new(mapper::NROM::from(&rom)),
-            1 => Box::new(sxrom::SxROM::from(&rom)),
-            _ => Box::new(mapper::Unknown()), // NOTE: this allows parsing to succeed, but running it will fail
-        };
+        let mapper = mapper::from(&rom);
 
         Ok(
             Cartridge {

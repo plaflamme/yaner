@@ -1,7 +1,7 @@
 use bitflags::bitflags;
-use super::Mapper;
-use super::rom::Rom;
+use crate::cartridge::rom::Rom;
 use crate::memory::{Ram8KB, AddressSpace};
+use super::Mapper;
 use std::cell::Cell;
 
 #[derive(Clone, Copy)]

@@ -1,28 +1,6 @@
-use super::Mapper;
-use super::rom::Rom;
 use crate::memory::AddressSpace;
-
-pub struct Unknown();
-
-impl Mapper for Unknown {
-    fn name(&self) -> String {
-        "Unknown".to_string()
-    }
-
-    fn as_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
-}
-
-impl AddressSpace for Unknown {
-    fn read_u8(&self, _addr: u16) -> u8 {
-        unimplemented!()
-    }
-
-    fn write_u8(&self, _addr: u16, _value: u8) {
-        unimplemented!()
-    }
-}
+use crate::cartridge::rom::Rom;
+use super::Mapper;
 
 // http://wiki.nesdev.com/w/index.php/NROM
 pub struct NROM {
