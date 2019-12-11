@@ -18,6 +18,24 @@ pub trait AddressSpace {
     }
 }
 
+pub struct Rom {
+    data: Vec<u8>
+}
+
+impl Rom {
+    pub fn new(data: Vec<u8>) -> Self {
+        Rom { data }
+    }
+}
+
+impl AddressSpace for Rom {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data[addr as usize % self.data.len()]
+    }
+
+    fn write_u8(&self, _: u16, _: u8) { }
+}
+
 fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
     // TODO: for some reason as_slice_of_cells can only be invoked on &Cell<[u8]>
     let cells = data.as_slice_of_cells();

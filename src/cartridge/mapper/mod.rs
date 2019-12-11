@@ -34,3 +34,45 @@ pub fn from(rom: &Rom) -> Box<dyn Mapper> {
         _ => Box::new(Unknown()), // NOTE: this allows parsing to succeed, but running it will fail
     }
 }
+
+enum BankSelect {
+    First,
+    Last,
+    Index(u8)
+}
+
+struct Switched {
+    addr_space: Box<dyn AddressSpace>,
+    addr_space_size: usize,
+    bank_size: u16
+}
+
+impl Switched {
+
+    fn new(addr_space: Box<dyn AddressSpace>, addr_space_size: usize, bank_size: u16) -> Self {
+        assert_eq!(addr_space_size % bank_size as usize, 0, "Address space size ({}) must be a multiple of bank size ({})", addr_space_size, bank_size);
+        Switched {
+            addr_space,
+            addr_space_size,
+            bank_size
+        }
+    }
+
+    fn addr_offset(&self, select: BankSelect) -> u16 {
+        match select {
+            BankSelect::First => 0,
+            BankSelect::Last => (self.addr_space_size - self.bank_size as usize) as u16,
+            BankSelect::Index(idx) => idx as u16 * self.bank_size,
+        }
+    }
+
+    fn read_u8(&self, select: BankSelect, addr: u16) -> u8 {
+        let addr_offset = self.addr_offset(select);
+        self.addr_space.read_u8(addr_offset + addr)
+    }
+
+    fn write_u8(&self, select: BankSelect, addr: u16, value: u8) {
+        let addr_offset = self.addr_offset(select);
+        self.addr_space.write_u8(addr_offset + addr, value);
+    }
+}

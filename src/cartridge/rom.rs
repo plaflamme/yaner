@@ -93,6 +93,15 @@ pub enum Chr {
     Ram(Ram8KB)
 }
 
+impl Chr {
+    pub fn addr_space_size(&self) -> usize {
+        match self {
+            Chr::Ram(_) => 8_192,
+            Chr::Rom(rom) => rom.len()
+        }
+    }
+}
+
 impl AddressSpace for Chr {
     fn read_u8(&self, addr: u16) -> u8 {
         match self {
