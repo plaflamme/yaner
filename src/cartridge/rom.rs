@@ -15,6 +15,7 @@ use nom::{
     number::complete::be_u8
 };
 use std::convert::TryFrom;
+use crate::memory::{AddressSpace, Ram, Ram8KB};
 
 #[derive(Debug)]
 pub struct Header {
@@ -87,15 +88,56 @@ impl From<Flags9> for TvStandard {
     }
 }
 
+pub enum Chr {
+    Rom(Vec<u8>),
+    Ram(Ram8KB)
+}
+
+impl AddressSpace for Chr {
+    fn read_u8(&self, addr: u16) -> u8 {
+        match self {
+            Chr::Rom(rom) => rom[addr as usize % rom.len()],
+            Chr::Ram(ram) => ram.read_u8(addr % 0x2000)
+        }
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        match self {
+            Chr::Rom(_) => (),
+            Chr::Ram(ram) => ram.write_u8(addr % 0x2000, value)
+        }
+    }
+}
+
+pub struct RomData {
+    pub prg_rom: Vec<u8>,
+    pub prg_ram: Ram,
+    pub chr: Chr,
+}
+
+impl RomData {
+    pub fn new(rom: &Rom) -> Self {
+        let chr = match rom.chr_rom.len() {
+            0 => Chr::Ram(Ram8KB::new()),
+            _ => Chr::Rom(rom.chr_rom.clone())
+        };
+        RomData {
+            prg_rom: rom.prg_rom.clone(),
+            prg_ram: Ram::new(rom.prg_ram_size),
+            chr
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Rom {
     pub title: Option<String>,
     pub mapper: u8,
     pub nametable_mirroring: NametableMirroring,
     pub tv_standard: TvStandard,
+    pub prg_ram_size: usize,
     pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>,
-    pub prg_ram_size: usize
+    pub chr_rom: Vec<u8>
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -168,9 +210,9 @@ named!(ines_rom<&[u8], Rom>,
                 mapper: header.mapper,
                 nametable_mirroring: header.flags_6.into(),
                 tv_standard: header.flags_9.into(),
+                prg_ram_size: if header.prg_ram_size == 0 { 8_192 } else { header.prg_ram_size as usize * 8_192 },
                 prg_rom: prg_rom.into(),
                 chr_rom: chr_rom.into(),
-                prg_ram_size: if header.prg_ram_size == 0 { 8_192 } else { header.prg_ram_size as usize * 8_192 }
             }
         )
     )

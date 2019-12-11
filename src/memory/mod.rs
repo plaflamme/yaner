@@ -24,6 +24,28 @@ fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
     cells[addr as usize].set(value);
 }
 
+pub struct Ram {
+    data: Vec<Cell<u8>>
+}
+
+impl Ram {
+    pub fn new(size: usize) -> Self {
+        Ram {
+            data: vec![Cell::new(0u8); size]
+        }
+    }
+}
+
+impl AddressSpace for Ram {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data[addr as usize % self.data.len()].get()
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        self.data[addr as usize % self.data.len()].set(value)
+    }
+}
+
 // https://github.com/rust-lang/rust/issues/43408
 pub struct Ram2KB {
     data: Cell<[u8; 0x0800]>

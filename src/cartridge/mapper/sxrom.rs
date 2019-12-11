@@ -1,6 +1,6 @@
 use bitflags::bitflags;
-use crate::cartridge::rom::Rom;
-use crate::memory::{Ram8KB, AddressSpace};
+use crate::cartridge::rom::{Rom, RomData};
+use crate::memory::AddressSpace;
 use super::Mapper;
 use std::cell::Cell;
 
@@ -47,10 +47,7 @@ bitflags!(
 
 // http://wiki.nesdev.com/w/index.php/MMC1
 pub struct SxROM {
-    prg_ram: Ram8KB,
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-    chr_ram: Ram8KB,
+    data: RomData,
     shift_register: Cell<ShiftRegister>,
     control: Cell<Ctrl>,
     prg_bank: Cell<u8>,
@@ -61,10 +58,7 @@ pub struct SxROM {
 impl From<&Rom> for SxROM {
     fn from(rom: &Rom) -> Self {
         SxROM {
-            prg_ram: Ram8KB::new(),
-            prg_rom: rom.prg_rom.clone(),
-            chr_rom: rom.chr_rom.clone(),
-            chr_ram: Ram8KB::new(),
+            data: RomData::new(rom),
             shift_register: Cell::new(ShiftRegister::new()),
             control: Cell::new(Ctrl::empty()),
             prg_bank: Cell::new(0),
@@ -89,18 +83,18 @@ impl AddressSpace for SxROM {
         match addr {
             0x0000..=0x0FFF => unimplemented!(), // TODO: 4 KB switchable CHR bank
             0x1000..=0x1FFF => unimplemented!(), // TODO: 4 KB switchable CHR bank
-            0x6000..=0x7FFF => self.prg_ram.read_u8(addr - 0x6000),
-            0x8000..=0xBFFF => self.prg_rom[(addr - 0x8000) as usize % self.prg_rom.len()], // TODO: switching
-            0xC000..=0xFFFF => self.prg_rom[(addr - 0xC000) as usize % self.prg_rom.len()], // TODO: switching
+            0x6000..=0x7FFF => self.data.prg_ram.read_u8(addr - 0x6000),
+            0x8000..=0xBFFF => self.data.prg_rom[(addr - 0x8000) as usize % self.data.prg_rom.len()], // TODO: switching
+            0xC000..=0xFFFF => self.data.prg_rom[(addr - 0xC000) as usize % self.data.prg_rom.len()], // TODO: switching
             _ => invalid_address!(addr)
         }
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
-            0x0000..=0x0FFF => self.chr_ram.write_u8(addr, value),
-            0x1000..=0x1FFF => self.chr_ram.write_u8(addr - 0x1000, value),
-            0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
+            0x0000..=0x0FFF => self.data.chr.write_u8(addr, value),
+            0x1000..=0x1FFF => self.data.chr.write_u8(addr - 0x1000, value),
+            0x6000..=0x7FFF => self.data.prg_ram.write_u8(addr - 0x6000, value),
             0x8000..=0xFFFF => {
                 let mut s = self.shift_register.get();
                 if let Some(v) = s.push(value) {
