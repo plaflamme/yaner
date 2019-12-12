@@ -7,6 +7,8 @@ use crate::memory::Ram256;
 use std::ops::Generator;
 use rand::{thread_rng, Rng};
 
+mod renderer;
+
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
     struct PpuCtrl: u8 {
