@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use crate::cartridge::rom::{Rom, RomData};
+use crate::cartridge::rom::{Rom, RomData, Chr};
 use crate::memory::{AddressSpace, Ram};
 use super::{Mapper, Switched};
 use std::cell::Cell;
@@ -85,8 +85,8 @@ enum BankAddr {
 
 // http://wiki.nesdev.com/w/index.php/MMC1
 pub struct SxROM {
-    prg_rom: Switched,
-    chr: Switched,
+    prg_rom: Switched<crate::memory::Rom>,
+    chr: Switched<Chr>,
     prg_ram: Ram,
     shift_register: Cell<ShiftRegister>,
     control: Cell<Ctrl>,
@@ -142,14 +142,14 @@ impl From<&Rom> for SxROM {
         let data = RomData::new(rom);
 
         let prg_rom = Switched::new(
-            Box::new(crate::memory::Rom::new(rom.prg_rom.clone())),
+            crate::memory::Rom::new(rom.prg_rom.clone()),
             rom.prg_rom.len(),
             16_384
         );
 
         let size = data.chr.addr_space_size();
         let chr = Switched::new(
-            Box::new(data.chr),
+            data.chr,
             size,
             4_096,
         );

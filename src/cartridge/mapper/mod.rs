@@ -41,15 +41,15 @@ enum BankSelect {
     Index(u8)
 }
 
-struct Switched {
-    addr_space: Box<dyn AddressSpace>,
+struct Switched<T: AddressSpace> {
+    addr_space: T,
     addr_space_size: usize,
     bank_size: u16
 }
 
-impl Switched {
+impl<T: AddressSpace> Switched<T> {
 
-    fn new(addr_space: Box<dyn AddressSpace>, addr_space_size: usize, bank_size: u16) -> Self {
+    fn new(addr_space: T, addr_space_size: usize, bank_size: u16) -> Self {
         assert_eq!(addr_space_size % bank_size as usize, 0, "Address space size ({}) must be a multiple of bank size ({})", addr_space_size, bank_size);
         Switched {
             addr_space,
