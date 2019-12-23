@@ -209,7 +209,7 @@ pub enum PpuCycle {
 }
 
 pub struct PpuAddressSpace<'a> {
-    ppu_ram: Box<dyn AddressSpace + 'a>,
+    ppu_ram: Mirrored<'a>,
     mapper: &'a dyn AddressSpace,
     palette_ctrl: &'a dyn AddressSpace
 }
@@ -217,7 +217,7 @@ pub struct PpuAddressSpace<'a> {
 impl<'a> PpuAddressSpace<'a> {
     pub fn new(ppu: &'a Ppu, mapper: &'a dyn AddressSpace) -> Self {
         PpuAddressSpace {
-            ppu_ram: Box::new(Mirrored::new(&ppu.ppu_ram, 0x800, 0x2000)),
+            ppu_ram: Mirrored::new(&ppu.ppu_ram, 0x800, 0x2000),
             mapper,
             palette_ctrl: &NullAddressSpace
         }
