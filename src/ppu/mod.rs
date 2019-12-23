@@ -98,8 +98,6 @@ pub struct Ppu {
 
     oam_data: Ram256,
 
-    ppu_ram: Ram2KB, // VRAM
-
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 }
@@ -118,8 +116,6 @@ impl Ppu {
             addr_latch: Cell::new(false),
 
             oam_data: Ram256::new(),
-
-            ppu_ram: Ram2KB::new(),
 
             open_bus: Cell::new(0)
         }
@@ -209,15 +205,15 @@ pub enum PpuCycle {
 }
 
 pub struct PpuAddressSpace<'a> {
-    ppu_ram: Mirrored<'a>,
+    ppu_ram: Mirrored<Ram2KB>,
     mapper: &'a dyn AddressSpace,
     palette_ctrl: &'a dyn AddressSpace
 }
 
 impl<'a> PpuAddressSpace<'a> {
-    pub fn new(ppu: &'a Ppu, mapper: &'a dyn AddressSpace) -> Self {
+    pub fn new(mapper: &'a dyn AddressSpace) -> Self {
         PpuAddressSpace {
-            ppu_ram: Mirrored::new(&ppu.ppu_ram, 0x800, 0x2000),
+            ppu_ram: Mirrored::new(Ram2KB::new(), 0x800, 0x2000),
             mapper,
             palette_ctrl: &NullAddressSpace
         }

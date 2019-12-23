@@ -127,14 +127,14 @@ impl AddressSpace for Ram256 {
     }
 }
 
-pub struct Mirrored<'a> {
-    addr_space: &'a dyn AddressSpace,
+pub struct Mirrored<T: AddressSpace> {
+    addr_space: T,
     size: u16,
     base_addr: u16,
 }
 
-impl<'a> Mirrored<'a> {
-    pub fn new(addr_space: &'a dyn AddressSpace, size: u16, base_addr: u16) -> Self {
+impl<T: AddressSpace> Mirrored<T> {
+    pub fn new(addr_space: T, size: u16, base_addr: u16) -> Self {
         Mirrored { addr_space, size, base_addr }
     }
 
@@ -143,7 +143,7 @@ impl<'a> Mirrored<'a> {
     }
 }
 
-impl<'a> AddressSpace for Mirrored<'a> {
+impl<T: AddressSpace> AddressSpace for Mirrored<T> {
 
     fn read_u8(&self, addr: u16) -> u8 {
         self.addr_space.read_u8(self.translate(addr))

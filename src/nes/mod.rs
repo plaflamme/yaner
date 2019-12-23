@@ -28,7 +28,7 @@ impl Nes {
     }
 
     pub fn run(&self, start_at: Option<u16>, mut halt: impl FnMut(&dyn AddressSpace) -> bool) {
-        let ppu_addr_space = PpuAddressSpace::new(&self.ppu, self.cartridge.mapper.as_addr_space());
+        let ppu_addr_space = PpuAddressSpace::new(self.cartridge.mapper.as_addr_space());
         let ppu_mem_registers = MemoryMappedRegisters::new(&self.ppu, &ppu_addr_space);
         let cpu_addr_space = CpuAddressSpace::new(&self.ram, &ppu_mem_registers, self.cartridge.mapper.as_addr_space());
 
