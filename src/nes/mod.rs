@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use crate::cartridge::Cartridge;
-use crate::memory::{Ram2KB, AddressSpace};
+use crate::memory::AddressSpace;
 use crate::cpu::{Cpu, CpuAddressSpace};
 use crate::ppu::{Ppu, PpuAddressSpace, MemoryMappedRegisters};
 use std::ops::{Generator, GeneratorState};

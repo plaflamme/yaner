@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use crate::cartridge::Cartridge;
 use std::num::ParseIntError;
-use crate::memory::AddressSpace;
 
 #[macro_use]
 extern crate log;

@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use bitflags::bitflags;
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, Ram2KB};
 use std::cell::Cell;
 use std::fmt::{Display, Formatter, Error};
 use std::ops::Generator;
