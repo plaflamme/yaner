@@ -72,10 +72,6 @@ fn main() {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
             nes.run(pc, |_| false);
-            match output {
-                None => (),
-                Some(addr) => println!("0x{:02X?}", nes.ram().read_u16(addr))
-            }
         },
         Generate => {
             crate::cpu::generator::generate_opcode_table()

@@ -562,15 +562,15 @@ trait WriteOperation {
 }
 
 pub struct CpuAddressSpace<'a> {
-    ram: &'a dyn AddressSpace,
+    ram: Ram2KB,
     ppu: &'a dyn AddressSpace,
     mapper: &'a dyn AddressSpace,
     oam_dma: Cell<Option<u8>>
 }
 
 impl<'a> CpuAddressSpace<'a> {
-    pub fn new(ram: &'a dyn AddressSpace, ppu: &'a dyn AddressSpace, mapper: &'a dyn AddressSpace) -> Self {
-        CpuAddressSpace { ram, ppu, mapper, oam_dma: Cell::new(None) }
+    pub fn new(ppu: &'a dyn AddressSpace, mapper: &'a dyn AddressSpace) -> Self {
+        CpuAddressSpace { ram: Ram2KB::new(), ppu, mapper, oam_dma: Cell::new(None) }
     }
 
     // This will return last write to OAM DMA and then None until the next write

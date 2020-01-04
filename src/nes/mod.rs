@@ -9,7 +9,6 @@ use std::fmt::{Display, Error, Formatter};
 mod dma;
 
 pub struct Nes {
-    ram: Ram2KB,
     cartridge: Cartridge,
     cpu: Cpu,
     ppu: Ppu,
@@ -20,7 +19,6 @@ pub struct Nes {
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
         Nes {
-            ram: Ram2KB::new(),
             cartridge,
             cpu: Cpu::new(),
             ppu: Ppu::new(),
@@ -30,7 +28,7 @@ impl Nes {
     pub fn run(&self, start_at: Option<u16>, mut halt: impl FnMut(&dyn AddressSpace) -> bool) {
         let ppu_addr_space = PpuAddressSpace::new(self.cartridge.mapper.as_addr_space());
         let ppu_mem_registers = MemoryMappedRegisters::new(&self.ppu, &ppu_addr_space);
-        let cpu_addr_space = CpuAddressSpace::new(&self.ram, &ppu_mem_registers, self.cartridge.mapper.as_addr_space());
+        let cpu_addr_space = CpuAddressSpace::new(&ppu_mem_registers, self.cartridge.mapper.as_addr_space());
 
         let oam_dma = dma::Dma::new();
 
@@ -88,10 +86,6 @@ impl Nes {
                 break;
             }
         }
-    }
-
-    pub fn ram(&self) -> &Ram2KB {
-        &self.ram
     }
 }
 
