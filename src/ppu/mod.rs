@@ -133,6 +133,8 @@ impl Ppu {
         status.bits()
     }
 
+    // This explains the way the addresses should be decoded into t, v and x.
+    // http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
     fn latched_write(&self, target: &Cell<u16>, value: u8) {
         let latch = self.addr_latch.get();
         let current = target.get();
