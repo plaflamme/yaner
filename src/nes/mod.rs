@@ -1,10 +1,12 @@
 use std::pin::Pin;
-use crate::cartridge::Cartridge;
-use crate::memory::AddressSpace;
-use crate::cpu::{Cpu, CpuAddressSpace};
-use crate::ppu::{Ppu, PpuAddressSpace, MemoryMappedRegisters};
 use std::ops::{Generator, GeneratorState};
 use std::fmt::{Display, Error, Formatter};
+
+use dma::DmaCycle;
+use crate::cartridge::Cartridge;
+use crate::memory::AddressSpace;
+use crate::cpu::{Cpu, CpuAddressSpace, CpuCycle};
+use crate::ppu::{Ppu, PpuAddressSpace, PpuCycle, MemoryMappedRegisters};
 
 mod dma;
 
@@ -44,12 +46,12 @@ impl Nes {
 
             if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
                 match Pin::new(&mut cpu).resume() {
-                    GeneratorState::Yielded(crate::cpu::CpuCycle::Tick) => cpu_clock.tick(),
-                    GeneratorState::Yielded(crate::cpu::CpuCycle::OpComplete) => {
+                    GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
+                    GeneratorState::Yielded(CpuCycle::OpComplete) => {
                         trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
                         continue;
                     },
-                    GeneratorState::Yielded(crate::cpu::CpuCycle::Halt) => {
+                    GeneratorState::Yielded(CpuCycle::Halt) => {
                         trace!("HALT");
                         break;
                     },
@@ -58,9 +60,9 @@ impl Nes {
             }
 
             match Pin::new(&mut dma).resume() {
-                GeneratorState::Yielded(dma::DmaCycle::NoDma) => (),
-                GeneratorState::Yielded(dma::DmaCycle::Tick) => (),
-                GeneratorState::Yielded(dma::DmaCycle::Done) => cpu_clock.resume(),
+                GeneratorState::Yielded(DmaCycle::NoDma) => (),
+                GeneratorState::Yielded(DmaCycle::Tick) => (),
+                GeneratorState::Yielded(DmaCycle::Done) => cpu_clock.resume(),
                 GeneratorState::Complete(_) => (),
             };
 
@@ -71,7 +73,7 @@ impl Nes {
 
             if clock % ppu_clock.divisor == 0 {
                 match Pin::new(&mut ppu).resume() {
-                    GeneratorState::Yielded(crate::ppu::PpuCycle::Tick) => ppu_clock.tick(),
+                    GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
                     GeneratorState::Complete(_) => unimplemented!()
                 }
             }
@@ -118,7 +120,7 @@ impl CpuClock {
 }
 
 impl Clock for CpuClock {
-    fn divisor(&self) -> u64 { 12 }
+    fn divisor(&self) -> u64 { self.divisor }
 
     fn tick(&mut self) {
         self.cycle += 1;
@@ -147,7 +149,7 @@ impl PpuClock {
 }
 
 impl Clock for PpuClock {
-    fn divisor(&self) -> u64 { 4 }
+    fn divisor(&self) -> u64 { self.divisor }
 
     fn tick(&mut self) {
         self.cycle += 1;
