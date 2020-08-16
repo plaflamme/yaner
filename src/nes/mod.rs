@@ -45,7 +45,7 @@ impl Nes {
         loop {
 
             if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
-                match Pin::new(&mut cpu).resume() {
+                match Pin::new(&mut cpu).resume(()) {
                     GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
                     GeneratorState::Yielded(CpuCycle::OpComplete) => {
                         trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
@@ -59,7 +59,7 @@ impl Nes {
                 };
             }
 
-            match Pin::new(&mut dma).resume() {
+            match Pin::new(&mut dma).resume(()) {
                 GeneratorState::Yielded(DmaCycle::NoDma) => (),
                 GeneratorState::Yielded(DmaCycle::Tick) => (),
                 GeneratorState::Yielded(DmaCycle::Done) => cpu_clock.resume(),
@@ -72,7 +72,7 @@ impl Nes {
             }
 
             if clock % ppu_clock.divisor == 0 {
-                match Pin::new(&mut ppu).resume() {
+                match Pin::new(&mut ppu).resume(()) {
                     GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
                     GeneratorState::Complete(_) => unimplemented!()
                 }
