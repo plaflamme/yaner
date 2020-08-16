@@ -2,7 +2,7 @@
 
 use bitflags::bitflags;
 use std::cell::Cell;
-use crate::memory::{AddressSpace, Ram2KB, Mirrored, NullAddressSpace};
+use crate::memory::{AddressSpace, Ram2KB, Mirrored, Ram32};
 use crate::memory::Ram256;
 use std::ops::Generator;
 use rand::{thread_rng, Rng};
@@ -207,17 +207,17 @@ pub enum PpuCycle {
 }
 
 pub struct PpuAddressSpace<'a> {
-    ppu_ram: Mirrored<Ram2KB>,
+    ram: Mirrored<Ram2KB>,
+    palette: Mirrored<Ram32>,
     mapper: &'a dyn AddressSpace,
-    palette_ctrl: &'a dyn AddressSpace
 }
 
 impl<'a> PpuAddressSpace<'a> {
     pub fn new(mapper: &'a dyn AddressSpace) -> Self {
         PpuAddressSpace {
-            ppu_ram: Mirrored::new(Ram2KB::new(), 0x800, 0x2000),
+            ram: Mirrored::new(Ram2KB::new(), 0x800, 0x2000),
+            palette: Mirrored::new(Ram32::new(), 0x20, 0x3F00),
             mapper,
-            palette_ctrl: &NullAddressSpace
         }
     }
 }
@@ -226,8 +226,8 @@ impl<'a> AddressSpace for PpuAddressSpace<'a> {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.mapper.read_u8(addr),
-            0x2000..=0x3EFF => self.ppu_ram.read_u8(addr),
-            0x3F00..=0x3FFF => self.palette_ctrl.read_u8(addr),
+            0x2000..=0x3EFF => self.ram.read_u8(addr),
+            0x3F00..=0x3FFF => self.palette.read_u8(addr),
             _ => invalid_address!(addr)
         }
     }
@@ -235,8 +235,8 @@ impl<'a> AddressSpace for PpuAddressSpace<'a> {
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x1FFF => self.mapper.write_u8(addr, value),
-            0x2000..=0x3EFF => self.ppu_ram.write_u8(addr, value),
-            0x3F00..=0x3FFF => self.palette_ctrl.write_u8(addr, value),
+            0x2000..=0x3EFF => self.ram.write_u8(addr, value),
+            0x3F00..=0x3FFF => self.palette.write_u8(addr, value),
             _ => invalid_address!(addr)
         }
     }

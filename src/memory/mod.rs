@@ -106,7 +106,6 @@ impl AddressSpace for Ram8KB {
     }
 }
 
-
 pub struct Ram256 {
     data: Cell<[u8; 0x0100]>
 }
@@ -118,6 +117,26 @@ impl Ram256 {
 }
 
 impl AddressSpace for Ram256 {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.data.get()[addr as usize]
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        write_u8(&self.data, addr, value);
+    }
+}
+
+pub struct Ram32 {
+    data: Cell<[u8; 0x20]>
+}
+
+impl Ram32 {
+    pub fn new() -> Self {
+        Ram32 { data: Cell::new([0; 0x20]) }
+    }
+}
+
+impl AddressSpace for Ram32 {
     fn read_u8(&self, addr: u16) -> u8 {
         self.data.get()[addr as usize]
     }
