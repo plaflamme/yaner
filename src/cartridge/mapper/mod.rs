@@ -1,4 +1,4 @@
-use crate::memory::{AddressSpace, NullAddressSpace};
+use crate::memory::AddressSpace;
 use super::rom::Rom;
 use super::Mapper;
 

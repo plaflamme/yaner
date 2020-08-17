@@ -5,15 +5,14 @@ use std::fmt::{Display, Error, Formatter};
 use dma::DmaCycle;
 use crate::cartridge::Cartridge;
 use crate::memory::AddressSpace;
-use crate::cpu::{Cpu, CpuAddressSpace, CpuCycle};
-use crate::ppu::{Ppu, PpuAddressSpace, PpuCycle, MemoryMappedRegisters};
+use crate::cpu::{Cpu, CpuBus, CpuCycle};
+use crate::ppu::{Ppu, PpuBus, PpuCycle, MemoryMappedRegisters};
 use std::rc::Rc;
 use std::cell::RefCell;
 
 mod dma;
 
 pub struct Nes {
-    // cartridge: Cartridge,
     cpu: Cpu,
     // ppu: Ppu,
     // TODO: apu
@@ -23,14 +22,12 @@ pub struct Nes {
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
-        let ppu_addr_space = PpuAddressSpace::new(mapper.clone());
-        let ppu_mem_registers = MemoryMappedRegisters::new(Ppu::new(), ppu_addr_space);
-        let cpu_addr_space = CpuAddressSpace::new(ppu_mem_registers, mapper.clone());
+        let ppu_bus = PpuBus::new(mapper.clone());
+        let ppu_mem_registers = MemoryMappedRegisters::new(Ppu::new(), ppu_bus);
+        let cpu_bus = CpuBus::new(ppu_mem_registers, mapper.clone());
 
         Nes {
-            // cartridge,
-            cpu: Cpu::new(cpu_addr_space),
-            // ppu,
+            cpu: Cpu::new(cpu_bus),
         }
     }
 
@@ -41,7 +38,7 @@ impl Nes {
         let mut cpu_clock = CpuClock::new();
         let mut ppu_clock = PpuClock::new();
         let mut cpu = self.cpu.run(start_at);
-        let mut ppu = self.cpu.bus.ppu.ppu.run();
+        let mut ppu = self.cpu.bus.ppu_registers.ppu.run();
         let mut dma = oam_dma.run(&self.cpu.bus);
 
         trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
@@ -84,7 +81,7 @@ impl Nes {
             clock += 1;
 
             if clock % 10_000 == 0 {
-                self.cpu.bus.ppu.ppu.decay_open_bus()
+                self.cpu.bus.ppu_registers.ppu.decay_open_bus()
             }
 
             if halt(&self.cpu.bus) {

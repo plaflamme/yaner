@@ -68,7 +68,7 @@ fn main() {
             let cartridge = Cartridge::try_from(rom).unwrap();
             println!("{}", cartridge);
         },
-        Run { pc, output, rom  } => {
+        Run { pc, output: _, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
             nes.run(pc, |_| false);

@@ -1,5 +1,5 @@
 use crate::memory::AddressSpace;
-use crate::cartridge::rom::{Rom, Chr};
+use crate::cartridge::rom::Rom;
 use crate::cartridge::rom::RomData;
 use super::Mapper;
 

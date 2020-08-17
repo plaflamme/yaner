@@ -161,7 +161,7 @@ pub struct Cpu {
     sp: Cell<u8>,
     pc: Cell<u16>,
 
-    pub bus: CpuAddressSpace,
+    pub bus: CpuBus,
 }
 
 impl Display for Cpu {
@@ -180,7 +180,7 @@ pub enum CpuCycle {
 }
 
 impl Cpu {
-    pub fn new(bus: CpuAddressSpace) -> Self {
+    pub fn new(bus: CpuBus) -> Self {
         // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
         Cpu {
             acc: Cell::new(0),
@@ -561,16 +561,16 @@ trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
 }
 
-pub struct CpuAddressSpace {
+pub struct CpuBus {
     ram: Ram2KB,
-    pub ppu: MemoryMappedRegisters,
+    pub ppu_registers: MemoryMappedRegisters,
     mapper: Rc<RefCell<Box<dyn Mapper>>>,
     oam_dma: Cell<Option<u8>>
 }
 
-impl CpuAddressSpace {
-    pub fn new(ppu: MemoryMappedRegisters, mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
-        CpuAddressSpace { ram: Ram2KB::new(), ppu, mapper, oam_dma: Cell::new(None) }
+impl CpuBus {
+    pub fn new(ppu_registers: MemoryMappedRegisters, mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
+        CpuBus { ram: Ram2KB::new(), ppu_registers, mapper, oam_dma: Cell::new(None) }
     }
 
     // This will return last write to OAM DMA and then None until the next write
@@ -581,14 +581,14 @@ impl CpuAddressSpace {
     }
 }
 
-impl crate::memory::AddressSpace for CpuAddressSpace {
+impl crate::memory::AddressSpace for CpuBus {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x07FF => self.ram.read_u8(addr),
             0x0800..=0x1FFF => self.ram.read_u8(addr % 0x0800),
 
-            0x2000..=0x2007 => self.ppu.read_u8(addr), // PPU
-            0x2008..=0x3FFF => self.ppu.read_u8(0x2000 + (addr % 8)), // PPU mirror
+            0x2000..=0x2007 => self.ppu_registers.read_u8(addr), // PPU
+            0x2008..=0x3FFF => self.ppu_registers.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
             0x4000..=0x4017 => 0x00, // APU
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
@@ -602,8 +602,8 @@ impl crate::memory::AddressSpace for CpuAddressSpace {
             0x0000..=0x07FF => self.ram.write_u8(addr, value),
             0x0800..=0x1FFF => self.ram.write_u8(addr % 0x8000, value),
 
-            0x2000..=0x2007 => self.ppu.write_u8(addr, value), // PPU
-            0x2008..=0x3FFF => self.ppu.write_u8(0x2000 + (addr % 8), value), // PPU mirror
+            0x2000..=0x2007 => self.ppu_registers.write_u8(addr, value), // PPU
+            0x2008..=0x3FFF => self.ppu_registers.write_u8(0x2000 + (addr % 8), value), // PPU mirror
 
             0x4014 => self.oam_dma.set(Some(value)),
 
