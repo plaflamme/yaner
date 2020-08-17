@@ -1,12 +1,12 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
+fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next(mem_map) as u16;
+        let addr_lo = cpu.pc_read_u8_next() as u16;
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next(mem_map) as u16;
+        let addr_hi = cpu.pc_read_u8_next() as u16;
         yield CpuCycle::Tick;
 
         addr_hi << 8 | addr_lo
@@ -19,9 +19,9 @@ fn abs_addr<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Y
 //  2    PC     R  fetch low address byte, increment PC
 //  3    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = yield_complete!(abs_addr(cpu, mem_map));
+        let addr = yield_complete!(abs_addr(cpu));
         cpu.pc.set(addr);
     }
 }
@@ -32,11 +32,11 @@ pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> im
 //  2    PC     R  fetch low byte of address, increment PC
 //  3    PC     R  fetch high byte of address, increment PC
 //  4  address  R  read from effective address
-pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = yield_complete!(abs_addr(cpu, mem_map));
+        let addr = yield_complete!(abs_addr(cpu));
 
-        let value = mem_map.read_u8(addr);
+        let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }
@@ -51,18 +51,18 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu,
 //  5  address  W  write the value back to effective address,
 //                 and do the operation on it
 //  6  address  W  write the new value to effective address
-pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = yield_complete!(abs_addr(cpu, mem_map));
+        let addr = yield_complete!(abs_addr(cpu));
 
-        let value = mem_map.read_u8(addr);
+        let value = cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
-        mem_map.write_u8(addr, value);
+        cpu.bus.write_u8(addr, value);
         let (_, result) = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
-        mem_map.write_u8(addr, result);
+        cpu.bus.write_u8(addr, result);
         yield CpuCycle::Tick;
     }
 }
@@ -73,11 +73,11 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a 
 //  2    PC     R  fetch low byte of address, increment PC
 //  3    PC     R  fetch high byte of address, increment PC
 //  4  address  W  write register to effective address
-pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = yield_complete!(abs_addr(cpu, mem_map));
+        let addr = yield_complete!(abs_addr(cpu));
 
-        mem_map.write_u8(addr, operation.operate(cpu));
+        cpu.bus.write_u8(addr, operation.operate(cpu));
         yield CpuCycle::Tick;
     }
 }

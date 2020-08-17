@@ -11,20 +11,20 @@ use super::*;
 //
 // Note: * The PCH will always be fetched from the same page
 //         than PCL, i.e. page boundary crossing is not handled.
-pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next(mem_map);
+        let addr_lo = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next(mem_map);
+        let addr_hi = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
 
         let addr = (addr_hi as u16) << 8 | addr_lo as u16;
-        let pc_lo = mem_map.read_u8(addr);
+        let pc_lo = cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
         let addr = (addr_hi as u16) << 8 | addr_lo.wrapping_add(1) as u16;
-        let pc_hi = mem_map.read_u8(addr);
+        let pc_hi = cpu.bus.read_u8(addr);
         cpu.pc.set((pc_hi as u16) << 8 | pc_lo as u16);
         yield CpuCycle::Tick;
     }

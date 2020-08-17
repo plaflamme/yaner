@@ -172,8 +172,13 @@ impl Mapper for SxROM {
         "SxROM".to_string()
     }
 
-    fn as_addr_space(&self) -> &dyn AddressSpace {
-        self
+
+    fn cpu_addr_space(&self) -> &dyn AddressSpace {
+        self // TODO
+    }
+
+    fn ppu_addr_space(&self) -> &dyn AddressSpace {
+        self // TODO
     }
 }
 

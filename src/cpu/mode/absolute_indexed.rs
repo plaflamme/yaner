@@ -1,19 +1,19 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = (u16, u8, bool)> + 'a {
+fn abs_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8, bool)> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next(mem_map);
+        let addr_lo = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
 
-        let addr_hi = (cpu.pc_read_u8_next(mem_map) as u16) << 8;
+        let addr_hi = (cpu.pc_read_u8_next() as u16) << 8;
         let addr_pre = addr_hi | addr_lo.wrapping_add(index) as u16;
         yield CpuCycle::Tick;
 
-        let _ = mem_map.read_u8(addr_pre);
+        let _ = cpu.bus.read_u8(addr_pre);
         let addr = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
 
-        let value = mem_map.read_u8(addr);
+        let value = cpu.bus.read_u8(addr);
         (addr, value, addr != addr_pre)
     }
 }
@@ -36,9 +36,9 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> im
 //
 //        + This cycle will be executed only if the effective address
 //          was invalid during cycle #4, i.e. page boundary was crossed.
-fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value, oops) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (_, value, oops) = yield_complete!(abs_indexed(index, cpu));
         if oops {
             yield CpuCycle::Tick;
         }
@@ -47,12 +47,12 @@ fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map
     }
 }
 
-pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    read(operation, cpu.x.get(), cpu, mem_map)
+pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    read(operation, cpu.x.get(), cpu)
 }
 
-pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    read(operation, cpu.y.get(), cpu, mem_map)
+pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    read(operation, cpu.y.get(), cpu)
 }
 
 //  #   address  R/W description
@@ -71,32 +71,32 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 //
 // Notes: * The high byte of the effective address may be invalid
 //          at this time, i.e. it may be smaller by $100.
-fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value, _) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (addr, value, _) = yield_complete!(abs_indexed(index, cpu));
         yield CpuCycle::Tick;
 
-        mem_map.read_u8(addr);
+        cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
-        mem_map.write_u8(addr, value);
+        cpu.bus.write_u8(addr, value);
 
         // SHX and SHY may override the address to write to.
         let (addr, value) = operation.modify(cpu, addr, value);
         yield CpuCycle::Tick;
 
-        mem_map.write_u8(addr, value);
+        cpu.bus.write_u8(addr, value);
         yield CpuCycle::Tick;
     }
 }
 
-pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    modify(operation, cpu.x.get(), cpu, mem_map)
+pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    modify(operation, cpu.x.get(), cpu)
 }
 
 #[allow(dead_code)]
-pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    modify(operation, cpu.y.get(), cpu, mem_map)
+pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    modify(operation, cpu.y.get(), cpu)
 }
 
 //  #   address  R/W description
@@ -116,21 +116,21 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //          at this time, i.e. it may be smaller by $100. Because
 //          the processor cannot undo a write to an invalid
 //          address, it always reads from the address first.
-fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, _, _) = yield_complete!(abs_indexed(index, cpu, mem_map));
+        let (addr, _, _) = yield_complete!(abs_indexed(index, cpu));
         yield CpuCycle::Tick;
 
         let value = operation.operate(cpu);
-        mem_map.write_u8(addr, value);
+        cpu.bus.write_u8(addr, value);
         yield CpuCycle::Tick;
     }
 }
 
-pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    write(operation, cpu.x.get(), cpu, mem_map)
+pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    write(operation, cpu.x.get(), cpu)
 }
 
-pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu, mem_map: &'a dyn AddressSpace) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-    write(operation, cpu.y.get(), cpu, mem_map)
+pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    write(operation, cpu.y.get(), cpu)
 }

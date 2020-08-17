@@ -1,4 +1,4 @@
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, NullAddressSpace};
 use super::rom::Rom;
 use super::Mapper;
 
@@ -12,17 +12,11 @@ impl Mapper for Unknown {
         "Unknown".to_string()
     }
 
-    fn as_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
-}
-
-impl AddressSpace for Unknown {
-    fn read_u8(&self, _addr: u16) -> u8 {
+    fn cpu_addr_space(&self) -> &dyn AddressSpace {
         unimplemented!()
     }
 
-    fn write_u8(&self, _addr: u16, _value: u8) {
+    fn ppu_addr_space(&self) -> &dyn AddressSpace {
         unimplemented!()
     }
 }

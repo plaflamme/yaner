@@ -10,11 +10,12 @@ mod rom;
 
 use rom::{Rom, RomError};
 
-pub trait Mapper: AddressSpace {
+pub trait Mapper {
     fn name(&self) -> String;
 
-    // upcast
-    fn as_addr_space(&self) -> &dyn AddressSpace;
+    fn cpu_addr_space(&self) -> &dyn AddressSpace;
+
+    fn ppu_addr_space(&self) -> &dyn AddressSpace;
 }
 
 pub struct Cartridge {

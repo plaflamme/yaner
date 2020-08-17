@@ -16,6 +16,7 @@ mod cartridge;
 mod cpu;
 mod ppu;
 mod nes;
+// mod own;
 
 #[cfg(test)]
 mod tests;

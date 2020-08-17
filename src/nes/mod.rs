@@ -7,48 +7,51 @@ use crate::cartridge::Cartridge;
 use crate::memory::AddressSpace;
 use crate::cpu::{Cpu, CpuAddressSpace, CpuCycle};
 use crate::ppu::{Ppu, PpuAddressSpace, PpuCycle, MemoryMappedRegisters};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 mod dma;
 
 pub struct Nes {
-    cartridge: Cartridge,
+    // cartridge: Cartridge,
     cpu: Cpu,
-    ppu: Ppu,
+    // ppu: Ppu,
     // TODO: apu
     // TODO: input
 }
 
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
+        let mapper = Rc::new(RefCell::new(cartridge.mapper));
+        let ppu_addr_space = PpuAddressSpace::new(mapper.clone());
+        let ppu_mem_registers = MemoryMappedRegisters::new(Ppu::new(), ppu_addr_space);
+        let cpu_addr_space = CpuAddressSpace::new(ppu_mem_registers, mapper.clone());
+
         Nes {
-            cartridge,
-            cpu: Cpu::new(),
-            ppu: Ppu::new(),
+            // cartridge,
+            cpu: Cpu::new(cpu_addr_space),
+            // ppu,
         }
     }
 
     pub fn run(&self, start_at: Option<u16>, mut halt: impl FnMut(&dyn AddressSpace) -> bool) {
-        let ppu_addr_space = PpuAddressSpace::new(self.cartridge.mapper.as_addr_space());
-        let ppu_mem_registers = MemoryMappedRegisters::new(&self.ppu, &ppu_addr_space);
-        let cpu_addr_space = CpuAddressSpace::new(&ppu_mem_registers, self.cartridge.mapper.as_addr_space());
-
         let oam_dma = dma::Dma::new();
 
         let mut clock = 0u64;
         let mut cpu_clock = CpuClock::new();
         let mut ppu_clock = PpuClock::new();
-        let mut cpu = self.cpu.run(&cpu_addr_space, start_at);
-        let mut ppu = self.ppu.run(&ppu_addr_space);
-        let mut dma = oam_dma.run(&cpu_addr_space);
+        let mut cpu = self.cpu.run(start_at);
+        let mut ppu = self.cpu.bus.ppu.ppu.run();
+        let mut dma = oam_dma.run(&self.cpu.bus);
 
-        trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
+        trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
         loop {
 
             if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
                 match Pin::new(&mut cpu).resume(()) {
                     GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
                     GeneratorState::Yielded(CpuCycle::OpComplete) => {
-                        trace!("{} {} {}", self.cpu.write(&cpu_addr_space), ppu_clock, cpu_clock);
+                        trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
                         continue;
                     },
                     GeneratorState::Yielded(CpuCycle::Halt) => {
@@ -66,7 +69,7 @@ impl Nes {
                 GeneratorState::Complete(_) => (),
             };
 
-            if let Some(addr) = cpu_addr_space.dma_latch() {
+            if let Some(addr) = self.cpu.bus.dma_latch() {
                 oam_dma.start(addr, cpu_clock.cycle);
                 cpu_clock.suspend();
             }
@@ -81,10 +84,10 @@ impl Nes {
             clock += 1;
 
             if clock % 10_000 == 0 {
-                self.ppu.decay_open_bus()
+                self.cpu.bus.ppu.ppu.decay_open_bus()
             }
 
-            if halt(&cpu_addr_space) {
+            if halt(&self.cpu.bus) {
                 break;
             }
         }

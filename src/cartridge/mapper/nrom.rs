@@ -1,5 +1,5 @@
 use crate::memory::AddressSpace;
-use crate::cartridge::rom::Rom;
+use crate::cartridge::rom::{Rom, Chr};
 use crate::cartridge::rom::RomData;
 use super::Mapper;
 
@@ -21,8 +21,12 @@ impl Mapper for NROM {
         "NROM".to_string()
     }
 
-    fn as_addr_space(&self) -> &dyn AddressSpace {
-        self
+    fn cpu_addr_space(&self) -> &dyn AddressSpace {
+        self // TODO
+    }
+
+    fn ppu_addr_space(&self) -> &dyn AddressSpace {
+        self // TODO
     }
 }
 
