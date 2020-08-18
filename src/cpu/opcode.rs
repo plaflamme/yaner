@@ -3,7 +3,7 @@ use super::AddressingMode;
 
 // https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
 // http://www.oxyron.de/html/opcodes02.html
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OpCode(pub Op, pub AddressingMode);
 
 use Op::*;

@@ -71,7 +71,7 @@ fn main() {
         Run { pc, output: _, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = crate::nes::Nes::new(cartridge);
-            nes.run(pc, |_| false);
+            consume_generator!(nes.run(pc), ());
         },
         Generate => {
             crate::cpu::generator::generate_opcode_table()

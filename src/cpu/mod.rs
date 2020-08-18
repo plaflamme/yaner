@@ -9,7 +9,7 @@ use std::ops::Generator;
 mod mode;
 use mode::*;
 mod instr;
-mod opcode;
+pub mod opcode;
 
 pub mod generator;
 
@@ -175,7 +175,7 @@ impl Display for Cpu {
 
 pub enum CpuCycle {
     Tick,
-    OpComplete,
+    OpComplete(OpCode),
     Halt
 }
 
@@ -529,7 +529,7 @@ impl Cpu {
                     }
                 }
 
-                yield CpuCycle::OpComplete
+                yield CpuCycle::OpComplete(OPCODES[opcode as usize])
             }
         }
     }

@@ -10,11 +10,11 @@ fn test_nestest() {
     let nes = run_test(
         &Path::new("roms/nes-test-roms/other/nestest.nes"),
         Some(0xC000),
-        |addr_space| addr_space.read_u16(0x02) == 0x00
+        |_| false
     );
 
-    // let result = nes.ram().read_u16(0x02);
-    // assert_eq!(0x00, result);
+    let result = nes.ram().read_u16(0x02);
+    assert_eq!(0x00, result);
 }
 
 #[test]
@@ -153,9 +153,13 @@ fn run_blargg_test(rom_path: &Path) {
     assert_eq!(0x00, result);
 }
 
-fn run_test(rom_path: &Path, start_at: Option<u16>, halt: impl FnMut(&dyn AddressSpace) -> bool) -> Nes {
+fn run_test(rom_path: &Path, start_at: Option<u16>, mut halt: impl FnMut(&dyn AddressSpace) -> bool) -> Nes {
     let cart = Cartridge::try_from(rom_path.to_owned()).unwrap();
     let nes = Nes::new(cart);
-    nes.run(start_at, halt);
+    consume_generator!(nes.run(start_at), {
+        if halt(nes.ram()) {
+            break;
+        }
+    });
     nes
 }

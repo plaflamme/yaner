@@ -198,6 +198,8 @@ impl Ppu {
 
                         yield PpuCycle::Tick;
                     }
+
+                    yield PpuCycle::Frame;
                 }
             }
         }
@@ -205,7 +207,8 @@ impl Ppu {
 }
 
 pub enum PpuCycle {
-    Tick
+    Tick,
+    Frame
 }
 
 pub struct PpuBus {
@@ -246,11 +249,11 @@ impl AddressSpace for PpuBus {
 
 pub struct MemoryMappedRegisters {
     bus: PpuBus,
-    pub ppu: Ppu
+    ppu: Rc<Ppu>
 }
 
 impl MemoryMappedRegisters {
-    pub fn new(ppu: Ppu, bus: PpuBus) -> Self {
+    pub fn new(ppu: Rc<Ppu>, bus: PpuBus) -> Self {
         MemoryMappedRegisters { bus, ppu }
     }
 }

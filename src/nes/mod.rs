@@ -4,88 +4,105 @@ use std::fmt::{Display, Error, Formatter};
 
 use dma::DmaCycle;
 use crate::cartridge::Cartridge;
-use crate::memory::AddressSpace;
 use crate::cpu::{Cpu, CpuBus, CpuCycle};
+use crate::cpu::opcode::OpCode;
 use crate::ppu::{Ppu, PpuBus, PpuCycle, MemoryMappedRegisters};
 use std::rc::Rc;
 use std::cell::RefCell;
+use crate::nes::dma::Dma;
+use crate::memory::AddressSpace;
 
 mod dma;
 
+pub enum NesCycle {
+    CpuOp(u64, OpCode),
+    PpuFrame,
+}
+
 pub struct Nes {
     cpu: Cpu,
-    // ppu: Ppu,
+    ppu: Rc<Ppu>,
+    dma: Dma,
     // TODO: apu
     // TODO: input
 }
 
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
+        let ppu = Rc::new(Ppu::new());
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
         let ppu_bus = PpuBus::new(mapper.clone());
-        let ppu_mem_registers = MemoryMappedRegisters::new(Ppu::new(), ppu_bus);
+        let ppu_mem_registers = MemoryMappedRegisters::new(ppu.clone(), ppu_bus);
         let cpu_bus = CpuBus::new(ppu_mem_registers, mapper.clone());
 
         Nes {
             cpu: Cpu::new(cpu_bus),
+            ppu,
+            dma: Dma::new(),
         }
     }
 
-    pub fn run(&self, start_at: Option<u16>, mut halt: impl FnMut(&dyn AddressSpace) -> bool) {
-        let oam_dma = dma::Dma::new();
+    pub fn ram(&self) -> &dyn AddressSpace {
+        &self.cpu.bus
+    }
 
-        let mut clock = 0u64;
-        let mut cpu_clock = CpuClock::new();
-        let mut ppu_clock = PpuClock::new();
-        let mut cpu = self.cpu.run(start_at);
-        let mut ppu = self.cpu.bus.ppu_registers.ppu.run();
-        let mut dma = oam_dma.run(&self.cpu.bus);
+    pub fn run<'a>(&'a self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
+        move || {
 
-        trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
-        loop {
+            let mut clock = 0u64;
+            let mut cpu_clock = CpuClock::new();
+            let mut ppu_clock = PpuClock::new();
+            let mut cpu = self.cpu.run(start_at);
+            let mut ppu = self.ppu.run();
+            let mut dma = self.dma.run(&self.cpu.bus);
 
-            if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
-                match Pin::new(&mut cpu).resume(()) {
-                    GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
-                    GeneratorState::Yielded(CpuCycle::OpComplete) => {
-                        trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
-                        continue;
-                    },
-                    GeneratorState::Yielded(CpuCycle::Halt) => {
-                        trace!("HALT");
-                        break;
-                    },
-                    GeneratorState::Complete(_) => unimplemented!()
-                };
-            }
-
-            match Pin::new(&mut dma).resume(()) {
-                GeneratorState::Yielded(DmaCycle::NoDma) => (),
-                GeneratorState::Yielded(DmaCycle::Tick) => (),
-                GeneratorState::Yielded(DmaCycle::Done) => cpu_clock.resume(),
-                GeneratorState::Complete(_) => (),
-            };
-
-            if let Some(addr) = self.cpu.bus.dma_latch() {
-                oam_dma.start(addr, cpu_clock.cycle);
-                cpu_clock.suspend();
-            }
-
-            if clock % ppu_clock.divisor == 0 {
-                match Pin::new(&mut ppu).resume(()) {
-                    GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
-                    GeneratorState::Complete(_) => unimplemented!()
+            trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
+            loop {
+                if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
+                    match Pin::new(&mut cpu).resume(()) {
+                        GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
+                        GeneratorState::Yielded(CpuCycle::OpComplete(opcode)) => {
+                            trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
+                            yield NesCycle::CpuOp(clock, opcode);
+                            continue;
+                        },
+                        GeneratorState::Yielded(CpuCycle::Halt) => {
+                            trace!("HALT");
+                            break;
+                        },
+                        GeneratorState::Complete(_) => unimplemented!()
+                    };
                 }
-            }
 
-            clock += 1;
+                match Pin::new(&mut dma).resume(()) {
+                    GeneratorState::Yielded(DmaCycle::NoDma) => (),
+                    GeneratorState::Yielded(DmaCycle::Tick) => (),
+                    GeneratorState::Yielded(DmaCycle::Done) => cpu_clock.resume(),
+                    GeneratorState::Complete(_) => (),
+                };
 
-            if clock % 10_000 == 0 {
-                self.cpu.bus.ppu_registers.ppu.decay_open_bus()
-            }
+                if let Some(addr) = self.cpu.bus.dma_latch() {
+                    self.dma.start(addr, cpu_clock.cycle);
+                    cpu_clock.suspend();
+                }
 
-            if halt(&self.cpu.bus) {
-                break;
+                if clock % ppu_clock.divisor == 0 {
+                    match Pin::new(&mut ppu).resume(()) {
+                        GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
+                        GeneratorState::Yielded(PpuCycle::Frame) => {
+                            yield NesCycle::PpuFrame;
+                            continue;
+                        },
+                        GeneratorState::Complete(_) => unimplemented!()
+                    }
+                }
+
+                // go as fast as the PPU
+                clock = clock.wrapping_add(ppu_clock.divisor);
+
+                if clock % 10_000 == 0 {
+                    self.ppu.decay_open_bus()
+                }
             }
         }
     }

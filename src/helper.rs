@@ -16,6 +16,22 @@ macro_rules! yield_complete {
     }
 }
 
+macro_rules! consume_generator {
+($gn:expr, $y: expr) => {
+        {
+            use std::ops::{Generator, GeneratorState};
+            use std::pin::Pin;
+            let mut gen = $gn;
+            loop {
+                match Generator::resume(Pin::new(&mut gen), ()) {
+                    GeneratorState::Yielded(_) => $y,
+                    GeneratorState::Complete(value) => break value
+                };
+            }
+        }
+    }
+}
+
 macro_rules! invalid_address {
     ($addr:expr) => {
         {
