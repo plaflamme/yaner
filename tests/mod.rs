@@ -1,9 +1,14 @@
+#![feature(generators, generator_trait)]
+
+#[macro_use]
+extern crate yaner;
+
 use std::convert::TryFrom;
 use std::path::Path;
 
-use crate::cartridge::Cartridge;
-use crate::nes::Nes;
-use crate::memory::AddressSpace;
+use yaner::cartridge::Cartridge;
+use yaner::memory::AddressSpace;
+use yaner::nes::Nes;
 
 #[test]
 fn test_nestest() {

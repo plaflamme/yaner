@@ -16,6 +16,7 @@ macro_rules! yield_complete {
     }
 }
 
+#[macro_export]
 macro_rules! consume_generator {
 ($gn:expr, $y: expr) => {
         {

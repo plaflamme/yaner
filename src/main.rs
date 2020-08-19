@@ -1,25 +1,16 @@
-#![feature(
-    generators, generator_trait
-)]
-use std::convert::TryFrom;
-use std::path::PathBuf;
-use structopt::StructOpt;
-use crate::cartridge::Cartridge;
-use std::num::ParseIntError;
+#![feature(generators, generator_trait)]
 
 #[macro_use]
-extern crate log;
+extern crate yaner;
 
-#[macro_use] mod helper;
-mod memory;
-mod cartridge;
-mod cpu;
-mod ppu;
-mod nes;
-// mod own;
+use std::convert::TryFrom;
+use std::num::ParseIntError;
+use std::path::PathBuf;
 
-#[cfg(test)]
-mod tests;
+use structopt::StructOpt;
+
+use yaner::cartridge::Cartridge;
+use yaner::nes::Nes;
 
 fn parse_hex(input: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(input, 16)
@@ -70,7 +61,7 @@ fn main() {
         },
         Run { pc, output, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
-            let nes = crate::nes::Nes::new(cartridge);
+            let nes = Nes::new(cartridge);
             consume_generator!(nes.run(pc), ());
             if let Some(addr) = output {
                 let value = nes.ram().read_u16(addr);
@@ -78,7 +69,7 @@ fn main() {
             }
         },
         Generate => {
-            crate::cpu::generator::generate_opcode_table()
+            yaner::cpu::generator::generate_opcode_table()
         },
     }
 }
