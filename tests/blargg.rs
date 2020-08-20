@@ -90,6 +90,21 @@ fn test_nes_instr_16() {
 }
 
 #[test]
+fn test_instr_misc_01() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/01-abs_x_wrap.nes"));
+}
+
+#[test]
+fn test_instr_misc_02() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/02-branch_wrap.nes"));
+}
+
+#[test]
+fn test_instr_misc_03() {
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes"));
+}
+
+#[test]
 fn test_ppu_open_bus() {
     run_blargg_test(&Path::new("roms/nes-test-roms/ppu_open_bus/ppu_open_bus.nes"));
 }
