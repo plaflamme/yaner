@@ -154,12 +154,12 @@ bitflags!(
 // http://nesdev.com/6502_cpu.txt
 // http://wiki.nesdev.com/w/index.php/CPU_ALL
 pub struct Cpu {
-    acc: Cell<u8>,
-    x: Cell<u8>,
-    y: Cell<u8>,
+    pub acc: Cell<u8>,
+    pub x: Cell<u8>,
+    pub y: Cell<u8>,
     flags: Cell<Flags>,
-    sp: Cell<u8>,
-    pc: Cell<u16>,
+    pub sp: Cell<u8>,
+    pub pc: Cell<u16>,
 
     pub bus: CpuBus,
 }
@@ -192,6 +192,10 @@ impl Cpu {
 
             bus,
         }
+    }
+
+    pub fn flags(&self) -> u8 {
+        self.flags.get().bits
     }
 
     // Reads pc and advances by one

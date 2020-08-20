@@ -20,7 +20,7 @@ pub enum NesCycle {
 }
 
 pub struct Nes {
-    cpu: Cpu,
+    pub cpu: Cpu,
     ppu: Rc<Ppu>,
     dma: Dma,
     // TODO: apu
@@ -47,14 +47,15 @@ impl Nes {
     }
 
     pub fn run<'a>(&'a self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
-        move || {
 
-            let mut clock = 0u64;
-            let mut cpu_clock = CpuClock::new();
-            let mut ppu_clock = PpuClock::new();
-            let mut cpu = self.cpu.run(start_at);
-            let mut ppu = self.ppu.run();
-            let mut dma = self.dma.run(&self.cpu.bus);
+        let mut clock = 0u64;
+        let mut cpu_clock = CpuClock::new();
+        let mut ppu_clock = PpuClock::new();
+        let mut cpu = self.cpu.run(start_at);
+        let mut ppu = self.ppu.run();
+        let mut dma = self.dma.run(&self.cpu.bus);
+
+        move || {
 
             trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
             loop {
@@ -63,7 +64,7 @@ impl Nes {
                         GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
                         GeneratorState::Yielded(CpuCycle::OpComplete(opcode)) => {
                             trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
-                            yield NesCycle::CpuOp(clock, opcode);
+                            yield NesCycle::CpuOp(cpu_clock.cycle, opcode);
                             continue;
                         },
                         GeneratorState::Yielded(CpuCycle::Halt) => {
