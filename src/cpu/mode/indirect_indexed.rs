@@ -1,7 +1,7 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
         let pointer = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
@@ -15,8 +15,7 @@ fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8
         yield CpuCycle::Tick;
 
         let addr = (addr_hi << 8) | addr_lo;
-        let value = cpu.bus.read_u8(addr);
-        (addr, value)
+        addr
     }
 }
 
@@ -34,7 +33,8 @@ fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8
 //       i.e. the zero page boundary crossing is not handled.
 pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value) = yield_complete!(ind_x(cpu));
+        let addr = yield_complete!(ind_x(cpu));
+        let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }
@@ -57,7 +57,8 @@ pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 #[allow(dead_code)]
 pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value) = yield_complete!(ind_x(cpu));
+        let addr = yield_complete!(ind_x(cpu));
+        let value = cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
@@ -82,7 +83,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //       i.e. the zero page boundary crossing is not handled.
 pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, _) = yield_complete!(ind_x(cpu));
+        let addr = yield_complete!(ind_x(cpu));
         cpu.bus.write_u8(addr, operation.operate(cpu));
         yield CpuCycle::Tick;
     }

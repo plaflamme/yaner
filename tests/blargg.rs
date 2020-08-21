@@ -103,7 +103,7 @@ fn test_instr_misc_02() {
 fn test_instr_misc_03() {
     // NOTE: This relies on the fact that reading PPUSTATUS resets the v-blank flag.
     //   It also requires precise timing between the CPU and PPU
-    blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes"), true);
+    run_blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes"));
 }
 
 #[test]
