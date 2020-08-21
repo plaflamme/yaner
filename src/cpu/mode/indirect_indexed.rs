@@ -90,22 +90,27 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a 
 
 fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next();
+        let pointer = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
 
-        let addr_lo = cpu.bus.read_u8(addr as u16);
-        yield CpuCycle::Tick;
-        let addr_hi = cpu.bus.read_u8(addr.wrapping_add(1) as u16);
+        let addr_lo = cpu.bus.read_u8(pointer as u16);
         yield CpuCycle::Tick;
 
-        let addr_unfixed = ((addr_hi as u16) << 8) | addr_lo.wrapping_add(cpu.y.get()) as u16;
+        let addr_hi = cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16;
+        let addr_hi = addr_hi << 8;
+        let addr_pre = addr_hi | addr_lo.wrapping_add(cpu.y.get()) as u16;
+        yield CpuCycle::Tick;
 
-        let addr_effective = (((addr_hi as u16) << 8) | addr_lo as u16).wrapping_add(cpu.y.get() as u16);
-        if eager || addr_unfixed != addr_effective {
+        let mut value = cpu.bus.read_u8(addr_pre);
+
+        let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(cpu.y.get() as u16);
+        let oops = addr_pre != addr_fixed;
+        if eager || oops {
+            value = cpu.bus.read_u8(addr_fixed);
             yield CpuCycle::Tick;
         }
 
-        (addr_effective, cpu.bus.read_u8(addr_effective))
+        (addr_fixed, value)
     }
 }
 
