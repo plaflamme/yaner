@@ -116,7 +116,7 @@ fn test_oam_read() {
     run_blargg_test(&Path::new("roms/nes-test-roms/oam_read/oam_read.nes"));
 }
 
-#[test] #[ignore] // slow, run with cargo test -- --ignore
+#[test] #[ignore] // slow, run with cargo test -- --ignored
 fn test_oam_stress() {
     run_blargg_test(&Path::new("roms/nes-test-roms/oam_stress/oam_stress.nes"));
 }
