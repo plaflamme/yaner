@@ -3,10 +3,10 @@ use super::*;
 
 fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next() as u16;
+        let addr_lo = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next() as u16;
+        let addr_hi = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
         addr_hi << 8 | addr_lo

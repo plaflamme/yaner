@@ -3,7 +3,7 @@ use super::*;
 
 fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next();
+        let addr = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         let _ = cpu.bus.read_u8(addr as u16);

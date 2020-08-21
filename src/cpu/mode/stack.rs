@@ -12,7 +12,7 @@ use super::*;
 //  7   $FFFF   R  fetch PCH
 pub(in crate::cpu) fn brk<'a>(cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
-        let _ = cpu.pc_read_u8_next();
+        let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         let pc_hi = (cpu.pc.get() >> 8) as u8;
@@ -51,7 +51,7 @@ pub(in crate::cpu) fn brk<'a>(cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Re
 //                 byte to PCH
 pub(in crate::cpu) fn jsr<'a>(cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next() as u16;
+        let addr_lo = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
         yield CpuCycle::Tick;
@@ -64,7 +64,7 @@ pub(in crate::cpu) fn jsr<'a>(cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Re
         cpu.push_stack(pc_lo);
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next() as u16;
+        let addr_hi = cpu.next_pc_read_u8() as u16;
         let pc = addr_hi << 8 | addr_lo;
         cpu.pc.set(pc);
         yield CpuCycle::Tick;
@@ -81,7 +81,7 @@ pub(in crate::cpu) fn jsr<'a>(cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Re
 //  6  $0100,S  R  pull PCH from stack
 pub(in crate::cpu) fn rti<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let _ = cpu.pc_read_u8_next();
+        let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         cpu.stack_inc();
@@ -112,7 +112,7 @@ pub(in crate::cpu) fn rti<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
 //  6    PC     R  increment PC
 pub(in crate::cpu) fn rts<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let _ = cpu.pc_read_u8_next();
+        let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         cpu.stack_inc();

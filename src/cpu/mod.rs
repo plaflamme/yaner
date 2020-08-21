@@ -199,15 +199,15 @@ impl Cpu {
         self.flags.get().bits
     }
 
-    // Reads pc and advances by one
+    // reads pc and advances by one
     fn next_pc(&self) -> u16 {
         let pc = self.pc.get();
         self.pc.set(pc.wrapping_add(1));
         pc
     }
 
-    // reads u8 at pc and advances by one
-    fn pc_read_u8_next(&self) -> u8 {
+    // advances pc by one and reads u8
+    fn next_pc_read_u8(&self) -> u8 {
         let pc = self.next_pc();
         self.bus.read_u8(pc)
     }
@@ -270,7 +270,7 @@ impl Cpu {
 
         move || {
             loop {
-                let opcode = self.pc_read_u8_next();
+                let opcode = self.next_pc_read_u8();
                 yield CpuCycle::Tick;
 
                 match opcode {

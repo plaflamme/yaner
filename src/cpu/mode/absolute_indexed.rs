@@ -3,10 +3,10 @@ use super::*;
 
 fn abs_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8, bool)> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next();
+        let addr_lo = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
-        let addr_hi = (cpu.pc_read_u8_next() as u16) << 8;
+        let addr_hi = (cpu.next_pc_read_u8() as u16) << 8;
         let addr_pre = addr_hi | (addr_lo.wrapping_add(index) as u16);
         yield CpuCycle::Tick;
 

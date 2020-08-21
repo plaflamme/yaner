@@ -6,7 +6,7 @@ use super::*;
 //  2    PC     R  fetch value, increment PC
 pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let value = cpu.pc_read_u8_next();
+        let value = cpu.next_pc_read_u8();
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }

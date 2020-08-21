@@ -8,7 +8,7 @@ use super::*;
 //  3  address  R  read from effective address
 pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next() as u16;
+        let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
         let value = cpu.bus.read_u8(addr);
@@ -27,7 +27,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu)
 //  5  address  W  write the new value to effective address
 pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next() as u16;
+        let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
         let value = cpu.bus.read_u8(addr);
@@ -49,7 +49,7 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a 
 //  3  address  W  write register to effective address
 pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next() as u16;
+        let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, operation.operate(cpu));

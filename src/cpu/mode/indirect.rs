@@ -13,10 +13,10 @@ use super::*;
 //         than PCL, i.e. page boundary crossing is not handled.
 pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let addr_lo = cpu.pc_read_u8_next();
+        let addr_lo = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
-        let addr_hi = cpu.pc_read_u8_next();
+        let addr_hi = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         let addr = (addr_hi as u16) << 8 | addr_lo as u16;

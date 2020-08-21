@@ -3,7 +3,7 @@ use super::*;
 
 fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
-        let pointer = cpu.pc_read_u8_next();
+        let pointer = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         let pointer = pointer.wrapping_add(cpu.x.get());
@@ -91,7 +91,7 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a 
 
 fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
-        let pointer = cpu.pc_read_u8_next();
+        let pointer = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
         let addr_lo = cpu.bus.read_u8(pointer as u16);
