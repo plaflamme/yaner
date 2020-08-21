@@ -3,15 +3,15 @@ use super::*;
 
 fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
     move || {
-        let addr = cpu.pc_read_u8_next();
+        let pointer = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
 
-        let addr = addr.wrapping_add(cpu.x.get());
+        let pointer = pointer.wrapping_add(cpu.x.get());
         yield CpuCycle::Tick;
 
-        let addr_lo = cpu.bus.read_u8(addr as u16) as u16;
+        let addr_lo = cpu.bus.read_u8(pointer as u16) as u16;
         yield CpuCycle::Tick;
-        let addr_hi = cpu.bus.read_u8(addr.wrapping_add(1) as u16) as u16;
+        let addr_hi = cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16;
         yield CpuCycle::Tick;
 
         let addr = (addr_hi << 8) | addr_lo;

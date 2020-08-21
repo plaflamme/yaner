@@ -10,13 +10,10 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let addr_pre = addr_hi | (addr_lo.wrapping_add(index) as u16);
         yield CpuCycle::Tick;
 
-        let mut value = cpu.bus.read_u8(addr_pre);
+        let value = cpu.bus.read_u8(addr_pre);
         let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
 
         let oops = addr_pre != addr_fixed;
-        if oops {
-            value = cpu.bus.read_u8(addr_fixed);
-        }
         (addr_fixed, value, oops)
     }
 }
@@ -41,8 +38,9 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
 //          was invalid during cycle #4, i.e. page boundary was crossed.
 fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value, oops) = yield_complete!(abs_indexed(index, cpu));
+        let (addr, mut value, oops) = yield_complete!(abs_indexed(index, cpu));
         if oops {
+            value = cpu.bus.read_u8(addr);
             yield CpuCycle::Tick;
         }
         operation.operate(cpu, value);
@@ -76,13 +74,13 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 //          at this time, i.e. it may be smaller by $100.
 fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value, _) = yield_complete!(abs_indexed(index, cpu));
-        yield CpuCycle::Tick;
+        let (addr, _, _) = yield_complete!(abs_indexed(index, cpu));
 
-        cpu.bus.read_u8(addr);
+        let value = cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
+        yield CpuCycle::Tick;
 
         // SHX and SHY may override the address to write to.
         let (addr, value) = operation.modify(cpu, addr, value);

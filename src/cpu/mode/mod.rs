@@ -1,5 +1,7 @@
 use super::*;
 
+// timing information is from here http://nesdev.com/6502_cpu.txt
+
 pub mod absolute;
 pub mod absolute_indexed;
 pub mod accumulator;

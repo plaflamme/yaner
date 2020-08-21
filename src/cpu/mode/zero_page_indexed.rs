@@ -1,7 +1,7 @@
 use crate::memory::AddressSpace;
 use super::*;
 
-fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
         let addr = cpu.pc_read_u8_next();
         yield CpuCycle::Tick;
@@ -10,8 +10,7 @@ fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, R
         let addr = addr.wrapping_add(index) as u16;
         yield CpuCycle::Tick;
 
-        let value = cpu.bus.read_u8(addr);
-        (addr, value)
+        addr
     }
 }
 
@@ -27,7 +26,8 @@ fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, R
 //          i.e. page boundary crossings are not handled.
 fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (_, value) = yield_complete!(zp_indexed(index, cpu));
+        let addr = yield_complete!(zp_indexed(index, cpu));
+        let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
         yield CpuCycle::Tick;
     }
@@ -55,7 +55,8 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 //         i.e. page boundary crossings are not handled.
 fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, value) = yield_complete!(zp_indexed(index, cpu));
+        let addr = yield_complete!(zp_indexed(index, cpu));
+        let value = cpu.bus.read_u8(addr);
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
@@ -84,7 +85,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //          i.e. page boundary crossings are not handled.
 fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
     move || {
-        let (addr, _) = yield_complete!(zp_indexed(index, cpu));
+        let addr = yield_complete!(zp_indexed(index, cpu));
         let value = operation.operate(cpu);
         cpu.bus.write_u8(addr, value);
         yield CpuCycle::Tick;
