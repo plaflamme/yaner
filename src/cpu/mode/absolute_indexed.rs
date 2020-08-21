@@ -7,14 +7,17 @@ fn abs_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         yield CpuCycle::Tick;
 
         let addr_hi = (cpu.pc_read_u8_next() as u16) << 8;
-        let addr_pre = addr_hi | addr_lo.wrapping_add(index) as u16;
+        let addr_pre = addr_hi | (addr_lo.wrapping_add(index) as u16);
         yield CpuCycle::Tick;
 
-        let _ = cpu.bus.read_u8(addr_pre);
-        let addr = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
+        let mut value = cpu.bus.read_u8(addr_pre);
+        let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
 
-        let value = cpu.bus.read_u8(addr);
-        (addr, value, addr != addr_pre)
+        let oops = addr_pre != addr_fixed;
+        if oops {
+            value = cpu.bus.read_u8(addr_fixed);
+        }
+        (addr_fixed, value, oops)
     }
 }
 

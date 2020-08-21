@@ -101,8 +101,9 @@ fn test_instr_misc_02() {
 
 #[test]
 fn test_instr_misc_03() {
-    // TODO: I believe this requires NMI to be implemented to pass.
-    blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes"), false);
+    // NOTE: This relies on the fact that reading PPUSTATUS resets the v-blank flag.
+    //   It also requires precise timing between the CPU and PPU
+    blargg_test(&Path::new("roms/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes"), true);
 }
 
 #[test]

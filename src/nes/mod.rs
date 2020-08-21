@@ -92,7 +92,6 @@ impl Nes {
                         GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
                         GeneratorState::Yielded(PpuCycle::Frame) => {
                             yield NesCycle::PpuFrame;
-                            continue;
                         },
                         GeneratorState::Complete(_) => unimplemented!()
                     }

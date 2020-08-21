@@ -125,7 +125,7 @@ impl Ppu {
 
     fn status(&self) -> u8 {
         let status = self.status.get();
-        let mut cleared = PpuStatus::from(status);
+        let mut cleared = status.clone();
         cleared.remove(PpuStatus::V);
         self.status.set(cleared);
 
@@ -196,9 +196,11 @@ impl Ppu {
                             self.status.set(status);
                         }
 
-                        yield PpuCycle::Tick;
+                        // we yield a frame instead
+                        if dot < 340 {
+                            yield PpuCycle::Tick;
+                        }
                     }
-
                     yield PpuCycle::Frame;
                 }
             }

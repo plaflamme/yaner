@@ -167,9 +167,10 @@ pub struct Cpu {
 impl Display for Cpu {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let pc = self.pc.get();
-        let addr = self.bus.read_u8(pc);
-        let OpCode(op, _) = &OPCODES[addr as usize];
-        write!(f, "{:02X?} {:?} A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} ({:?}) SP:{:02X?}", pc, op, self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.flags.get(), self.sp.get())
+        let opcode = self.bus.read_u8(pc);
+        let OpCode(op, mode) = &OPCODES[opcode as usize];
+        let operand = self.bus.read_u16(self.pc.get().wrapping_add(1));
+        write!(f, "{:02X?} {:?} {:04X} A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} ({:?}) SP:{:02X?}", pc, op, operand, self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.flags.get(), self.sp.get())
     }
 }
 
