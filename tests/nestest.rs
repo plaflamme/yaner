@@ -15,7 +15,7 @@ use nom::bytes::complete::take_while;
 use nom::combinator::map_res;
 
 use yaner::cartridge::Cartridge;
-use yaner::nes::Nes;
+use yaner::nes::{Nes, NesCycle};
 
 #[derive(Debug)]
 struct LogLine {
@@ -25,8 +25,8 @@ struct LogLine {
     y: u8,
     flags: u8,
     sp: u8,
-    ppu_cyc: u32,
-    ppu_sl: u32,
+    ppu_frame: u32,
+    ppu_dot: u32,
     cpu_cyc: u32,
 }
 
@@ -76,7 +76,7 @@ named!(parse_logline<&str, LogLine>,
         tag!("Y:") >> y: hex_u8 >> tag!(" ") >>
         tag!("P:") >> flags: hex_u8 >> tag!(" ") >>
         tag!("SP:") >> sp: hex_u8 >> tag!(" ") >>
-        tag!("PPU:") >> ppu_cyc: ws!(d_u32) >> tag!(",") >> ppu_sl: ws!(d_u32) >>
+        tag!("PPU:") >> ppu_frame: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
         tag!("CYC:") >> cpu_cyc: ws!(d_u32) >>
         (
             LogLine {
@@ -86,8 +86,8 @@ named!(parse_logline<&str, LogLine>,
                 y,
                 flags,
                 sp,
-                ppu_cyc,
-                ppu_sl,
+                ppu_dot,
+                ppu_frame,
                 cpu_cyc
             }
         )
@@ -106,14 +106,16 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
     Ok(lines)
 }
 
-fn assert_log(nes: &Nes, cpu_cyc: u64, line: &LogLine) {
-    assert_eq!(cpu_cyc, line.cpu_cyc as u64, "incorrect cpu cycle at {}", line);
+fn assert_log(nes: &Nes, line: &LogLine) {
+    assert_eq!(nes.cpu_clock.cycle(), line.cpu_cyc as u64, "incorrect cpu cycle at {}", line);
     assert_eq!(nes.cpu.pc.get(), line.pc, "incorrect pc at {}", line);
     assert_eq!(nes.cpu.acc.get(), line.a, "incorrect acc at {}", line);
     assert_eq!(nes.cpu.x.get(), line.x, "incorrect x at {}", line);
     assert_eq!(nes.cpu.y.get(), line.y, "incorrect y at {}", line);
     assert_eq!(nes.cpu.flags(), line.flags, "incorrect flags at {}", line);
     assert_eq!(nes.cpu.sp.get(), line.sp, "incorrect stack pointer at {}", line);
+    assert_eq!(nes.ppu_clock.frame(), line.ppu_frame as u64, "incorrect ppu frame at {}", line);
+    assert_eq!(nes.ppu_clock.dot(), line.ppu_dot as u16, "incorrect ppu dot at {}", line);
     // TODO: check ppu scanline and cycle
 }
 
@@ -129,15 +131,13 @@ fn test_nestest() {
 
     let mut log_iter = log.iter();
 
-    // TODO: expose cpu_clock so we can read it here
-    assert_log(&nes, 7, &log_iter.next().unwrap());
     loop {
         match Generator::resume(Pin::new(&mut clock), ()) {
             GeneratorState::Yielded(value) => {
                 match value {
-                    yaner::nes::NesCycle::CpuOp(cpu_cycle, _) => {
+                    NesCycle::PowerUp | NesCycle::CpuOp(_) => {
                         match log_iter.next() {
-                            Some(line) => assert_log(&nes, cpu_cycle, line),
+                            Some(line) => assert_log(&nes, line),
                             None => () // log is shorter than actual test
                         }
                     },

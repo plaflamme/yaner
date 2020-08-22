@@ -8,14 +8,15 @@ use crate::cpu::{Cpu, CpuBus, CpuCycle};
 use crate::cpu::opcode::OpCode;
 use crate::ppu::{Ppu, PpuBus, PpuCycle, MemoryMappedRegisters};
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, Cell};
 use crate::nes::dma::Dma;
 use crate::memory::AddressSpace;
 
 mod dma;
 
 pub enum NesCycle {
-    CpuOp(u64, OpCode),
+    PowerUp,
+    CpuOp(OpCode),
     PpuFrame,
 }
 
@@ -23,6 +24,8 @@ pub struct Nes {
     pub cpu: Cpu,
     ppu: Rc<Ppu>,
     dma: Dma,
+    pub cpu_clock: CpuClock,
+    pub ppu_clock: PpuClock,
     // TODO: apu
     // TODO: input
 }
@@ -39,6 +42,8 @@ impl Nes {
             cpu: Cpu::new(cpu_bus),
             ppu,
             dma: Dma::new(),
+            cpu_clock: CpuClock::new(),
+            ppu_clock: PpuClock::new(),
         }
     }
 
@@ -49,22 +54,23 @@ impl Nes {
     pub fn run<'a>(&'a self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
 
         let mut clock = 0u64;
-        let mut cpu_clock = CpuClock::new();
-        let mut ppu_clock = PpuClock::new();
         let mut cpu = self.cpu.run(start_at);
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
 
         move || {
 
-            trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
+            trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
+            yield NesCycle::PowerUp;
             loop {
-                if clock % cpu_clock.divisor == 0 && !cpu_clock.suspended {
+                if clock % self.cpu_clock.divisor == 0 && !self.cpu_clock.suspended() {
                     match Pin::new(&mut cpu).resume(()) {
-                        GeneratorState::Yielded(CpuCycle::Tick) => cpu_clock.tick(),
+                        GeneratorState::Yielded(CpuCycle::Tick) => self.cpu_clock.tick(),
                         GeneratorState::Yielded(CpuCycle::OpComplete(opcode)) => {
-                            trace!("{} {} {}", self.cpu, ppu_clock, cpu_clock);
-                            yield NesCycle::CpuOp(cpu_clock.cycle, opcode);
+                            trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
+                            // TODO: it's annoying that this isn't an actual tick.
+                            //   It'd be simpler to have something like CpuCycle::Tick(Some(op))
+                            yield NesCycle::CpuOp(opcode);
                             continue;
                         },
                         GeneratorState::Yielded(CpuCycle::Halt) => {
@@ -78,19 +84,20 @@ impl Nes {
                 match Pin::new(&mut dma).resume(()) {
                     GeneratorState::Yielded(DmaCycle::NoDma) => (),
                     GeneratorState::Yielded(DmaCycle::Tick) => (),
-                    GeneratorState::Yielded(DmaCycle::Done) => cpu_clock.resume(),
+                    GeneratorState::Yielded(DmaCycle::Done) => self.cpu_clock.resume(),
                     GeneratorState::Complete(_) => (),
                 };
 
                 if let Some(addr) = self.cpu.bus.dma_latch() {
-                    self.dma.start(addr, cpu_clock.cycle);
-                    cpu_clock.suspend();
+                    self.dma.start(addr, self.cpu_clock.cycle.get());
+                    self.cpu_clock.suspend();
                 }
 
-                if clock % ppu_clock.divisor == 0 {
+                if clock % self.ppu_clock.divisor == 0 {
                     match Pin::new(&mut ppu).resume(()) {
-                        GeneratorState::Yielded(PpuCycle::Tick) => ppu_clock.tick(),
+                        GeneratorState::Yielded(PpuCycle::Tick) => self.ppu_clock.tick(),
                         GeneratorState::Yielded(PpuCycle::Frame) => {
+                            self.ppu_clock.tick();
                             yield NesCycle::PpuFrame;
                         },
                         GeneratorState::Complete(_) => unimplemented!()
@@ -98,7 +105,7 @@ impl Nes {
                 }
 
                 // go as fast as the PPU
-                clock = clock.wrapping_add(ppu_clock.divisor);
+                clock = clock.wrapping_add(self.ppu_clock.divisor);
 
                 if clock % 10_000 == 0 {
                     self.ppu.decay_open_bus()
@@ -110,66 +117,78 @@ impl Nes {
 
 trait Clock {
     fn divisor(&self) -> u64;
-    fn tick(&mut self);
+    fn tick(&self);
     fn suspended(&self) -> bool;
 }
 
-struct CpuClock {
+pub struct CpuClock {
     divisor: u64,
-    cycle: u64,
-    suspended: bool
+    cycle: Cell<u64>,
+    suspended: Cell<bool>
 }
 
 impl CpuClock {
     fn new() -> Self {
         // start at 7 due to reset interrupt handling
         //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        CpuClock { divisor: 12, cycle: 7, suspended: false }
+        CpuClock { divisor: 12, cycle: Cell::new(7), suspended: Cell::new(false) }
     }
 
-    fn suspend(&mut self) {
-        self.suspended = true;
+    pub fn cycle(&self) -> u64 {
+        self.cycle.get()
     }
 
-    fn resume(&mut self) {
-        self.suspended = false;
+    fn suspend(&self) {
+        self.suspended.set(true);
+    }
+
+    fn resume(&self) {
+        self.suspended.set(false);
     }
 }
 
 impl Clock for CpuClock {
     fn divisor(&self) -> u64 { self.divisor }
 
-    fn tick(&mut self) {
-        self.cycle += 1;
+    fn tick(&self) {
+        self.cycle.update(|c| c + 1);
     }
 
     fn suspended(&self) -> bool {
-        self.suspended
+        self.suspended.get()
     }
 }
 
 impl Display for CpuClock {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "CYC:{}", self.cycle)
+        write!(f, "CYC:{}", self.cycle.get())
     }
 }
 
-struct PpuClock {
+pub struct PpuClock {
     divisor: u64,
-    cycle: u64
+    cycle: Cell<u64>
 }
 
 impl PpuClock {
     fn new() -> Self {
-        PpuClock { divisor: 4, cycle: 21 }
+        PpuClock { divisor: 4, cycle: Cell::new(21) }
+    }
+
+    pub fn frame(&self) -> u64 {
+        self.cycle.get() / 341
+    }
+
+    pub fn dot(&self) -> u16 {
+        (self.cycle.get() % 341) as u16
     }
 }
 
 impl Clock for PpuClock {
     fn divisor(&self) -> u64 { self.divisor }
 
-    fn tick(&mut self) {
-        self.cycle += 1;
+    fn tick(&self) {
+        self.cycle.update(|c| c + 1);
     }
 
     fn suspended(&self) -> bool { false }
@@ -177,6 +196,6 @@ impl Clock for PpuClock {
 
 impl Display for PpuClock {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "PPU:{:>3},{:>3}", self.cycle / 341, self.cycle % 341)
+        write!(f, "PPU:{:>3},{:>3}", self.frame(), self.dot())
     }
 }
