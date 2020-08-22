@@ -122,6 +122,42 @@ pub enum AddressingMode {
     Implicit
 }
 
+impl AddressingMode {
+
+    fn read_u8(addr: u16, cpu: &Cpu) -> u8 {
+        cpu.bus.read_u8(addr)
+    }
+
+    fn read_u16(addr: u16, cpu: &Cpu) -> u16 {
+        cpu.bus.read_u16(addr)
+    }
+
+    fn operand(&self, cpu: &Cpu) -> String {
+        let addr = cpu.pc.get().wrapping_add(1); // skip opcode
+        match self {
+            AddressingMode::Immediate => format!("#${:02X}", Self::read_u8(addr, cpu)),
+
+            AddressingMode::ZeroPage => format!("z{:02X}", Self::read_u8(addr, cpu)),
+            AddressingMode::ZeroPageX => format!("z{:02X},X", Self::read_u8(addr, cpu)),
+            AddressingMode::ZeroPageY => format!("z{:02X},Y", Self::read_u8(addr, cpu)),
+
+            AddressingMode::Indirect => format!("(${:02X})", Self::read_u8(addr, cpu)),
+            AddressingMode::IndirectX => format!("(${:02X},X)", Self::read_u8(addr, cpu)),
+            AddressingMode::IndirectY => format!("(${:02X}),Y", Self::read_u8(addr, cpu)),
+
+            AddressingMode::Absolute => format!("${:04X}", Self::read_u16(addr, cpu)),
+            AddressingMode::AbsoluteX => format!("${:04X},X", Self::read_u16(addr, cpu)),
+            AddressingMode::AbsoluteY => format!("${:04X},Y", Self::read_u16(addr, cpu)),
+
+            AddressingMode::Accumulator => "A".to_owned(),
+
+            AddressingMode::Relative => format!("+{:04X}", Self::read_u16(addr, cpu)),
+
+            AddressingMode::Implicit => "".to_owned()
+        }
+    }
+}
+
 // http://wiki.nesdev.com/w/index.php/Status_flags
 bitflags!(
     struct Flags: u8 {
@@ -169,8 +205,9 @@ impl Display for Cpu {
         let pc = self.pc.get();
         let opcode = self.bus.read_u8(pc);
         let OpCode(op, mode) = &OPCODES[opcode as usize];
-        let operand = self.bus.read_u16(self.pc.get().wrapping_add(1));
-        write!(f, "{:02X?} {:?} {:04X} A:{:02X?} X:{:02X?} Y:{:02X?} P:{:02X?} ({:?}) SP:{:02X?}", pc, op, operand, self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), self.flags.get(), self.sp.get())
+        let operand = mode.operand(self);
+        let flags = format!("({:?})", self.flags.get());
+        write!(f, "{:04X} {:?} {:<7} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} {:<27} SP:{:02X?}", pc, op, operand, self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), flags, self.sp.get())
     }
 }
 

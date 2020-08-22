@@ -161,7 +161,7 @@ struct PpuClock {
 
 impl PpuClock {
     fn new() -> Self {
-        PpuClock { divisor: 4, cycle: 0 }
+        PpuClock { divisor: 4, cycle: 21 }
     }
 }
 
@@ -177,6 +177,6 @@ impl Clock for PpuClock {
 
 impl Display for PpuClock {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "PPU:{}, {}", self.cycle % 341, self.cycle / 341)
+        write!(f, "PPU:{:>3},{:>3}", self.cycle / 341, self.cycle % 341)
     }
 }
