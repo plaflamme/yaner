@@ -211,7 +211,19 @@ impl Display for Cpu {
     }
 }
 
-pub struct OpTrace;
+#[derive(Debug, Clone, Copy)]
+pub enum OpTrace {
+    // the resulting address used by the instruction
+    Addr(u16),
+
+    // the resulting address used by the instruction,
+    //   as well as the intermediate, partially computed address and whether it resulted
+    //   in an extra cycle
+    AddrIndexed { addr: u16, unfixed: u16, oops: bool },
+
+    // No relevant information
+    Implicit
+}
 
 pub enum CpuCycle {
     Tick,
@@ -315,7 +327,7 @@ impl Cpu {
                 let trace = match opcode {
                     0x00 => yield_complete!(stack::brk(self)),
                     0x01 => yield_complete!(indirect_indexed::x_read(&ora, self)),
-                    0x02 => OpTrace{},
+                    0x02 => OpTrace::Implicit,
                     0x03 => yield_complete!(indirect_indexed::x_modify(&slo, self)),
                     0x04 => yield_complete!(zero_page::read(&nop, self)),
                     0x05 => yield_complete!(zero_page::read(&ora, self)),
@@ -331,7 +343,7 @@ impl Cpu {
                     0x0F => yield_complete!(absolute::modify(&slo, self)),
                     0x10 => yield_complete!(relative::branch(&bpl, self)),
                     0x11 => yield_complete!(indirect_indexed::y_read(&ora, self)),
-                    0x12 => OpTrace{},
+                    0x12 => OpTrace::Implicit,
                     0x13 => yield_complete!(indirect_indexed::y_modify(&slo, self)),
                     0x14 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0x15 => yield_complete!(zero_page_indexed::x_read(&ora, self)),
@@ -347,7 +359,7 @@ impl Cpu {
                     0x1F => yield_complete!(absolute_indexed::x_modify(&slo, self)),
                     0x20 => yield_complete!(stack::jsr(self)),
                     0x21 => yield_complete!(indirect_indexed::x_read(&and, self)),
-                    0x22 => OpTrace{},
+                    0x22 => OpTrace::Implicit,
                     0x23 => yield_complete!(indirect_indexed::x_modify(&rla, self)),
                     0x24 => yield_complete!(zero_page::read(&bit, self)),
                     0x25 => yield_complete!(zero_page::read(&and, self)),
@@ -363,7 +375,7 @@ impl Cpu {
                     0x2F => yield_complete!(absolute::modify(&rla, self)),
                     0x30 => yield_complete!(relative::branch(&bmi, self)),
                     0x31 => yield_complete!(indirect_indexed::y_read(&and, self)),
-                    0x32 => OpTrace{},
+                    0x32 => OpTrace::Implicit,
                     0x33 => yield_complete!(indirect_indexed::y_modify(&rla, self)),
                     0x34 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0x35 => yield_complete!(zero_page_indexed::x_read(&and, self)),
@@ -379,7 +391,7 @@ impl Cpu {
                     0x3F => yield_complete!(absolute_indexed::x_modify(&rla, self)),
                     0x40 => yield_complete!(stack::rti(self)),
                     0x41 => yield_complete!(indirect_indexed::x_read(&eor, self)),
-                    0x42 => OpTrace{},
+                    0x42 => OpTrace::Implicit,
                     0x43 => yield_complete!(indirect_indexed::x_modify(&sre, self)),
                     0x44 => yield_complete!(zero_page::read(&nop, self)),
                     0x45 => yield_complete!(zero_page::read(&eor, self)),
@@ -395,7 +407,7 @@ impl Cpu {
                     0x4F => yield_complete!(absolute::modify(&sre, self)),
                     0x50 => yield_complete!(relative::branch(&bvc, self)),
                     0x51 => yield_complete!(indirect_indexed::y_read(&eor, self)),
-                    0x52 => OpTrace{},
+                    0x52 => OpTrace::Implicit,
                     0x53 => yield_complete!(indirect_indexed::y_modify(&sre, self)),
                     0x54 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0x55 => yield_complete!(zero_page_indexed::x_read(&eor, self)),
@@ -411,7 +423,7 @@ impl Cpu {
                     0x5F => yield_complete!(absolute_indexed::x_modify(&sre, self)),
                     0x60 => yield_complete!(stack::rts(self)),
                     0x61 => yield_complete!(indirect_indexed::x_read(&adc, self)),
-                    0x62 => OpTrace{},
+                    0x62 => OpTrace::Implicit,
                     0x63 => yield_complete!(indirect_indexed::x_modify(&rra, self)),
                     0x64 => yield_complete!(zero_page::read(&nop, self)),
                     0x65 => yield_complete!(zero_page::read(&adc, self)),
@@ -427,7 +439,7 @@ impl Cpu {
                     0x6F => yield_complete!(absolute::modify(&rra, self)),
                     0x70 => yield_complete!(relative::branch(&bvs, self)),
                     0x71 => yield_complete!(indirect_indexed::y_read(&adc, self)),
-                    0x72 => OpTrace{},
+                    0x72 => OpTrace::Implicit,
                     0x73 => yield_complete!(indirect_indexed::y_modify(&rra, self)),
                     0x74 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0x75 => yield_complete!(zero_page_indexed::x_read(&adc, self)),
@@ -458,7 +470,7 @@ impl Cpu {
                     0x8F => yield_complete!(absolute::write(&sax, self)),
                     0x90 => yield_complete!(relative::branch(&bcc, self)),
                     0x91 => yield_complete!(indirect_indexed::y_write(&sta, self)),
-                    0x92 => OpTrace{},
+                    0x92 => OpTrace::Implicit,
                     0x93 => yield_complete!(indirect_indexed::y_modify(&ahx, self)),
                     0x94 => yield_complete!(zero_page_indexed::x_write(&sty, self)),
                     0x95 => yield_complete!(zero_page_indexed::x_write(&sta, self)),
@@ -490,7 +502,7 @@ impl Cpu {
                     0xAF => yield_complete!(absolute::read(&lax, self)),
                     0xB0 => yield_complete!(relative::branch(&bcs, self)),
                     0xB1 => yield_complete!(indirect_indexed::y_read(&lda, self)),
-                    0xB2 => OpTrace{},
+                    0xB2 => OpTrace::Implicit,
                     0xB3 => yield_complete!(indirect_indexed::y_read(&lax, self)),
                     0xB4 => yield_complete!(zero_page_indexed::x_read(&ldy, self)),
                     0xB5 => yield_complete!(zero_page_indexed::x_read(&lda, self)),
@@ -522,7 +534,7 @@ impl Cpu {
                     0xCF => yield_complete!(absolute::modify(&dcp, self)),
                     0xD0 => yield_complete!(relative::branch(&bne, self)),
                     0xD1 => yield_complete!(indirect_indexed::y_read(&cmp, self)),
-                    0xD2 => OpTrace{},
+                    0xD2 => OpTrace::Implicit,
                     0xD3 => yield_complete!(indirect_indexed::y_modify(&dcp, self)),
                     0xD4 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0xD5 => yield_complete!(zero_page_indexed::x_read(&cmp, self)),
@@ -554,7 +566,7 @@ impl Cpu {
                     0xEF => yield_complete!(absolute::modify(&isc, self)),
                     0xF0 => yield_complete!(relative::branch(&beq, self)),
                     0xF1 => yield_complete!(indirect_indexed::y_read(&sbc, self)),
-                    0xF2 => OpTrace{},
+                    0xF2 => OpTrace::Implicit,
                     0xF3 => yield_complete!(indirect_indexed::y_modify(&isc, self)),
                     0xF4 => yield_complete!(zero_page_indexed::x_read(&nop, self)),
                     0xF5 => yield_complete!(zero_page_indexed::x_read(&sbc, self)),
@@ -574,10 +586,9 @@ impl Cpu {
                 };
 
                 let opcode = &OPCODES[opcode as usize];
-                if opcode.0 == Op::KIL {
-                    yield CpuCycle::Halt;
-                } else {
-                    yield CpuCycle::OpComplete(opcode.clone(), trace);
+                match opcode.0 {
+                    Op::KIL => yield CpuCycle::Halt,
+                    _ => yield CpuCycle::OpComplete(opcode.clone(), trace)
                 }
             }
         }

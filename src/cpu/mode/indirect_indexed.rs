@@ -36,7 +36,7 @@ pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
         let addr = yield_complete!(ind_x(cpu));
         let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -66,7 +66,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -85,11 +85,11 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a 
     move || {
         let addr = yield_complete!(ind_x(cpu));
         cpu.bus.write_u8(addr, operation.operate(cpu));
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
-fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u8)> + 'a {
+fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + 'a {
     move || {
         let pointer = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -111,7 +111,7 @@ fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Retu
             yield CpuCycle::Tick;
         }
 
-        (addr_fixed, value)
+        (addr_fixed, addr_pre, value, oops)
     }
 }
 
@@ -136,9 +136,9 @@ fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Retu
 //          was invalid during cycle #5, i.e. page boundary was crossed.
 pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (_, value) = yield_complete!(ind_y(false, cpu));
+        let (addr, unfixed, value, oops) = yield_complete!(ind_y(false, cpu));
         operation.operate(cpu, value);
-        OpTrace{}
+        OpTrace::AddrIndexed { addr, unfixed, oops }
     }
 }
 
@@ -164,7 +164,7 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 #[allow(dead_code)]
 pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (addr, value) = yield_complete!(ind_y(true, cpu));
+        let (addr, unfixed, value, _) = yield_complete!(ind_y(true, cpu));
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
@@ -172,7 +172,8 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
-        OpTrace{}
+
+        OpTrace::AddrIndexed { addr, unfixed, oops: false }
     }
 }
 
@@ -194,8 +195,9 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //          at this time, i.e. it may be smaller by $100.
 pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (addr, _) = yield_complete!(ind_y(true, cpu));
+        let (addr, unfixed, _, _) = yield_complete!(ind_y(true, cpu));
         cpu.bus.write_u8(addr, operation.operate(cpu));
-        OpTrace{}
+
+        OpTrace::AddrIndexed { addr, unfixed, oops: false }
     }
 }

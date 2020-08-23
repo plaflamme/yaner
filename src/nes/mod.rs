@@ -1,16 +1,16 @@
-use std::pin::Pin;
-use std::ops::{Generator, GeneratorState};
+use std::cell::{Cell, RefCell};
 use std::fmt::{Display, Error, Formatter};
+use std::ops::{Generator, GeneratorState};
+use std::pin::Pin;
+use std::rc::Rc;
 
 use dma::DmaCycle;
+
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle, OpTrace};
-use crate::cpu::opcode::OpCode;
-use crate::ppu::{Ppu, PpuBus, PpuCycle, MemoryMappedRegisters};
-use std::rc::Rc;
-use std::cell::{RefCell, Cell};
-use crate::nes::dma::Dma;
+use crate::cpu::{Cpu, CpuBus, CpuCycle};
 use crate::memory::AddressSpace;
+use crate::nes::dma::Dma;
+use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus};
 
 mod dma;
 
@@ -104,7 +104,8 @@ impl Nes {
                 ppu_cycle();
 
                 match cpu_cycle {
-                    CpuCycle::OpComplete(_, _) => {
+                    CpuCycle::OpComplete(opcode, optrace) => {
+                        trace!("{:?} {:?}", opcode, optrace);
                         trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
                         yield NesCycle::Tick(cpu_cycle);
                     },

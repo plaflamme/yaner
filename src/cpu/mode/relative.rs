@@ -28,7 +28,7 @@ pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a 
         let operand = cpu.next_pc_read_u8() as i8;
 
         if !operation.branch(cpu) {
-            OpTrace{}
+            OpTrace::Implicit
         } else {
             let pc = cpu.pc.get() as i16;
             let addr = pc.wrapping_add(operand as i16) as u16;
@@ -40,7 +40,7 @@ pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a 
             }
 
             cpu.pc.set(addr);
-            OpTrace{}
+            OpTrace::Addr(addr)
         }
     }
 }

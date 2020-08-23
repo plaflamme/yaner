@@ -37,7 +37,7 @@ pub(in crate::cpu) fn brk<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let pc = pc_hi << 8 | pc_lo;
         cpu.pc.set(pc);
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 
@@ -69,7 +69,7 @@ pub(in crate::cpu) fn jsr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let pc = addr_hi << 8 | addr_lo;
         cpu.pc.set(pc);
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 
@@ -101,7 +101,7 @@ pub(in crate::cpu) fn rti<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let pc_hi = cpu.read_stack() as u16;
         cpu.pc.set((pc_hi << 8) | pc_lo);
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 
@@ -130,7 +130,7 @@ pub(in crate::cpu) fn rts<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let pc = ((pc_hi << 8) | pc_lo).wrapping_add(1);
         cpu.pc.set(pc);
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 
@@ -145,7 +145,7 @@ fn push<'a>(cpu: &'a Cpu, value: u8) -> impl Generator<Yield = CpuCycle, Return 
         yield CpuCycle::Tick;
 
         cpu.push_stack(value);
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 pub(in crate::cpu) fn php<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
@@ -184,7 +184,7 @@ pub(in crate::cpu) fn plp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         flags.insert(Flags::U); // this must always be 1
         cpu.flags.set(flags);
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }
 
@@ -194,6 +194,6 @@ pub(in crate::cpu) fn pla<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         cpu.acc.set(value);
         cpu.set_flags_from_acc();
 
-        OpTrace{}
+        OpTrace::Implicit
     }
 }

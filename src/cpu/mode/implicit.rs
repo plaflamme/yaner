@@ -7,5 +7,5 @@ use super::*;
 pub(in crate::cpu) fn run<'a, O: ImplicitOperation>(operation: &O, cpu: &Cpu) -> OpTrace {
     let _ = cpu.pc_read_u8() as u16;
     operation.operate(cpu);
-    OpTrace{}
+    OpTrace::Implicit
 }

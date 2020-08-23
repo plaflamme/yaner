@@ -26,6 +26,7 @@ pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
         let addr = (addr_hi as u16) << 8 | addr_lo.wrapping_add(1) as u16;
         let pc_hi = cpu.bus.read_u8(addr);
         cpu.pc.set((pc_hi as u16) << 8 | pc_lo as u16);
-        OpTrace{}
+
+        OpTrace::Addr(addr)
     }
 }

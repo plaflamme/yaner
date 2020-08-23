@@ -13,7 +13,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu)
 
         let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -38,7 +38,7 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a 
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -53,6 +53,6 @@ pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cp
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, operation.operate(cpu));
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }

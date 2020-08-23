@@ -29,7 +29,7 @@ fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -64,7 +64,7 @@ fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> 
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
@@ -88,7 +88,7 @@ fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> im
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = operation.operate(cpu);
         cpu.bus.write_u8(addr, value);
-        OpTrace{}
+        OpTrace::Addr(addr)
     }
 }
 
