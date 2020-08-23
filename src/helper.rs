@@ -3,13 +3,11 @@
 macro_rules! yield_complete {
     ($gn:expr) => {
         {
-            use std::ops::{Generator, GeneratorState};
-            use std::pin::Pin;
             let mut gen = $gn;
             loop {
-                match Generator::resume(Pin::new(&mut gen), ()) {
-                    GeneratorState::Yielded(value) => yield value,
-                    GeneratorState::Complete(value) => break value
+                match std::ops::Generator::resume(std::pin::Pin::new(&mut gen), ()) {
+                    std::ops::GeneratorState::Yielded(value) => yield value,
+                    std::ops::GeneratorState::Complete(value) => break value
                 };
             }
         }
@@ -20,13 +18,11 @@ macro_rules! yield_complete {
 macro_rules! consume_generator {
 ($gn:expr, $y: expr) => {
         {
-            use std::ops::{Generator, GeneratorState};
-            use std::pin::Pin;
             let mut gen = $gn;
             loop {
-                match Generator::resume(Pin::new(&mut gen), ()) {
-                    GeneratorState::Yielded(_) => $y,
-                    GeneratorState::Complete(value) => break value
+                match std::ops::Generator::resume(std::pin::Pin::new(&mut gen), ()) {
+                    std::ops::GeneratorState::Yielded(_) => $y,
+                    std::ops::GeneratorState::Complete(value) => break value
                 };
             }
         }

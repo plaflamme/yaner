@@ -1,6 +1,5 @@
 #![feature(generators, generator_trait)]
 
-#[macro_use]
 extern crate yaner;
 
 use std::convert::TryFrom;
@@ -62,7 +61,7 @@ fn main() {
         Run { pc, output, rom  } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
-            consume_generator!(nes.run(pc), ());
+            nes.run(pc);
             if let Some(addr) = output {
                 let value = nes.ram().read_u16(addr);
                 println!("{:#04X} -> {:#04X}", addr, value);

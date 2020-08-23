@@ -120,6 +120,33 @@ fn assert_log(nes: &Nes, line: &LogLine) {
     // TODO: check ppu scanline and cycle
 }
 
+// Steps the same way nintendulator does, which is:
+//   (cpu_step + 3 * ppu_step)
+//   if cpu_step == OpComplete { yield () }
+fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '_ {
+    let mut ppu_steps = nes.ppu_steps(Some(0xC000));
+    move || {
+        let mut ppu_cycles = 0u64;
+        let mut yield_on_next = false;
+        loop {
+            match Generator::resume(Pin::new(&mut ppu_steps), ()) {
+                GeneratorState::Yielded(NesCycle::PowerUp) => yield (),
+                GeneratorState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
+                    ppu_cycles += 1;
+                    yield_on_next = true;
+                },
+                GeneratorState::Yielded(_) => ppu_cycles += 1,
+                GeneratorState::Complete(_) => break,
+            }
+
+            if yield_on_next && ppu_cycles % 3 == 0 {
+                yield_on_next = false;
+                yield ();
+            }
+        }
+    }
+}
+
 #[test]
 fn test_nestest() {
 
@@ -128,27 +155,16 @@ fn test_nestest() {
     let cartridge = Cartridge::try_from(Path::new("roms/nes-test-roms/other/nestest.nes").to_owned()).unwrap();
     let nes = Nes::new(cartridge);
 
-    let mut clock = nes.run(Some(0xC000));
+    let mut steps = nintendulator_steps(&nes);
 
     let mut log_iter = log.iter();
 
     loop {
-        match Generator::resume(Pin::new(&mut clock), ()) {
-            GeneratorState::Yielded(value) => {
-                match value {
-                    NesCycle::PowerUp => {
-                        match log_iter.next() {
-                            Some(line) => assert_log(&nes, line),
-                            None => () // log is shorter than actual test
-                        }
-                    },
-                    NesCycle::Tick(CpuCycle::OpComplete(_, _)) => {
-                        match log_iter.next() {
-                            Some(line) => assert_log(&nes, line),
-                            None => () // log is shorter than actual test
-                        }
-                    },
-                    _ => ()
+        match Generator::resume(Pin::new(&mut steps), ()) {
+            GeneratorState::Yielded(_) => {
+                match log_iter.next() {
+                    Some(line) => assert_log(&nes, line),
+                    None => () // log is shorter than actual test
                 }
             },
             GeneratorState::Complete(_) => break
