@@ -23,14 +23,16 @@ use super::*;
 //
 //        ! If branch occurs to different page, this cycle will be
 //          executed.
-pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield=CpuCycle, Return=()> + 'a {
+pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return= OpTrace> + 'a {
     move || {
         let operand = cpu.next_pc_read_u8() as i8;
-        yield CpuCycle::Tick;
 
-        if operation.branch(cpu) {
+        if !operation.branch(cpu) {
+            OpTrace{}
+        } else {
             let pc = cpu.pc.get() as i16;
             let addr = pc.wrapping_add(operand as i16) as u16;
+            yield CpuCycle::Tick;
 
             if ((pc as u16) & 0xFF00) != (addr & 0xFF00) {
                 // crossing page boundary incurs an additional cycle
@@ -38,8 +40,7 @@ pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a 
             }
 
             cpu.pc.set(addr);
-            yield CpuCycle::Tick;
+            OpTrace{}
         }
-
     }
 }

@@ -16,6 +16,7 @@ use nom::combinator::map_res;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::{Nes, NesCycle};
+use yaner::cpu::CpuCycle;
 
 #[derive(Debug)]
 struct LogLine {
@@ -135,7 +136,13 @@ fn test_nestest() {
         match Generator::resume(Pin::new(&mut clock), ()) {
             GeneratorState::Yielded(value) => {
                 match value {
-                    NesCycle::PowerUp | NesCycle::CpuOp(_) => {
+                    NesCycle::PowerUp => {
+                        match log_iter.next() {
+                            Some(line) => assert_log(&nes, line),
+                            None => () // log is shorter than actual test
+                        }
+                    },
+                    NesCycle::Tick(CpuCycle::OpComplete(_, _)) => {
                         match log_iter.next() {
                             Some(line) => assert_log(&nes, line),
                             None => () // log is shorter than actual test

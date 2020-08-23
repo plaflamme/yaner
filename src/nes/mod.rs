@@ -4,7 +4,7 @@ use std::fmt::{Display, Error, Formatter};
 
 use dma::DmaCycle;
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle};
+use crate::cpu::{Cpu, CpuBus, CpuCycle, OpTrace};
 use crate::cpu::opcode::OpCode;
 use crate::ppu::{Ppu, PpuBus, PpuCycle, MemoryMappedRegisters};
 use std::rc::Rc;
@@ -16,8 +16,7 @@ mod dma;
 
 pub enum NesCycle {
     PowerUp,
-    CpuOp(OpCode),
-    PpuFrame,
+    Tick(CpuCycle),
 }
 
 pub struct Nes {
@@ -60,26 +59,33 @@ impl Nes {
 
         move || {
 
+            // TODO: this steps according to how nestest assumes things
+            //   but we can implement different styles, e.g.: step per frame, per cpu op, per nes tick, etc.
             trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
             yield NesCycle::PowerUp;
             loop {
-                if clock % self.cpu_clock.divisor == 0 && !self.cpu_clock.suspended() {
+
+                let mut cpu_step = || {
                     match Pin::new(&mut cpu).resume(()) {
-                        GeneratorState::Yielded(CpuCycle::Tick) => self.cpu_clock.tick(),
-                        GeneratorState::Yielded(CpuCycle::OpComplete(opcode)) => {
-                            trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
-                            // TODO: it's annoying that this isn't an actual tick.
-                            //   It'd be simpler to have something like CpuCycle::Tick(Some(op))
-                            yield NesCycle::CpuOp(opcode);
-                            continue;
+                        GeneratorState::Yielded(cycle) => {
+                            self.cpu_clock.tick();
+                            cycle
                         },
-                        GeneratorState::Yielded(CpuCycle::Halt) => {
-                            trace!("HALT");
-                            break;
+                        GeneratorState::Complete(_) => panic!("cpu stopped"),
+                    }
+                };
+
+                let mut ppu_cycle = || {
+                    match Pin::new(&mut ppu).resume(()) {
+                        GeneratorState::Yielded(ppu_cycle) => {
+                            self.ppu_clock.tick();
+                            ppu_cycle
                         },
-                        GeneratorState::Complete(_) => unimplemented!()
-                    };
-                }
+                        GeneratorState::Complete(_) => panic!("ppu stopped")
+                    }
+                };
+
+                let cpu_cycle = cpu_step();
 
                 match Pin::new(&mut dma).resume(()) {
                     GeneratorState::Yielded(DmaCycle::NoDma) => (),
@@ -93,16 +99,18 @@ impl Nes {
                     self.cpu_clock.suspend();
                 }
 
-                if clock % self.ppu_clock.divisor == 0 {
-                    match Pin::new(&mut ppu).resume(()) {
-                        GeneratorState::Yielded(PpuCycle::Tick) => self.ppu_clock.tick(),
-                        GeneratorState::Yielded(PpuCycle::Frame) => {
-                            self.ppu_clock.tick();
-                            yield NesCycle::PpuFrame;
-                        },
-                        GeneratorState::Complete(_) => unimplemented!()
-                    }
-                }
+                ppu_cycle();
+                ppu_cycle();
+                ppu_cycle();
+
+                match cpu_cycle {
+                    CpuCycle::OpComplete(_, _) => {
+                        trace!("{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock);
+                        yield NesCycle::Tick(cpu_cycle);
+                    },
+                    CpuCycle::Halt => break,
+                    _ => ()
+                };
 
                 // go as fast as the PPU
                 clock = clock.wrapping_add(self.ppu_clock.divisor);

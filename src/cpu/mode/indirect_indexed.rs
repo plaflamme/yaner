@@ -31,12 +31,12 @@ fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '
 //
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
-pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
         let value = cpu.bus.read_u8(addr);
         operation.operate(cpu, value);
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
 
@@ -55,7 +55,7 @@ pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
 #[allow(dead_code)]
-pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
         let value = cpu.bus.read_u8(addr);
@@ -66,7 +66,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
 
@@ -81,11 +81,11 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //
 // Note: The effective address is always fetched from zero page,
 //       i.e. the zero page boundary crossing is not handled.
-pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
         cpu.bus.write_u8(addr, operation.operate(cpu));
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
 
@@ -134,11 +134,11 @@ fn ind_y<'a>(eager: bool, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Retu
 //
 //        + This cycle will be executed only if the effective address
 //          was invalid during cycle #5, i.e. page boundary was crossed.
-pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (_, value) = yield_complete!(ind_y(false, cpu));
         operation.operate(cpu, value);
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
 
@@ -162,7 +162,7 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 //        * The high byte of the effective address may be invalid
 //          at this time, i.e. it may be smaller by $100.
 #[allow(dead_code)]
-pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, value) = yield_complete!(ind_y(true, cpu));
         yield CpuCycle::Tick;
@@ -172,7 +172,7 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
         yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
 
@@ -192,10 +192,10 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //
 //        * The high byte of the effective address may be invalid
 //          at this time, i.e. it may be smaller by $100.
-pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, _) = yield_complete!(ind_y(true, cpu));
         cpu.bus.write_u8(addr, operation.operate(cpu));
-        yield CpuCycle::Tick;
+        OpTrace{}
     }
 }
