@@ -18,3 +18,7 @@ criterion = "0.3"
 [[bench]]
 name = "cpu"
 harness = false
+
+[[bench]]
+name = "ppu"
+harness = false

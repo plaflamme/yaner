@@ -11,6 +11,7 @@ use crate::cpu::{Cpu, CpuBus, CpuCycle};
 use crate::memory::AddressSpace;
 use crate::nes::dma::Dma;
 use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
+use std::borrow::BorrowMut;
 
 mod dma;
 
@@ -156,6 +157,18 @@ impl Nes {
         }
     }
 
+    pub fn ppu_stepper(&self, start_at: Option<u16>) -> Stepper<NesCycle> {
+        Stepper::new(self.ppu_steps(start_at))
+    }
+
+    pub fn ppu_frame_stepper(&self, start_at: Option<u16>) -> Stepper<PpuCycle> {
+        Stepper::new(self.ppu_frames(start_at))
+    }
+
+    pub fn cpu_op_stepper(&self, start_at: Option<u16>) -> Stepper<NesCycle> {
+        Stepper::new(self.cpu_steps(start_at))
+    }
+
     // runs the program until the CPU halts
     pub fn run(&self, start_at: Option<u16>) {
         consume_generator!(self.ppu_frames(start_at), ())
@@ -165,6 +178,32 @@ impl Nes {
 impl Display for Nes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock)
+    }
+}
+
+pub struct Stepper<'a, Y> {
+    stepper: Box<dyn Generator<Yield = Y, Return = ()> + Unpin + 'a>,
+    steps: u64,
+}
+
+impl<'a, Y> Stepper<'a, Y> {
+    fn new(generator: impl Generator<Yield = Y, Return = ()> + Unpin + 'a) -> Self {
+        Stepper {
+            stepper: Box::new(generator),
+            steps: 0,
+        }
+    }
+
+    pub fn step(&mut self) -> Y {
+        // NOTE: we have to help the compiler here by using type ascription
+        let gen: &mut (dyn Generator<Yield = Y, Return = ()> + Unpin) = self.stepper.borrow_mut();
+        match Pin::new(gen).resume(()) {
+            GeneratorState::Yielded(cycle) => {
+                self.steps += 1;
+                cycle
+            },
+            GeneratorState::Complete(_) => panic!("clock stopped"),
+        }
     }
 }
 
