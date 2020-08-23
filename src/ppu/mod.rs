@@ -196,12 +196,12 @@ impl Ppu {
                             self.status.set(status);
                         }
 
-                        // we yield a frame instead
-                        if dot < 340 {
+                        if dot < 340 || scanline < 261 {
                             yield PpuCycle::Tick;
+                        } else {
+                            yield PpuCycle::Frame;
                         }
                     }
-                    yield PpuCycle::Frame;
                 }
             }
         }
