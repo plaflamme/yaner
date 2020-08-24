@@ -214,7 +214,7 @@ pub enum PpuCycle {
 }
 
 pub struct PpuBus {
-    vram: Mirrored<Ram2KB>,
+    pub vram: Mirrored<Ram2KB>,
     palette: Mirrored<Ram32>,
     mapper: Rc<RefCell<Box<dyn Mapper>>>,
 }
@@ -250,7 +250,7 @@ impl AddressSpace for PpuBus {
 }
 
 pub struct MemoryMappedRegisters {
-    bus: PpuBus,
+    pub bus: PpuBus,
     ppu: Rc<Ppu>
 }
 

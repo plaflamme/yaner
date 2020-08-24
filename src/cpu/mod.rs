@@ -622,7 +622,7 @@ trait WriteOperation {
 }
 
 pub struct CpuBus {
-    ram: Ram2KB,
+    pub ram: Ram2KB,
     pub ppu_registers: MemoryMappedRegisters,
     mapper: Rc<RefCell<Box<dyn Mapper>>>,
     oam_dma: Cell<Option<u8>>

@@ -39,6 +39,13 @@ enum YanerCommand {
         /// The iNES ROM file.
         rom: PathBuf,
     },
+    Debug {
+        #[structopt(short, parse(try_from_str = parse_hex))]
+        /// Sets the initial PC value instead of reading it from the reset vector.
+        pc: Option<u16>,
+        /// The iNES ROM file.
+        rom: PathBuf,
+    },
     Generate,
 }
 
@@ -67,6 +74,11 @@ fn main() {
                 println!("{:#04X} -> {:#04X}", addr, value);
             }
         },
+        Debug { pc, rom } => {
+            let cartridge = Cartridge::try_from(rom).unwrap();
+            let nes = Nes::new(cartridge);
+            yaner::tui::main(&nes, pc).unwrap();
+        }
         Generate => {
             yaner::cpu::generator::generate_opcode_table()
         },

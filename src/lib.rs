@@ -7,6 +7,7 @@ pub mod cartridge;
 pub mod cpu;
 pub mod ppu;
 pub mod nes;
+pub mod tui;
 
 #[macro_use]
 extern crate log;
