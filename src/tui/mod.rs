@@ -10,10 +10,8 @@ use tui::style::{Modifier, Style};
 use tui::text::{Span, Spans};
 use tui::widgets::{Block, Borders, Paragraph, Row, Table, Widget};
 
-use crate::cpu::CpuCycle;
 use crate::memory::AddressSpace;
-use crate::nes::{Nes, NesCycle};
-use crate::ppu::PpuCycle;
+use crate::nes::{Nes, NesCycle, Stepper};
 
 fn cpu_block(nes: &Nes) -> Paragraph {
 
@@ -80,42 +78,35 @@ fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes) -> Result<(), io::Err
     })
 }
 
-pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), io::Error> {
+pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
     let stdout = io::stdout().into_raw_mode()?;
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut stepper = nes.ppu_stepper(start_at);
+    let mut stepper = Stepper::new(nes, start_at);
     let mut input = termion::async_stdin().keys();
 
     let mut running = false;
 
     // powerup
-    stepper.step();
+    stepper.tick()?;
     loop {
-        if running {
-            stepper.step();
+        if running && !stepper.halted(){
+            stepper.tick()?;
         }
         draw(&mut terminal, nes)?;
         if let Some(input_result) = input.next() {
             match input_result? {
                 Key::Ctrl('c') | Key::Char('q') => break,
-                Key::Char('f') => loop {
-                    match stepper.step() {
-                        NesCycle::CpuCycle(_, PpuCycle::Frame) => break,
-                        NesCycle::PpuCycle(PpuCycle::Frame) => break,
-                        _ => ()
-                    }
+                Key::Char('f') => {
+                    stepper.step_frame()?;
                 },
-                Key::Char('o') => loop {
-                    match stepper.step() {
-                        NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _) => break,
-                        _ => ()
-                    }
+                Key::Char('o') => {
+                    stepper.step_cpu()?;
                 },
                 Key::Char('s') => {
-                    stepper.step();
+                    stepper.tick()?;
                 },
                 Key::Char('r') => running = !running,
                 _ => ()

@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::fmt::{Display, Error, Formatter};
+use std::fmt::{Display, Formatter};
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -12,9 +12,40 @@ use crate::memory::AddressSpace;
 use crate::nes::dma::Dma;
 use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
 use std::borrow::BorrowMut;
+use std::error::Error;
 
 mod dma;
 
+pub struct Clocks {
+    pub cpu_cycles: Cell<u64>,
+    pub ppu_cycles: Cell<u64>,
+}
+
+impl Clocks {
+    fn new() -> Self {
+        // start at 7 due to reset interrupt handling
+        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
+        let cpu_cycles = 7u64;
+        // starts at 21, probably for the same reason as above, but this doesn't seem to be documented anywhere
+        let ppu_cycles = 21u64;
+        Clocks { cpu_cycles: Cell::new(cpu_cycles), ppu_cycles: Cell::new(ppu_cycles) }
+    }
+
+    fn tick(&self, with_cpu_cycle: bool) {
+        self.ppu_cycles.update(|c| c.wrapping_add(1));
+        if with_cpu_cycle {
+            self.cpu_cycles.update(|c| c.wrapping_add(1));
+        }
+    }
+
+    pub fn ppu_frame(&self) -> u64 {
+        self.ppu_cycles.get() / 341
+    }
+
+    pub fn ppu_dot(&self) -> u16 {
+        (self.ppu_cycles.get() % 341) as u16
+    }
+}
 pub enum NesCycle {
     PowerUp,
     PpuCycle(PpuCycle),
@@ -25,8 +56,7 @@ pub struct Nes {
     pub cpu: Cpu,
     ppu: Rc<Ppu>,
     dma: Dma,
-    pub cpu_clock: CpuClock,
-    pub ppu_clock: PpuClock,
+    pub clocks: Clocks,
     // TODO: apu
     // TODO: input
 }
@@ -43,8 +73,7 @@ impl Nes {
             cpu: Cpu::new(cpu_bus),
             ppu,
             dma: Dma::new(),
-            cpu_clock: CpuClock::new(),
-            ppu_clock: PpuClock::new(),
+            clocks: Clocks::new(),
         }
     }
 
@@ -55,19 +84,19 @@ impl Nes {
     // yields on every nes ppu tick
     pub fn ppu_steps(&self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
 
-        let mut clock = 0u64;
+        let mut cpu_suspended = false;
         let mut cpu = self.cpu.run(start_at);
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
 
         move || {
+
             yield NesCycle::PowerUp;
             loop {
 
                 let mut ppu_step = || {
                     match Pin::new(&mut ppu).resume(()) {
                         GeneratorState::Yielded(cycle) => {
-                            self.ppu_clock.tick();
                             cycle
                         },
                         GeneratorState::Complete(_) => panic!("ppu stopped"),
@@ -76,218 +105,125 @@ impl Nes {
 
                 let mut dma_step = || {
                     match Pin::new(&mut dma).resume(()) {
-                        GeneratorState::Yielded(DmaCycle::NoDma) => (),
-                        GeneratorState::Yielded(DmaCycle::Tick) => (),
-                        GeneratorState::Yielded(DmaCycle::Done) => self.cpu_clock.resume(),
-                        GeneratorState::Complete(_) => (),
-                    };
-
-                    if let Some(addr) = self.cpu.bus.dma_latch() {
-                        self.dma.start(addr, self.cpu_clock.cycle.get());
-                        self.cpu_clock.suspend();
+                        GeneratorState::Yielded(DmaCycle::NoDma) => true,
+                        GeneratorState::Yielded(DmaCycle::Tick) => true,
+                        GeneratorState::Yielded(DmaCycle::Done) => false,
+                        GeneratorState::Complete(_) => true,
                     }
                 };
 
-                if !self.cpu_clock.suspended() && clock % self.cpu_clock.divisor == 0 {
+                if let Some(addr) = self.cpu.bus.dma_latch() {
+                    self.dma.start(addr, self.clocks.cpu_cycles.get());
+                    cpu_suspended = true;
+                }
+
+                if !cpu_suspended && self.clocks.ppu_cycles.get() % 3 == 0 {
                     match Pin::new(&mut cpu).resume(()) {
                         GeneratorState::Yielded(CpuCycle::Halt) => break,
                         GeneratorState::Yielded(cpu_cycle) => {
-                            self.cpu_clock.tick();
+                            self.clocks.tick(true);
                             yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
                         },
                         GeneratorState::Complete(_) => panic!("cpu stopped"),
                     }
                 } else {
-                    if self.cpu_clock.suspended() {
-                        dma_step();
+                    if cpu_suspended {
+                        cpu_suspended = dma_step();
                     }
+                    self.clocks.tick(false);
                     yield NesCycle::PpuCycle(ppu_step());
                 }
 
-                // go as fast as the PPU
-                clock = clock.wrapping_add(self.ppu_clock.divisor);
-
-                if clock % 10_000 == 0 {
+                if self.clocks.ppu_cycles.get() % 10_000 == 0 { // TODO: this should be ~100ms
                     self.ppu.decay_open_bus()
                 }
             }
         }
     }
 
-    // yields only when the cpu finishes an operation
-    //   note that this will hide ppu frames, so it's likely only useful for debugging
-    pub fn cpu_steps(&self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
-
-        let mut ppu_steps = self.ppu_steps(start_at);
-
-        move || {
-            loop {
-                match Pin::new(&mut ppu_steps).resume(()) {
-                    GeneratorState::Yielded(NesCycle::PowerUp) => {
-                        trace!("{}", self);
-                        yield NesCycle::PowerUp
-                    },
-                    GeneratorState::Yielded(cycle@NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
-                        trace!("{}", self);
-                        yield cycle
-                    },
-                    GeneratorState::Yielded(_) => (),
-                    GeneratorState::Complete(_) => break
-                }
-            }
-        }
-    }
-
-    // yields once for every ppu frame
-    pub fn ppu_frames(&self, start_at: Option<u16>) -> impl Generator<Yield = PpuCycle, Return = ()> + '_ {
-        let mut ppu_steps = self.ppu_steps(start_at);
-        move || {
-            loop {
-                match Pin::new(&mut ppu_steps).resume(()) {
-                    GeneratorState::Yielded(NesCycle::CpuCycle(_, frame@PpuCycle::Frame)) => {
-                        yield frame;
-                    },
-                    GeneratorState::Yielded(NesCycle::PpuCycle(frame@PpuCycle::Frame)) => {
-                        yield frame;
-                    },
-                    GeneratorState::Yielded(_) => (),
-                    GeneratorState::Complete(_) => break
-                }
-            }
-        }
-    }
-
-    pub fn ppu_stepper(&self, start_at: Option<u16>) -> Stepper<NesCycle> {
-        Stepper::new(self.ppu_steps(start_at))
-    }
-
-    pub fn ppu_frame_stepper(&self, start_at: Option<u16>) -> Stepper<PpuCycle> {
-        Stepper::new(self.ppu_frames(start_at))
-    }
-
-    pub fn cpu_op_stepper(&self, start_at: Option<u16>) -> Stepper<NesCycle> {
-        Stepper::new(self.cpu_steps(start_at))
-    }
-
     // runs the program until the CPU halts
     pub fn run(&self, start_at: Option<u16>) {
-        consume_generator!(self.ppu_frames(start_at), ())
+        let mut stepper = Stepper::new(self, start_at);
+        loop {
+            match stepper.step_frame() {
+                Ok(_) => (),
+                Err(StepperError::Halted) => break
+            }
+        }
     }
 }
 
 impl Display for Nes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.cpu, self.ppu_clock, self.cpu_clock)
+        write!(f, "{}", self.cpu)
     }
 }
 
-pub struct Stepper<'a, Y> {
-    stepper: Box<dyn Generator<Yield = Y, Return = ()> + Unpin + 'a>,
-    steps: u64,
+#[derive(Clone, Copy, Debug)]
+pub enum StepperError {
+    Halted
 }
 
-impl<'a, Y> Stepper<'a, Y> {
-    fn new(generator: impl Generator<Yield = Y, Return = ()> + Unpin + 'a) -> Self {
-        Stepper {
-            stepper: Box::new(generator),
-            steps: 0,
-        }
-    }
-
-    pub fn step(&mut self) -> Y {
-        // NOTE: we have to help the compiler here by using type ascription
-        let gen: &mut (dyn Generator<Yield = Y, Return = ()> + Unpin) = self.stepper.borrow_mut();
-        match Pin::new(gen).resume(()) {
-            GeneratorState::Yielded(cycle) => {
-                self.steps += 1;
-                cycle
-            },
-            GeneratorState::Complete(_) => panic!("clock stopped"),
+impl Display for StepperError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StepperError::Halted => write!(f, "NES has already halted, cannot step"),
         }
     }
 }
 
-trait Clock {
-    fn divisor(&self) -> u64;
-    fn tick(&self);
-    fn suspended(&self) -> bool;
+impl Error for StepperError {}
+
+pub struct Stepper<'a> {
+    steps: Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'a>,
+    halted: bool,
 }
 
-pub struct CpuClock {
-    divisor: u64,
-    cycle: Cell<u64>,
-    suspended: Cell<bool>
-}
+impl<'a> Stepper<'a> {
 
-impl CpuClock {
-    fn new() -> Self {
-        // start at 7 due to reset interrupt handling
-        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        CpuClock { divisor: 12, cycle: Cell::new(7), suspended: Cell::new(false) }
+    // TODO: normally, this should consume `Nes`, but this requires more refactoring
+    pub fn new(nes: &'a Nes, start_at: Option<u16>) -> Self {
+        Stepper { steps: Box::new(nes.ppu_steps(start_at)), halted: false }
     }
 
-    pub fn cycle(&self) -> u64 {
-        self.cycle.get()
+    pub fn halted(&self) -> bool {
+        self.halted
     }
 
-    fn suspend(&self) {
-        self.suspended.set(true);
+    pub fn tick(&mut self) -> Result<NesCycle, StepperError> {
+        if self.halted {
+            Err(StepperError::Halted)
+        } else {
+            // NOTE: we have to help the compiler here by using type ascription
+            let gen: &mut (dyn Generator<Yield=NesCycle, Return=()> + Unpin) = self.steps.borrow_mut();
+            match Pin::new(gen).resume(()) {
+                GeneratorState::Yielded(cycle@NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
+                    self.halted = true;
+                    Ok(cycle)
+                }
+                GeneratorState::Yielded(cycle) => Ok(cycle),
+                GeneratorState::Complete(_) => Err(StepperError::Halted)
+            }
+        }
     }
 
-    fn resume(&self) {
-        self.suspended.set(false);
-    }
-}
-
-impl Clock for CpuClock {
-    fn divisor(&self) -> u64 { self.divisor }
-
-    fn tick(&self) {
-        self.cycle.update(|c| c + 1);
+    pub fn step_frame(&mut self) -> Result<PpuCycle, StepperError> {
+        loop {
+            match self.tick()? {
+                NesCycle::CpuCycle(_, PpuCycle::Frame) => break Ok(PpuCycle::Frame),
+                NesCycle::PpuCycle(PpuCycle::Frame) => break Ok(PpuCycle::Frame),
+                _ => ()
+            }
+        }
     }
 
-    fn suspended(&self) -> bool {
-        self.suspended.get()
-    }
-}
-
-impl Display for CpuClock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "CYC:{}", self.cycle.get())
-    }
-}
-
-pub struct PpuClock {
-    divisor: u64,
-    cycle: Cell<u64>
-}
-
-impl PpuClock {
-    fn new() -> Self {
-        PpuClock { divisor: 4, cycle: Cell::new(21) }
-    }
-
-    pub fn frame(&self) -> u64 {
-        self.cycle.get() / 341
-    }
-
-    pub fn dot(&self) -> u16 {
-        (self.cycle.get() % 341) as u16
-    }
-}
-
-impl Clock for PpuClock {
-    fn divisor(&self) -> u64 { self.divisor }
-
-    fn tick(&self) {
-        self.cycle.update(|c| c + 1);
-    }
-
-    fn suspended(&self) -> bool { false }
-}
-
-impl Display for PpuClock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "PPU:{:>3},{:>3}", self.frame(), self.dot())
+    pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
+        loop {
+            match self.tick()? {
+                NesCycle::CpuCycle(cycle@CpuCycle::OpComplete(_, _), PpuCycle::Frame) => break Ok(cycle),
+                NesCycle::CpuCycle(CpuCycle::Halt, _) => break Ok(CpuCycle::Halt),
+                _ => ()
+            }
+        }
     }
 }

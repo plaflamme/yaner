@@ -15,6 +15,7 @@ rand = "0.7.2"
 # terminal ui
 tui = "0.10"
 termion = "1.5"
+anyhow = "1.0.32"
 
 [dev-dependencies]
 criterion = "0.3"

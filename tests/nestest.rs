@@ -108,15 +108,15 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
 }
 
 fn assert_log(nes: &Nes, line: &LogLine) {
-    assert_eq!(nes.cpu_clock.cycle(), line.cpu_cyc as u64, "incorrect cpu cycle at {}", line);
+    assert_eq!(nes.clocks.cpu_cycles.get(), line.cpu_cyc as u64, "incorrect cpu cycle at {}", line);
     assert_eq!(nes.cpu.pc.get(), line.pc, "incorrect pc at {}", line);
     assert_eq!(nes.cpu.acc.get(), line.a, "incorrect acc at {}", line);
     assert_eq!(nes.cpu.x.get(), line.x, "incorrect x at {}", line);
     assert_eq!(nes.cpu.y.get(), line.y, "incorrect y at {}", line);
     assert_eq!(nes.cpu.flags(), line.flags, "incorrect flags at {}", line);
     assert_eq!(nes.cpu.sp.get(), line.sp, "incorrect stack pointer at {}", line);
-    assert_eq!(nes.ppu_clock.frame(), line.ppu_frame as u64, "incorrect ppu frame at {}", line);
-    assert_eq!(nes.ppu_clock.dot(), line.ppu_dot as u16, "incorrect ppu dot at {}", line);
+    assert_eq!(nes.clocks.ppu_frame(), line.ppu_frame as u64, "incorrect ppu frame at {}", line);
+    assert_eq!(nes.clocks.ppu_dot(), line.ppu_dot as u16, "incorrect ppu dot at {}", line);
     // TODO: check ppu scanline and cycle
 }
 
@@ -126,20 +126,18 @@ fn assert_log(nes: &Nes, line: &LogLine) {
 fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '_ {
     let mut ppu_steps = nes.ppu_steps(Some(0xC000));
     move || {
-        let mut ppu_cycles = 0u64;
         let mut yield_on_next = false;
         loop {
             match Generator::resume(Pin::new(&mut ppu_steps), ()) {
                 GeneratorState::Yielded(NesCycle::PowerUp) => yield (),
                 GeneratorState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
-                    ppu_cycles += 1;
                     yield_on_next = true;
                 },
-                GeneratorState::Yielded(_) => ppu_cycles += 1,
+                GeneratorState::Yielded(_) => (),
                 GeneratorState::Complete(_) => break,
             }
 
-            if yield_on_next && ppu_cycles % 3 == 0 {
+            if yield_on_next && nes.clocks.ppu_cycles.get() % 3 == 0 {
                 yield_on_next = false;
                 yield ();
             }

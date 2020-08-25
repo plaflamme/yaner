@@ -1,8 +1,5 @@
 #![feature(generators, generator_trait)]
 
-#[macro_use]
-extern crate yaner;
-
 use std::path::Path;
 
 use yaner::memory::AddressSpace;
