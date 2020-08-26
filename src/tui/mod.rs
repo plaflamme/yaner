@@ -35,6 +35,15 @@ fn cpu_block(nes: &Nes) -> Paragraph {
         .block(Block::default().title("CPU").borders(Borders::ALL))
 }
 
+fn prg_rom(nes: &Nes) -> impl Widget {
+
+    let addr_space = nes.cartridge.borrow().rom.prg_rom.clone();
+
+    nes.cpu.
+
+
+}
+
 fn ram_block<'a>(name: &'a str, addr_space: &'a dyn AddressSpace, base: u16, size: u16) -> impl Widget + 'a {
 
     let header = (0..16).map(|_| "");
