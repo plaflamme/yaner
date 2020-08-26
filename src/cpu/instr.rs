@@ -63,20 +63,24 @@ impl BranchOperation for bvs {
 pub struct AdcResult {
     r: u8,
     c: bool,
-    v: bool
+    v: bool,
 }
 fn do_adc(a: u8, b: u8, c: u8) -> AdcResult {
     let (v1, o1) = a.overflowing_add(b);
     let (v2, o2) = v1.overflowing_add(c);
 
-    AdcResult { r: v2, c: o1 | o2, v: (b^v2) & (a^v2) & 0x80 != 0 }
+    AdcResult {
+        r: v2,
+        c: o1 | o2,
+        v: (b ^ v2) & (a ^ v2) & 0x80 != 0,
+    }
 }
 
 // http://obelisk.me.uk/6502/reference.html#ADC
 pub struct adc;
 impl ReadOperation for adc {
     fn operate(&self, cpu: &Cpu, v: u8) {
-        let AdcResult { r, c, v} = do_adc(cpu.acc.get(), v, cpu.flag(Flags::C) as u8);
+        let AdcResult { r, c, v } = do_adc(cpu.acc.get(), v, cpu.flag(Flags::C) as u8);
         cpu.set_flag(Flags::C, c);
         cpu.set_flag(Flags::V, v);
 
@@ -141,14 +145,12 @@ impl ReadOperation for axs {
 
 pub struct bit;
 impl ReadOperation for bit {
-
     fn operate(&self, cpu: &Cpu, v: u8) {
         let r = cpu.acc.get() & v;
         cpu.set_flag(Flags::Z, r == 0);
         cpu.set_flag(Flags::V, (v & 0x40) != 0); // set to the 6th bit of the value
         cpu.set_flag(Flags::N, (v & 0x80) != 0); // set to the 7th bit of the value
     }
-
 }
 
 pub struct eor;
@@ -363,7 +365,9 @@ impl ModifyOperation for shx {
     fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> (u16, u8) {
         let addr_orig = addr - (cpu.y.get() as u16);
         let oops = (addr_orig & 0xFF00) != (addr & 0xFF00);
-        let addr_fixed = if !oops { addr } else {
+        let addr_fixed = if !oops {
+            addr
+        } else {
             addr & ((cpu.x.get() as u16) << 8)
         };
 
@@ -385,7 +389,9 @@ impl ModifyOperation for shy {
     fn modify(&self, cpu: &Cpu, addr: u16, _: u8) -> (u16, u8) {
         let addr_orig = addr - (cpu.x.get() as u16);
         let oops = (addr_orig & 0xFF00) != (addr & 0xFF00);
-        let addr_fixed = if !oops { addr } else {
+        let addr_fixed = if !oops {
+            addr
+        } else {
             addr & ((cpu.y.get() as u16) << 8)
         };
 
@@ -610,6 +616,4 @@ impl ImplicitOperation for tya {
     }
 }
 
-mod immediate {
-
-}
+mod immediate {}

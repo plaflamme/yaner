@@ -1,6 +1,6 @@
 #![feature(generators, generator_trait)]
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::convert::TryFrom;
 use std::path::Path;
 
@@ -21,13 +21,14 @@ fn ppu_benchmark(c: &mut Criterion) {
     for frames in vec![100, 200] {
         group.throughput(Throughput::Elements(frames));
 
-        let cart = Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
+        let cart =
+            Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
         let nes = Nes::new(cart);
         let mut stepper = Stepper::new(&nes, None);
 
         // group.sample_size(10);
         group.bench_function(format!("{}", frames), |b| {
-            b.iter(||run(&mut stepper, frames))
+            b.iter(|| run(&mut stepper, frames))
         });
     }
     group.finish();

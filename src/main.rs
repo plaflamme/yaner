@@ -21,13 +21,13 @@ struct Yaner {
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
     #[structopt(subcommand)]
-    cmd: YanerCommand
+    cmd: YanerCommand,
 }
 
 #[derive(Debug, StructOpt)]
 enum YanerCommand {
     Info {
-        rom: PathBuf
+        rom: PathBuf,
     },
     Run {
         #[structopt(short, parse(try_from_str = parse_hex))]
@@ -64,8 +64,8 @@ fn main() {
         Info { rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             println!("{}", cartridge);
-        },
-        Run { pc, output, rom  } => {
+        }
+        Run { pc, output, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
             nes.run(pc);
@@ -73,14 +73,12 @@ fn main() {
                 let value = nes.ram().read_u16(addr);
                 println!("{:#04X} -> {:#04X}", addr, value);
             }
-        },
+        }
         Debug { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
             yaner::tui::main(&nes, pc).unwrap();
         }
-        Generate => {
-            yaner::cpu::generator::generate_opcode_table()
-        },
+        Generate => yaner::cpu::generator::generate_opcode_table(),
     }
 }

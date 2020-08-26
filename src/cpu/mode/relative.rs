@@ -23,7 +23,10 @@ use super::*;
 //
 //        ! If branch occurs to different page, this cycle will be
 //          executed.
-pub(in crate::cpu) fn branch<'a, O: BranchOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return= OpTrace> + 'a {
+pub(in crate::cpu) fn branch<'a, O: BranchOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let operand = cpu.next_pc_read_u8() as i8;
 

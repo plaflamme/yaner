@@ -1,21 +1,10 @@
+use crate::memory::{AddressSpace, Ram, Ram8KB};
 use bitflags::bitflags;
 use nom::{
-    bits,
-    cond,
-    do_parse,
-    map_opt,
-    named,
-    tag,
-    take,
-    take_bits,
-    tuple,
-    verify,
-    combinator::rest,
-    error::ErrorKind,
-    number::complete::be_u8
+    bits, combinator::rest, cond, do_parse, error::ErrorKind, map_opt, named,
+    number::complete::be_u8, tag, take, take_bits, tuple, verify,
 };
 use std::convert::TryFrom;
-use crate::memory::{AddressSpace, Ram, Ram8KB};
 
 #[derive(Debug)]
 pub struct Header {
@@ -26,7 +15,7 @@ pub struct Header {
     mapper: u8,
     prg_ram_size: u8,
     flags_9: Flags9,
-    flags_10: u8
+    flags_10: u8,
 }
 
 bitflags! {
@@ -63,41 +52,48 @@ bitflags! {
 #[derive(PartialEq, Eq, Debug)]
 pub enum NametableMirroring {
     Horizontal, // vertical arrangement
-    Vertical, // horizontal arrangement
-    FourScreen
+    Vertical,   // horizontal arrangement
+    FourScreen,
 }
 
 impl From<Flags6> for NametableMirroring {
     fn from(flags: Flags6) -> Self {
-        if flags.contains(Flags6::FOUR_SCREEN) { NametableMirroring::FourScreen }
-        else if flags.contains(Flags6::VERTICAL) { NametableMirroring::Vertical }
-        else { NametableMirroring::Horizontal }
+        if flags.contains(Flags6::FOUR_SCREEN) {
+            NametableMirroring::FourScreen
+        } else if flags.contains(Flags6::VERTICAL) {
+            NametableMirroring::Vertical
+        } else {
+            NametableMirroring::Horizontal
+        }
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum TvStandard {
     NTSC,
-    PAL
+    PAL,
 }
 
 impl From<Flags9> for TvStandard {
     fn from(flags: Flags9) -> Self {
-        if flags.contains(Flags9::PAL) { TvStandard::PAL }
-        else { TvStandard::NTSC }
+        if flags.contains(Flags9::PAL) {
+            TvStandard::PAL
+        } else {
+            TvStandard::NTSC
+        }
     }
 }
 
 pub enum Chr {
     Rom(Vec<u8>),
-    Ram(Ram8KB)
+    Ram(Ram8KB),
 }
 
 impl Chr {
     pub fn addr_space_size(&self) -> usize {
         match self {
             Chr::Ram(_) => 8_192,
-            Chr::Rom(rom) => rom.len()
+            Chr::Rom(rom) => rom.len(),
         }
     }
 }
@@ -106,14 +102,14 @@ impl AddressSpace for Chr {
     fn read_u8(&self, addr: u16) -> u8 {
         match self {
             Chr::Rom(rom) => rom[addr as usize % rom.len()],
-            Chr::Ram(ram) => ram.read_u8(addr % 0x2000)
+            Chr::Ram(ram) => ram.read_u8(addr % 0x2000),
         }
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
         match self {
             Chr::Rom(_) => (),
-            Chr::Ram(ram) => ram.write_u8(addr % 0x2000, value)
+            Chr::Ram(ram) => ram.write_u8(addr % 0x2000, value),
         }
     }
 }
@@ -128,12 +124,12 @@ impl RomData {
     pub fn new(rom: &Rom) -> Self {
         let chr = match rom.chr_rom.len() {
             0 => Chr::Ram(Ram8KB::new()),
-            _ => Chr::Rom(rom.chr_rom.clone())
+            _ => Chr::Rom(rom.chr_rom.clone()),
         };
         RomData {
             prg_rom: rom.prg_rom.clone(),
             prg_ram: Ram::new(rom.prg_ram_size),
-            chr
+            chr,
         }
     }
 }
@@ -146,14 +142,14 @@ pub struct Rom {
     pub tv_standard: TvStandard,
     pub prg_ram_size: usize,
     pub prg_rom: Vec<u8>,
-    pub chr_rom: Vec<u8>
+    pub chr_rom: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum RomError {
     InvalidFormat,
     ParseError(String),
-    UnexpectedEof
+    UnexpectedEof,
 }
 
 named!(flags_6<&[u8], (u8, Flags6)>,
@@ -235,8 +231,12 @@ impl TryFrom<&[u8]> for Rom {
             Ok((_, rom)) => Ok(rom),
             Err(nom::Err::Incomplete(_)) => Err(RomError::UnexpectedEof),
             Err(nom::Err::Error((_, ErrorKind::Tag))) => Err(RomError::InvalidFormat), // tag error means the magic header didn't match
-            Err(nom::Err::Error((_, error))) => Err(RomError::ParseError(error.description().into())),
-            Err(nom::Err::Failure((_, error))) => Err(RomError::ParseError(error.description().into())),
+            Err(nom::Err::Error((_, error))) => {
+                Err(RomError::ParseError(error.description().into()))
+            }
+            Err(nom::Err::Failure((_, error))) => {
+                Err(RomError::ParseError(error.description().into()))
+            }
         }
     }
 }
@@ -252,7 +252,10 @@ mod tests {
 
         assert_eq!(None, nestest_rom.title);
         assert_eq!(0, nestest_rom.mapper);
-        assert_eq!(NametableMirroring::Horizontal, nestest_rom.nametable_mirroring);
+        assert_eq!(
+            NametableMirroring::Horizontal,
+            nestest_rom.nametable_mirroring
+        );
         assert_eq!(TvStandard::NTSC, nestest_rom.tv_standard);
         assert_eq!(8192, nestest_rom.prg_ram_size);
         assert_eq!(16_384, nestest_rom.prg_rom.len());
@@ -265,7 +268,7 @@ mod tests {
         let nestest_bytes: &[u8] = include_bytes!("../../roms/nes-test-roms/other/nestest.nes");
         match Rom::try_from(&nestest_bytes[1..]) {
             Ok(_) => panic!("unexpected success"),
-            Err(error) => assert_eq!(RomError::InvalidFormat, error)
+            Err(error) => assert_eq!(RomError::InvalidFormat, error),
         }
     }
 
@@ -274,7 +277,7 @@ mod tests {
         let nestest_bytes: &[u8] = include_bytes!("../../roms/nes-test-roms/other/nestest.nes");
         match Rom::try_from(&nestest_bytes[..100]) {
             Ok(_) => panic!("unexpected success"),
-            Err(error) => assert_eq!(RomError::UnexpectedEof, error)
+            Err(error) => assert_eq!(RomError::UnexpectedEof, error),
         }
     }
 }

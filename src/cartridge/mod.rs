@@ -1,9 +1,9 @@
+use crate::memory::AddressSpace;
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::fmt::{Display, Error, Formatter};
 use std::fs::File;
 use std::io::Read;
-use std::fmt::{Display, Formatter, Error};
-use crate::memory::AddressSpace;
+use std::path::PathBuf;
 
 mod mapper;
 mod rom;
@@ -27,11 +27,21 @@ pub struct Cartridge {
 
 impl Display for Cartridge {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        writeln!(f, "{} - {}", self.path.display(), self.rom.title.as_ref().unwrap_or(&"<no title>".to_string()))?;
+        writeln!(
+            f,
+            "{} - {}",
+            self.path.display(),
+            self.rom.title.as_ref().unwrap_or(&"<no title>".to_string())
+        )?;
         writeln!(f, "\tPRG ROM size: {} bytes", self.rom.prg_rom.len())?;
         writeln!(f, "\tCHR ROM size: {} bytes", self.rom.chr_rom.len())?;
         writeln!(f, "\tPRG RAM size: {} bytes", self.rom.prg_ram_size)?;
-        writeln!(f, "\tMapper      : {} ({})", self.mapper.name(), self.rom.mapper)?;
+        writeln!(
+            f,
+            "\tMapper      : {} ({})",
+            self.mapper.name(),
+            self.rom.mapper
+        )?;
         writeln!(f, "\tMirroring   : {:?}", self.rom.nametable_mirroring)?;
         writeln!(f, "\tTV Standard : {:?}", self.rom.tv_standard)
     }
@@ -66,12 +76,6 @@ impl TryFrom<PathBuf> for Cartridge {
 
         let mapper = mapper::from(&rom);
 
-        Ok(
-            Cartridge {
-                mapper,
-                path,
-                rom
-            }
-        )
+        Ok(Cartridge { mapper, path, rom })
     }
 }

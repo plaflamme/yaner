@@ -1,5 +1,5 @@
-use crate::memory::AddressSpace;
 use super::*;
+use crate::memory::AddressSpace;
 
 //  #   address  R/W description
 // --- --------- --- ------------------------------------------
@@ -11,7 +11,9 @@ use super::*;
 //
 // Note: * The PCH will always be fetched from the same page
 //         than PCL, i.e. page boundary crossing is not handled.
-pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn jmp<'a>(
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr_lo = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;

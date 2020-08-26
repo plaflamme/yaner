@@ -10,13 +10,13 @@ use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
 
-use nom::{AsChar, IResult};
 use nom::bytes::complete::take_while;
 use nom::combinator::map_res;
+use nom::{AsChar, IResult};
 
 use yaner::cartridge::Cartridge;
-use yaner::nes::{Nes, NesCycle};
 use yaner::cpu::CpuCycle;
+use yaner::nes::{Nes, NesCycle};
 
 #[derive(Debug)]
 struct LogLine {
@@ -60,10 +60,7 @@ named!(hex_u8<&str, u8>,
 // );
 
 fn d_u32(input: &str) -> IResult<&str, u32> {
-    map_res(
-        take_while(|c:char| c.is_digit(10)),
-        FromStr::from_str
-    )(input)
+    map_res(take_while(|c: char| c.is_digit(10)), FromStr::from_str)(input)
 }
 
 named!(parse_logline<&str, LogLine>,
@@ -97,9 +94,11 @@ named!(parse_logline<&str, LogLine>,
 
 fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
     let log = std::fs::read_to_string("roms/nes-test-roms/other/nestest.log")?;
-    let lines = log.lines()
+    let lines = log
+        .lines()
         .map(|line| {
-            let (_, log_line) = parse_logline(line).expect(format!("invalid log line {}", line).as_str());
+            let (_, log_line) =
+                parse_logline(line).expect(format!("invalid log line {}", line).as_str());
             log_line
         })
         .collect::<Vec<LogLine>>();
@@ -108,15 +107,35 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
 }
 
 fn assert_log(nes: &Nes, line: &LogLine) {
-    assert_eq!(nes.clocks.cpu_cycles.get(), line.cpu_cyc as u64, "incorrect cpu cycle at {}", line);
+    assert_eq!(
+        nes.clocks.cpu_cycles.get(),
+        line.cpu_cyc as u64,
+        "incorrect cpu cycle at {}",
+        line
+    );
     assert_eq!(nes.cpu.pc.get(), line.pc, "incorrect pc at {}", line);
     assert_eq!(nes.cpu.acc.get(), line.a, "incorrect acc at {}", line);
     assert_eq!(nes.cpu.x.get(), line.x, "incorrect x at {}", line);
     assert_eq!(nes.cpu.y.get(), line.y, "incorrect y at {}", line);
     assert_eq!(nes.cpu.flags(), line.flags, "incorrect flags at {}", line);
-    assert_eq!(nes.cpu.sp.get(), line.sp, "incorrect stack pointer at {}", line);
-    assert_eq!(nes.clocks.ppu_frame(), line.ppu_frame as u64, "incorrect ppu frame at {}", line);
-    assert_eq!(nes.clocks.ppu_dot(), line.ppu_dot as u16, "incorrect ppu dot at {}", line);
+    assert_eq!(
+        nes.cpu.sp.get(),
+        line.sp,
+        "incorrect stack pointer at {}",
+        line
+    );
+    assert_eq!(
+        nes.clocks.ppu_frame(),
+        line.ppu_frame as u64,
+        "incorrect ppu frame at {}",
+        line
+    );
+    assert_eq!(
+        nes.clocks.ppu_dot(),
+        line.ppu_dot as u16,
+        "incorrect ppu dot at {}",
+        line
+    );
     // TODO: check ppu scanline and cycle
 }
 
@@ -132,7 +151,7 @@ fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '
                 GeneratorState::Yielded(NesCycle::PowerUp) => yield (),
                 GeneratorState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
                     yield_on_next = true;
-                },
+                }
                 GeneratorState::Yielded(_) => (),
                 GeneratorState::Complete(_) => break,
             }
@@ -147,10 +166,10 @@ fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '
 
 #[test]
 fn test_nestest() {
-
     let log = parse_log().expect("cannot parse log");
 
-    let cartridge = Cartridge::try_from(Path::new("roms/nes-test-roms/other/nestest.nes").to_owned()).unwrap();
+    let cartridge =
+        Cartridge::try_from(Path::new("roms/nes-test-roms/other/nestest.nes").to_owned()).unwrap();
     let nes = Nes::new(cartridge);
 
     let mut steps = nintendulator_steps(&nes);
@@ -162,10 +181,10 @@ fn test_nestest() {
             GeneratorState::Yielded(_) => {
                 match log_iter.next() {
                     Some(line) => assert_log(&nes, line),
-                    None => () // log is shorter than actual test
+                    None => (), // log is shorter than actual test
                 }
-            },
-            GeneratorState::Complete(_) => break
+            }
+            GeneratorState::Complete(_) => break,
         };
     }
 

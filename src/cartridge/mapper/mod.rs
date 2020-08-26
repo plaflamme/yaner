@@ -1,6 +1,6 @@
-use crate::memory::AddressSpace;
 use super::rom::Rom;
 use super::Mapper;
+use crate::memory::AddressSpace;
 
 pub mod nrom;
 pub mod sxrom;
@@ -32,23 +32,28 @@ pub fn from(rom: &Rom) -> Box<dyn Mapper> {
 enum BankSelect {
     First,
     Last,
-    Index(u8)
+    Index(u8),
 }
 
 struct Switched<T: AddressSpace> {
     addr_space: T,
     addr_space_size: usize,
-    bank_size: u16
+    bank_size: u16,
 }
 
 impl<T: AddressSpace> Switched<T> {
-
     fn new(addr_space: T, addr_space_size: usize, bank_size: u16) -> Self {
-        assert_eq!(addr_space_size % bank_size as usize, 0, "Address space size ({}) must be a multiple of bank size ({})", addr_space_size, bank_size);
+        assert_eq!(
+            addr_space_size % bank_size as usize,
+            0,
+            "Address space size ({}) must be a multiple of bank size ({})",
+            addr_space_size,
+            bank_size
+        );
         Switched {
             addr_space,
             addr_space_size,
-            bank_size
+            bank_size,
         }
     }
 

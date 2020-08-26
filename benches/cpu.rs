@@ -1,6 +1,6 @@
 #![feature(generators, generator_trait)]
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::convert::TryFrom;
 use std::path::Path;
 
@@ -12,17 +12,19 @@ extern crate yaner;
 
 fn run(nes: &yaner::nes::Nes) {
     consume_generator!(nes.cpu.run(None), {
-      if nes.ram().read_u8(0x6001) == 0xDE && nes.ram().read_u8(0x6002) == 0xB0 && nes.ram().read_u8(0x6003) == 0x61 {
-        match nes.ram().read_u8(0x6000) {
-          0x80 => (),
-          _ => break
+        if nes.ram().read_u8(0x6001) == 0xDE
+            && nes.ram().read_u8(0x6002) == 0xB0
+            && nes.ram().read_u8(0x6003) == 0x61
+        {
+            match nes.ram().read_u8(0x6000) {
+                0x80 => (),
+                _ => break,
+            }
         }
-      }
     });
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-
     let carts = vec![
         "01-basics.nes",
         "02-implied.nes",
@@ -43,12 +45,19 @@ fn criterion_benchmark(c: &mut Criterion) {
     ];
 
     for &cart_name in carts.iter() {
-        let cart = Cartridge::try_from(Path::new(&format!("roms/nes-test-roms/instr_test-v5/rom_singles/{}", cart_name)).to_owned()).unwrap();
+        let cart = Cartridge::try_from(
+            Path::new(&format!(
+                "roms/nes-test-roms/instr_test-v5/rom_singles/{}",
+                cart_name
+            ))
+            .to_owned(),
+        )
+        .unwrap();
         let nes = Nes::new(cart);
         c.bench_with_input(
             BenchmarkId::new("instr-test-v5", cart_name),
             &nes,
-            |b, nes| b.iter(|| run(nes))
+            |b, nes| b.iter(|| run(nes)),
         );
     }
 }

@@ -2,9 +2,9 @@
 
 #[macro_use]
 pub mod helper;
-pub mod memory;
 pub mod cartridge;
 pub mod cpu;
-pub mod ppu;
+pub mod memory;
 pub mod nes;
+pub mod ppu;
 pub mod tui;

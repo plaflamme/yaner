@@ -1,5 +1,5 @@
-use crate::memory::AddressSpace;
 use super::*;
+use crate::memory::AddressSpace;
 
 fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
@@ -17,7 +17,9 @@ fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> 
 //  2    PC     R  fetch low address byte, increment PC
 //  3    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn jmp<'a>(
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         cpu.pc.set(addr);
@@ -32,7 +34,10 @@ pub(in crate::cpu) fn jmp<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, 
 //  2    PC     R  fetch low byte of address, increment PC
 //  3    PC     R  fetch high byte of address, increment PC
 //  4  address  R  read from effective address
-pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn read<'a, O: ReadOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;
@@ -53,7 +58,10 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu)
 //  5  address  W  write the value back to effective address,
 //                 and do the operation on it
 //  6  address  W  write the new value to effective address
-pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;
@@ -77,7 +85,10 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a 
 //  2    PC     R  fetch low byte of address, increment PC
 //  3    PC     R  fetch high byte of address, increment PC
 //  4  address  W  write register to effective address
-pub(in crate::cpu) fn write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn write<'a, O: WriteOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;

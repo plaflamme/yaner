@@ -28,7 +28,10 @@ impl Clocks {
         let cpu_cycles = 7u64;
         // starts at 21, probably for the same reason as above, but this doesn't seem to be documented anywhere
         let ppu_cycles = 21u64;
-        Clocks { cpu_cycles: Cell::new(cpu_cycles), ppu_cycles: Cell::new(ppu_cycles) }
+        Clocks {
+            cpu_cycles: Cell::new(cpu_cycles),
+            ppu_cycles: Cell::new(ppu_cycles),
+        }
     }
 
     fn tick(&self, with_cpu_cycle: bool) {
@@ -51,7 +54,7 @@ impl Clocks {
 pub enum NesCycle {
     PowerUp,
     PpuCycle(PpuCycle),
-    CpuCycle(CpuCycle, PpuCycle)
+    CpuCycle(CpuCycle, PpuCycle),
 }
 
 pub struct Nes {
@@ -84,34 +87,28 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps(&self, start_at: Option<u16>) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
-
+    pub fn ppu_steps(
+        &self,
+        start_at: Option<u16>,
+    ) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
         let mut cpu_suspended = false;
         let mut cpu = self.cpu.run(start_at);
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
 
         move || {
-
             yield NesCycle::PowerUp;
             loop {
-
-                let mut ppu_step = || {
-                    match Pin::new(&mut ppu).resume(()) {
-                        GeneratorState::Yielded(cycle) => {
-                            cycle
-                        },
-                        GeneratorState::Complete(_) => panic!("ppu stopped"),
-                    }
+                let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
+                    GeneratorState::Yielded(cycle) => cycle,
+                    GeneratorState::Complete(_) => panic!("ppu stopped"),
                 };
 
-                let mut dma_step = || {
-                    match Pin::new(&mut dma).resume(()) {
-                        GeneratorState::Yielded(DmaCycle::NoDma) => true,
-                        GeneratorState::Yielded(DmaCycle::Tick) => true,
-                        GeneratorState::Yielded(DmaCycle::Done) => false,
-                        GeneratorState::Complete(_) => true,
-                    }
+                let mut dma_step = || match Pin::new(&mut dma).resume(()) {
+                    GeneratorState::Yielded(DmaCycle::NoDma) => true,
+                    GeneratorState::Yielded(DmaCycle::Tick) => true,
+                    GeneratorState::Yielded(DmaCycle::Done) => false,
+                    GeneratorState::Complete(_) => true,
                 };
 
                 if let Some(addr) = self.cpu.bus.dma_latch() {
@@ -125,7 +122,7 @@ impl Nes {
                         GeneratorState::Yielded(cpu_cycle) => {
                             self.clocks.tick(true);
                             yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
-                        },
+                        }
                         GeneratorState::Complete(_) => panic!("cpu stopped"),
                     }
                 } else {
@@ -136,7 +133,8 @@ impl Nes {
                     yield NesCycle::PpuCycle(ppu_step());
                 }
 
-                if self.clocks.ppu_cycles.get() % 10_000 == 0 { // TODO: this should be ~100ms
+                if self.clocks.ppu_cycles.get() % 10_000 == 0 {
+                    // TODO: this should be ~100ms
                     self.ppu.decay_open_bus()
                 }
             }
@@ -149,7 +147,7 @@ impl Nes {
         loop {
             match stepper.step_frame() {
                 Ok(_) => (),
-                Err(StepperError::Halted) => break
+                Err(StepperError::Halted) => break,
             }
         }
     }
@@ -163,7 +161,7 @@ impl Display for Nes {
 
 #[derive(Clone, Copy, Debug)]
 pub enum StepperError {
-    Halted
+    Halted,
 }
 
 impl Display for StepperError {
@@ -182,10 +180,12 @@ pub struct Stepper<'a> {
 }
 
 impl<'a> Stepper<'a> {
-
     // TODO: normally, this should consume `Nes`, but this requires more refactoring
     pub fn new(nes: &'a Nes, start_at: Option<u16>) -> Self {
-        Stepper { steps: Box::new(nes.ppu_steps(start_at)), halted: false }
+        Stepper {
+            steps: Box::new(nes.ppu_steps(start_at)),
+            halted: false,
+        }
     }
 
     pub fn halted(&self) -> bool {
@@ -197,14 +197,15 @@ impl<'a> Stepper<'a> {
             Err(StepperError::Halted)
         } else {
             // NOTE: we have to help the compiler here by using type ascription
-            let gen: &mut (dyn Generator<Yield=NesCycle, Return=()> + Unpin) = self.steps.borrow_mut();
+            let gen: &mut (dyn Generator<Yield = NesCycle, Return = ()> + Unpin) =
+                self.steps.borrow_mut();
             match Pin::new(gen).resume(()) {
-                GeneratorState::Yielded(cycle@NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
+                GeneratorState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
                     self.halted = true;
                     Ok(cycle)
                 }
                 GeneratorState::Yielded(cycle) => Ok(cycle),
-                GeneratorState::Complete(_) => Err(StepperError::Halted)
+                GeneratorState::Complete(_) => Err(StepperError::Halted),
             }
         }
     }
@@ -214,7 +215,7 @@ impl<'a> Stepper<'a> {
             match self.tick()? {
                 NesCycle::CpuCycle(_, PpuCycle::Frame) => break Ok(PpuCycle::Frame),
                 NesCycle::PpuCycle(PpuCycle::Frame) => break Ok(PpuCycle::Frame),
-                _ => ()
+                _ => (),
             }
         }
     }
@@ -222,9 +223,9 @@ impl<'a> Stepper<'a> {
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
             match self.tick()? {
-                NesCycle::CpuCycle(cycle@CpuCycle::OpComplete(_, _), _) => break Ok(cycle),
+                NesCycle::CpuCycle(cycle @ CpuCycle::OpComplete(_, _), _) => break Ok(cycle),
                 NesCycle::CpuCycle(CpuCycle::Halt, _) => break Ok(CpuCycle::Halt),
-                _ => ()
+                _ => (),
             }
         }
     }

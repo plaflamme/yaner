@@ -1,7 +1,7 @@
 use super::*;
-use Op::*;
-use AddressingMode::*;
 use std::fmt::Display;
+use AddressingMode::*;
+use Op::*;
 
 const RAW_CODES: &str = r#"
 0x|BRK7|ORAizx 6|KIL|SLOizx 8|NOPzp 3|ORAzp 3|ASLzp 5|SLOzp 5|PHP3|ORAimm 2|ASL2|ANCimm 2|NOPabs 4|ORAabs 4|ASLabs 6|SLOabs 6|
@@ -32,7 +32,7 @@ enum ModeOp {
 
     stack,
 
-    unimplemented
+    unimplemented,
 }
 
 struct Code(AddressingMode, ModeOp, Op);
@@ -42,13 +42,11 @@ impl Display for Code {
         match self {
             Code(_, ModeOp::unimplemented, _) => write!(f, "unimplemented!()"),
             Code(mode, _, Op::JMP) => write!(f, "{}jmp(self, mem_map)", mode),
-            Code(AddressingMode::Implicit, ModeOp::read, op) => write!(f, "implicit::run(&{}, self, mem_map)", op),
-            Code(_, ModeOp::stack, op) => {
-                write!(f, "stack::{}(self, mem_map)", op)
-            },
-            Code(addr, mode, op) => {
-                write!(f, "{}{:?}(&{}, self, mem_map)", addr, mode, op)
+            Code(AddressingMode::Implicit, ModeOp::read, op) => {
+                write!(f, "implicit::run(&{}, self, mem_map)", op)
             }
+            Code(_, ModeOp::stack, op) => write!(f, "stack::{}(self, mem_map)", op),
+            Code(addr, mode, op) => write!(f, "{}{:?}(&{}, self, mem_map)", addr, mode, op),
         }
     }
 }
@@ -88,37 +86,98 @@ pub fn generate_opcode_table() {
     fn parse_code(code: &str) -> Code {
         let (op_str, addr_str) = code.split_at(3);
         let op = match op_str {
-            "ADC" => ADC, "AHX" => AHX, "ANC" => ANC, "AND" => AND,
-            "ALR" => ALR, "ARR" => ARR, "ASL" => ASL, "AXS" => AXS,
-            "BCC" => BCC, "BCS" => BCS, "BEQ" => BEQ,
-            "BIT" => BIT, "BMI" => BMI, "BNE" => BNE,
-            "BPL" => BPL, "BRK" => BRK, "BVC" => BVC,
-            "BVS" => BVS, "CLC" => CLC, "CLD" => CLD,
-            "CLI" => CLI, "CLV" => CLV, "CMP" => CMP,
-            "CPX" => CPX, "CPY" => CPY, "DCP" => DCP, "DEC" => DEC,
-            "DEX" => DEX, "DEY" => DEY, "EOR" => EOR,
-            "INC" => INC, "INX" => INX, "INY" => INY, "ISC" => ISC,
-            "JMP" => JMP, "JSR" => JSR, "KIL" => KIL,
-            "LAS" => LAS, "LAX" => LAX,
-            "LDA" => LDA, "LDX" => LDX, "LDY" => LDY,
-            "LSR" => LSR, "NOP" => NOP, "ORA" => ORA,
-            "PHA" => PHA, "PHP" => PHP, "PLA" => PLA,
-            "PLP" => PLP, "RLA" => RLA, "ROL" => ROL, "ROR" => ROR, "RRA" => RRA,
-            "RTI" => RTI, "RTS" => RTS, "SAX" => SAX, "SBC" => SBC, "SHX" => SHX, "SHY" => SHY,
-            "SEC" => SEC, "SED" => SED, "SEI" => SEI,
-            "SLO" => SLO, "SRE" => SRE,
-            "STA" => STA, "STX" => STX, "STY" => STY, "TAS" => TAS,
-            "TAX" => TAX, "TAY" => TAY, "TSX" => TSX,
-            "TXA" => TXA, "TXS" => TXS, "TYA" => TYA, "XAA" => XAA,
-            c => panic!("Unexpected code {}", c)
+            "ADC" => ADC,
+            "AHX" => AHX,
+            "ANC" => ANC,
+            "AND" => AND,
+            "ALR" => ALR,
+            "ARR" => ARR,
+            "ASL" => ASL,
+            "AXS" => AXS,
+            "BCC" => BCC,
+            "BCS" => BCS,
+            "BEQ" => BEQ,
+            "BIT" => BIT,
+            "BMI" => BMI,
+            "BNE" => BNE,
+            "BPL" => BPL,
+            "BRK" => BRK,
+            "BVC" => BVC,
+            "BVS" => BVS,
+            "CLC" => CLC,
+            "CLD" => CLD,
+            "CLI" => CLI,
+            "CLV" => CLV,
+            "CMP" => CMP,
+            "CPX" => CPX,
+            "CPY" => CPY,
+            "DCP" => DCP,
+            "DEC" => DEC,
+            "DEX" => DEX,
+            "DEY" => DEY,
+            "EOR" => EOR,
+            "INC" => INC,
+            "INX" => INX,
+            "INY" => INY,
+            "ISC" => ISC,
+            "JMP" => JMP,
+            "JSR" => JSR,
+            "KIL" => KIL,
+            "LAS" => LAS,
+            "LAX" => LAX,
+            "LDA" => LDA,
+            "LDX" => LDX,
+            "LDY" => LDY,
+            "LSR" => LSR,
+            "NOP" => NOP,
+            "ORA" => ORA,
+            "PHA" => PHA,
+            "PHP" => PHP,
+            "PLA" => PLA,
+            "PLP" => PLP,
+            "RLA" => RLA,
+            "ROL" => ROL,
+            "ROR" => ROR,
+            "RRA" => RRA,
+            "RTI" => RTI,
+            "RTS" => RTS,
+            "SAX" => SAX,
+            "SBC" => SBC,
+            "SHX" => SHX,
+            "SHY" => SHY,
+            "SEC" => SEC,
+            "SED" => SED,
+            "SEI" => SEI,
+            "SLO" => SLO,
+            "SRE" => SRE,
+            "STA" => STA,
+            "STX" => STX,
+            "STY" => STY,
+            "TAS" => TAS,
+            "TAX" => TAX,
+            "TAY" => TAY,
+            "TSX" => TSX,
+            "TXA" => TXA,
+            "TXS" => TXS,
+            "TYA" => TYA,
+            "XAA" => XAA,
+            c => panic!("Unexpected code {}", c),
         };
 
         let addr = match addr_str {
-            "zp" => ZeroPage, "zpx" => ZeroPageX, "zpy" => ZeroPageY,
-            "ind" => Indirect, "izx" => IndirectX, "izy" => IndirectY,
-            "abs" => Absolute, "abx" => AbsoluteX, "aby" => AbsoluteY,
-            "imm" => Immediate, "rel" => Relative, "" => Implicit,
-            c => panic!("Unexpected addressing mode {}", c)
+            "zp" => ZeroPage,
+            "zpx" => ZeroPageX,
+            "zpy" => ZeroPageY,
+            "ind" => Indirect,
+            "izx" => IndirectX,
+            "izy" => IndirectY,
+            "abs" => Absolute,
+            "abx" => AbsoluteX,
+            "aby" => AbsoluteY,
+            "imm" => Immediate,
+            "rel" => Relative,
+            "" => Implicit,
+            c => panic!("Unexpected addressing mode {}", c),
         };
 
         let mode = match op {
@@ -239,7 +298,7 @@ pub fn generate_opcode_table() {
             }
             4 => {
                 code.split_at(3) // BRK7
-            },
+            }
             _ => {
                 // ORAzp 7
                 let parts = code.split_ascii_whitespace().collect::<Vec<_>>();
@@ -261,20 +320,24 @@ pub fn generate_opcode_table() {
             codes_str
                 .iter()
                 .skip(1)
-                .map(|&code_str|{
+                .map(|&code_str| {
                     let code = parse_opcode(code_str);
                     match code {
-                        Code(AddressingMode::Implicit, ModeOp::modify, op) => Code(AddressingMode::Accumulator, ModeOp::modify, op),
-                        _ => code
+                        Code(AddressingMode::Implicit, ModeOp::modify, op) => {
+                            Code(AddressingMode::Accumulator, ModeOp::modify, op)
+                        }
+                        _ => code,
                     }
                 })
                 .enumerate()
                 .for_each(|(low_bits, kind)| {
                     let code = (high_bits as u8) << 4 | low_bits as u8;
                     match kind {
-                        Code(_, _, Op::KIL) => println!("\t0x{:02X?} => yield CpuCycle::Halt,", code),
+                        Code(_, _, Op::KIL) => {
+                            println!("\t0x{:02X?} => yield CpuCycle::Halt,", code)
+                        }
                         Code(_, ModeOp::unimplemented, _) => (),
-                        _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind)
+                        _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind),
                     }
                 });
         });

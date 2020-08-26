@@ -19,7 +19,7 @@ pub trait AddressSpace {
 }
 
 pub struct Rom {
-    data: Vec<u8>
+    data: Vec<u8>,
 }
 
 impl Rom {
@@ -33,7 +33,7 @@ impl AddressSpace for Rom {
         self.data[addr as usize % self.data.len()]
     }
 
-    fn write_u8(&self, _: u16, _: u8) { }
+    fn write_u8(&self, _: u16, _: u8) {}
 }
 
 fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
@@ -43,13 +43,13 @@ fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
 }
 
 pub struct Ram {
-    data: Vec<Cell<u8>>
+    data: Vec<Cell<u8>>,
 }
 
 impl Ram {
     pub fn new(size: usize) -> Self {
         Ram {
-            data: vec![Cell::new(0u8); size]
+            data: vec![Cell::new(0u8); size],
         }
     }
 }
@@ -66,12 +66,14 @@ impl AddressSpace for Ram {
 
 // https://github.com/rust-lang/rust/issues/43408
 pub struct Ram2KB {
-    data: Cell<[u8; 0x0800]>
+    data: Cell<[u8; 0x0800]>,
 }
 
 impl Ram2KB {
     pub fn new() -> Self {
-        Ram2KB { data: Cell::new([0; 0x0800]) }
+        Ram2KB {
+            data: Cell::new([0; 0x0800]),
+        }
     }
 }
 
@@ -87,12 +89,14 @@ impl AddressSpace for Ram2KB {
 
 // https://github.com/rust-lang/rust/issues/43408
 pub struct Ram8KB {
-    data: Cell<[u8; 0x2000]>
+    data: Cell<[u8; 0x2000]>,
 }
 
 impl Ram8KB {
     pub fn new() -> Self {
-        Ram8KB { data: Cell::new([0; 0x2000]) }
+        Ram8KB {
+            data: Cell::new([0; 0x2000]),
+        }
     }
 }
 
@@ -107,12 +111,14 @@ impl AddressSpace for Ram8KB {
 }
 
 pub struct Ram256 {
-    data: Cell<[u8; 0x0100]>
+    data: Cell<[u8; 0x0100]>,
 }
 
 impl Ram256 {
     pub fn new() -> Self {
-        Ram256 { data: Cell::new([0; 0x0100]) }
+        Ram256 {
+            data: Cell::new([0; 0x0100]),
+        }
     }
 }
 
@@ -127,12 +133,14 @@ impl AddressSpace for Ram256 {
 }
 
 pub struct Ram32 {
-    data: Cell<[u8; 0x20]>
+    data: Cell<[u8; 0x20]>,
 }
 
 impl Ram32 {
     pub fn new() -> Self {
-        Ram32 { data: Cell::new([0; 0x20]) }
+        Ram32 {
+            data: Cell::new([0; 0x20]),
+        }
     }
 }
 
@@ -154,7 +162,11 @@ pub struct Mirrored<T: AddressSpace> {
 
 impl<T: AddressSpace> Mirrored<T> {
     pub fn new(addr_space: T, size: u16, base_addr: u16) -> Self {
-        Mirrored { addr_space, size, base_addr }
+        Mirrored {
+            addr_space,
+            size,
+            base_addr,
+        }
     }
 
     fn translate(&self, addr: u16) -> u16 {
@@ -163,7 +175,6 @@ impl<T: AddressSpace> Mirrored<T> {
 }
 
 impl<T: AddressSpace> AddressSpace for Mirrored<T> {
-
     fn read_u8(&self, addr: u16) -> u8 {
         self.addr_space.read_u8(self.translate(addr))
     }

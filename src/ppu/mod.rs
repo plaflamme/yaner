@@ -1,13 +1,13 @@
 #![allow(non_upper_case_globals)]
 
-use bitflags::bitflags;
-use std::cell::{Cell, RefCell};
-use crate::memory::{AddressSpace, Ram2KB, Mirrored, Ram32};
-use crate::memory::Ram256;
-use std::ops::Generator;
-use rand::{thread_rng, Rng};
-use std::rc::Rc;
 use crate::cartridge::Mapper;
+use crate::memory::Ram256;
+use crate::memory::{AddressSpace, Mirrored, Ram2KB, Ram32};
+use bitflags::bitflags;
+use rand::{thread_rng, Rng};
+use std::cell::{Cell, RefCell};
+use std::ops::Generator;
+use std::rc::Rc;
 
 mod renderer;
 
@@ -39,7 +39,11 @@ impl Default for PpuCtrl {
 impl PpuCtrl {
     fn vram_inc_step(&self) -> u16 {
         // (0: add 1, going across; 1: add 32, going down)
-        if self.contains(PpuCtrl::I) { 32 } else { 0 }
+        if self.contains(PpuCtrl::I) {
+            32
+        } else {
+            0
+        }
     }
 }
 
@@ -119,7 +123,7 @@ impl Ppu {
 
             oam_data: Ram256::new(),
 
-            open_bus: Cell::new(0)
+            open_bus: Cell::new(0),
         }
     }
 
@@ -179,28 +183,25 @@ impl Ppu {
         }
     }
 
-    pub fn run<'a>(&'a self) -> impl Generator<Yield=PpuCycle, Return=()> + 'a {
-        move || {
-            loop {
-                for scanline in 0..262u16 {
-                    for dot in 0..341u16 {
+    pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+        move || loop {
+            for scanline in 0..262u16 {
+                for dot in 0..341u16 {
+                    if scanline == 241 && dot == 1 {
+                        let mut status = self.status.get();
+                        status.insert(PpuStatus::V);
+                        self.status.set(status);
+                    }
+                    if scanline == 261 && dot == 1 {
+                        let mut status = self.status.get();
+                        status.remove(PpuStatus::V);
+                        self.status.set(status);
+                    }
 
-                        if scanline == 241 && dot == 1 {
-                            let mut status = self.status.get();
-                            status.insert(PpuStatus::V);
-                            self.status.set(status);
-                        }
-                        if scanline == 261 && dot == 1 {
-                            let mut status = self.status.get();
-                            status.remove(PpuStatus::V);
-                            self.status.set(status);
-                        }
-
-                        if dot < 340 || scanline < 261 {
-                            yield PpuCycle::Tick;
-                        } else {
-                            yield PpuCycle::Frame;
-                        }
+                    if dot < 340 || scanline < 261 {
+                        yield PpuCycle::Tick;
+                    } else {
+                        yield PpuCycle::Frame;
                     }
                 }
             }
@@ -211,7 +212,7 @@ impl Ppu {
 #[derive(Debug)]
 pub enum PpuCycle {
     Tick,
-    Frame
+    Frame,
 }
 
 pub struct PpuBus {
@@ -236,7 +237,7 @@ impl AddressSpace for PpuBus {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().read_u8(addr),
             0x2000..=0x3EFF => self.vram.read_u8(addr),
             0x3F00..=0x3FFF => self.palette.read_u8(addr),
-            _ => invalid_address!(addr)
+            _ => invalid_address!(addr),
         }
     }
 
@@ -245,14 +246,14 @@ impl AddressSpace for PpuBus {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().write_u8(addr, value),
             0x2000..=0x3EFF => self.vram.write_u8(addr, value),
             0x3F00..=0x3FFF => self.palette.write_u8(addr, value),
-            _ => invalid_address!(addr)
+            _ => invalid_address!(addr),
         }
     }
 }
 
 pub struct MemoryMappedRegisters {
     pub bus: PpuBus,
-    ppu: Rc<Ppu>
+    ppu: Rc<Ppu>,
 }
 
 impl MemoryMappedRegisters {
@@ -262,7 +263,6 @@ impl MemoryMappedRegisters {
 }
 
 impl AddressSpace for MemoryMappedRegisters {
-
     fn read_u8(&self, addr: u16) -> u8 {
         let result = match addr {
             0x2000 => self.ppu.open_bus.get(),
@@ -277,15 +277,15 @@ impl AddressSpace for MemoryMappedRegisters {
                 let addr = self.ppu.oam_addr.get() as u16;
                 let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
                 self.ppu.oam_data.read_u8(addr) & mask
-            },
+            }
             0x2007 => {
                 let bus_mask = match self.ppu.data_addr.get() {
                     0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
-                    _ => 0x00
+                    _ => 0x00,
                 };
                 self.ppu.vram_read_u8(&self.bus) | bus_mask
-            },
-            _ => invalid_address!(addr)
+            }
+            _ => invalid_address!(addr),
         };
         self.ppu.open_bus.set(result);
         result
@@ -299,14 +299,16 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2002 => (),
             0x2003 => self.ppu.oam_addr.set(value),
             0x2004 => {
-                self.ppu.oam_data.write_u8(self.ppu.oam_addr.get() as u16, value);
+                self.ppu
+                    .oam_data
+                    .write_u8(self.ppu.oam_addr.get() as u16, value);
                 let addr = self.ppu.oam_addr.get();
                 self.ppu.oam_addr.set(addr.wrapping_add(1));
-            },
+            }
             0x2005 => self.ppu.latched_write(&self.ppu.scroll_addr, value),
             0x2006 => self.ppu.latched_write(&self.ppu.data_addr, value),
             0x2007 => self.ppu.vram_write_u8(&self.bus, value),
-            _ => invalid_address!(addr)
+            _ => invalid_address!(addr),
         }
     }
 }

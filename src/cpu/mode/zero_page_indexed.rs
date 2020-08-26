@@ -1,5 +1,5 @@
-use crate::memory::AddressSpace;
 use super::*;
+use crate::memory::AddressSpace;
 
 fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
     move || {
@@ -24,7 +24,11 @@ fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, R
 //
 //        * The high byte of the effective address is always zero,
 //          i.e. page boundary crossings are not handled.
-fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+fn read<'a, O: ReadOperation>(
+    operation: &'a O,
+    index: u8,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = cpu.bus.read_u8(addr);
@@ -33,11 +37,17 @@ fn read<'a, O: ReadOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl
     }
 }
 
-pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     read(operation, cpu.x.get(), cpu)
 }
 
-pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     read(operation, cpu.y.get(), cpu)
 }
 
@@ -53,7 +63,11 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(operation: &'a O, cpu: &'a Cp
 //
 // Note: * The high byte of the effective address is always zero,
 //         i.e. page boundary crossings are not handled.
-fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+fn modify<'a, O: ModifyOperation>(
+    operation: &'a O,
+    index: u8,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = cpu.bus.read_u8(addr);
@@ -68,7 +82,10 @@ fn modify<'a, O: ModifyOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> 
     }
 }
 
-pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     modify(operation, cpu.x.get(), cpu)
 }
 
@@ -83,7 +100,11 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(operation: &'a O, cpu: &'
 //
 //        * The high byte of the effective address is always zero,
 //          i.e. page boundary crossings are not handled.
-fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+fn write<'a, O: WriteOperation>(
+    operation: &'a O,
+    index: u8,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = operation.operate(cpu);
@@ -92,10 +113,16 @@ fn write<'a, O: WriteOperation>(operation: &'a O, index: u8, cpu: &'a Cpu) -> im
     }
 }
 
-pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     write(operation, cpu.x.get(), cpu)
 }
 
-pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(operation: &'a O, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(
+    operation: &'a O,
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     write(operation, cpu.y.get(), cpu)
 }

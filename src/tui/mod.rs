@@ -4,21 +4,31 @@ use std::io;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use tui::{Frame, Terminal};
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Modifier, Style};
 use tui::text::{Span, Spans, Text};
 use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
+use tui::{Frame, Terminal};
 
-use crate::cpu::{Cpu, Flags};
 use crate::cpu::opcode::OpCode;
+use crate::cpu::{Cpu, Flags};
 use crate::memory::AddressSpace;
 use crate::nes::{Nes, Stepper};
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![Flags::N, Flags::V, Flags::B, Flags::D, Flags::I, Flags::Z, Flags::C].into_iter() {
+        for flag in vec![
+            Flags::N,
+            Flags::V,
+            Flags::B,
+            Flags::D,
+            Flags::I,
+            Flags::Z,
+            Flags::C,
+        ]
+        .into_iter()
+        {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
             } else {
@@ -30,46 +40,46 @@ impl Display for Flags {
 }
 
 fn cpu_block(nes: &Nes) -> Paragraph {
-
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
     let state = Text::from(vec![
         Spans::from(vec![
             Span::from(" PC: "),
-            Span::styled(format!("{:04X}", nes.cpu.pc.get()), value_style)
+            Span::styled(format!("{:04X}", nes.cpu.pc.get()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" A: "),
-            Span::styled(format!("{:02X}", nes.cpu.acc.get()), value_style)
+            Span::styled(format!("{:02X}", nes.cpu.acc.get()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" X: "),
-            Span::styled(format!("{:02X}", nes.cpu.x.get()), value_style)
+            Span::styled(format!("{:02X}", nes.cpu.x.get()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" Y: "),
-            Span::styled(format!("{:02X}", nes.cpu.y.get()), value_style)
+            Span::styled(format!("{:02X}", nes.cpu.y.get()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" P: "),
-            Span::styled(format!("{:02X} {}", nes.cpu.flags(), nes.cpu.flags.get()), value_style)
+            Span::styled(
+                format!("{:02X} {}", nes.cpu.flags(), nes.cpu.flags.get()),
+                value_style,
+            ),
         ]),
         Spans::from(vec![
             Span::from(" SP: "),
-            Span::styled(format!("{:02X}", nes.cpu.sp.get()), value_style)
+            Span::styled(format!("{:02X}", nes.cpu.sp.get()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
-            Span::styled(format!("{}", nes.clocks.cpu_cycles.get()), value_style)
+            Span::styled(format!("{}", nes.clocks.cpu_cycles.get()), value_style),
         ]),
     ]);
-    Paragraph::new(state)
-        .block(Block::default().title("CPU").borders(Borders::ALL))
+    Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
 }
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
 fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
-
     let mapper = nes.cpu.bus.mapper.borrow();
     let addr_space = mapper.cpu_addr_space();
 
@@ -91,7 +101,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
         if addr >= 0xFFFC {
             break;
         }
-    };
+    }
 
     let mut state = ListState::default();
     state.select(selected);
@@ -113,37 +123,71 @@ fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
     prg_rom(f, &nes, chunks[1]);
 }
 
-fn ram_block<'a>(name: &'a str, addr_space: &'a dyn AddressSpace, base: u16, size: u16) -> impl Widget + 'a {
-
+fn ram_block<'a>(
+    name: &'a str,
+    addr_space: &'a dyn AddressSpace,
+    base: u16,
+    size: u16,
+) -> impl Widget + 'a {
     let header = (0..16).map(|_| "");
 
     let rows = (base..(base + size))
         .step_by(16)
         .map(move |base| {
-            std::iter::once(format!("${:04X}:", base))
-                .chain(
-                    (0..16)
-                        .map(move |low| addr_space.read_u8(base + low))
-                        .map(|v| format!("{:02X}", v))
-                )
+            std::iter::once(format!("${:04X}:", base)).chain(
+                (0..16)
+                    .map(move |low| addr_space.read_u8(base + low))
+                    .map(|v| format!("{:02X}", v)),
+            )
         })
         .map(|row| Row::Data(row));
 
     Table::new(header, rows)
         .block(Block::default().title(name).borders(Borders::ALL))
-        .widths(&[Constraint::Length(7), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2)])
+        .widths(&[
+            Constraint::Length(7),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+        ])
         .header_gap(0)
 }
 
 fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(55), Constraint::Length(55), Constraint::Length(55)].as_ref())
+        .constraints(
+            [
+                Constraint::Length(55),
+                Constraint::Length(55),
+                Constraint::Length(55),
+            ]
+            .as_ref(),
+        )
         .split(size);
 
     f.render_widget(ram_block("RAM", &nes.cpu.bus.ram, 0, 0x800), chunks[0]);
-    f.render_widget(ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800), chunks[1]);
-    f.render_widget(ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000), chunks[2]);
+    f.render_widget(
+        ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800),
+        chunks[1],
+    );
+    f.render_widget(
+        ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000),
+        chunks[2],
+    );
 }
 
 fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes) -> Result<(), io::Error> {
@@ -173,7 +217,7 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
     // powerup
     stepper.tick()?;
     loop {
-        if running && !stepper.halted(){
+        if running && !stepper.halted() {
             stepper.tick()?;
         }
         draw(&mut terminal, nes)?;
@@ -182,15 +226,15 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
                 Key::Ctrl('c') | Key::Char('q') => break,
                 Key::Char('f') => {
                     stepper.step_frame()?;
-                },
+                }
                 Key::Char('o') => {
                     stepper.step_cpu()?;
-                },
+                }
                 Key::Char('s') => {
                     stepper.tick()?;
-                },
+                }
                 Key::Char('r') => running = !running,
-                _ => ()
+                _ => (),
             }
         }
     }

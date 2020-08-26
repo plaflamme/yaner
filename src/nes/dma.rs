@@ -1,11 +1,11 @@
 use crate::memory::AddressSpace;
-use std::ops::Generator;
 use std::cell::Cell;
+use std::ops::Generator;
 
 pub enum DmaCycle {
     Tick,
     Done,
-    NoDma
+    NoDma,
 }
 
 #[derive(Clone, Copy)]
@@ -16,17 +16,22 @@ struct DmaState {
 
 impl DmaState {
     fn new(addr: u8, odd_cycle: bool) -> Self {
-        DmaState { addr_hi: (addr as u16) << 8, odd_cycle }
+        DmaState {
+            addr_hi: (addr as u16) << 8,
+            odd_cycle,
+        }
     }
 }
 
 pub struct Dma {
-    state: Cell<Option<DmaState>>
+    state: Cell<Option<DmaState>>,
 }
 
 impl Dma {
     pub fn new() -> Self {
-        Dma { state: Cell::new(None) }
+        Dma {
+            state: Cell::new(None),
+        }
     }
 
     pub fn start(&self, addr: u8, cpu_cycle: u64) {
@@ -34,7 +39,10 @@ impl Dma {
         self.state.set(Some(state));
     }
 
-    pub fn run<'a>(&'a self, cpu: &'a dyn AddressSpace) -> impl Generator<Yield=DmaCycle, Return=()> + 'a {
+    pub fn run<'a>(
+        &'a self,
+        cpu: &'a dyn AddressSpace,
+    ) -> impl Generator<Yield = DmaCycle, Return = ()> + 'a {
         move || {
             loop {
                 match self.state.get() {
