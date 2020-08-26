@@ -123,27 +123,30 @@ fn ram_block<'a>(name: &'a str, addr_space: &'a dyn AddressSpace, base: u16, siz
     let rows = (base..(base + size))
         .step_by(16)
         .map(move |base| {
-            (0..16)
-                .map(move |low| addr_space.read_u8(base + low))
-                .map(|v| format!("{:02X}", v))
+            std::iter::once(format!("${:04X}:", base))
+                .chain(
+                    (0..16)
+                        .map(move |low| addr_space.read_u8(base + low))
+                        .map(|v| format!("{:02X}", v))
+                )
         })
         .map(|row| Row::Data(row));
 
     Table::new(header, rows)
         .block(Block::default().title(name).borders(Borders::ALL))
-        .widths(&[Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3), Constraint::Length(3)])
+        .widths(&[Constraint::Length(7), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2), Constraint::Length(2)])
         .header_gap(0)
 }
 
 fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)/*, Constraint::Percentage(33)*/].as_ref())
+        .constraints([Constraint::Length(55), Constraint::Length(55), Constraint::Length(55)].as_ref())
         .split(size);
 
     f.render_widget(ram_block("RAM", &nes.cpu.bus.ram, 0, 0x800), chunks[0]);
     f.render_widget(ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800), chunks[1]);
-    // f.render_widget(ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000), chunks[2]);
+    f.render_widget(ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000), chunks[2]);
 }
 
 fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes) -> Result<(), io::Error> {
