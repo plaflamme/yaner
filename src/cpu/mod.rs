@@ -154,7 +154,7 @@ impl AddressingMode {
 
 // http://wiki.nesdev.com/w/index.php/Status_flags
 bitflags!(
-    struct Flags: u8 {
+    pub struct Flags: u8 {
         // http://wiki.nesdev.com/w/index.php/Status_flags#C:_Carry
         const C = 1 << 0;
 
@@ -187,7 +187,7 @@ pub struct Cpu {
     pub acc: Cell<u8>,
     pub x: Cell<u8>,
     pub y: Cell<u8>,
-    flags: Cell<Flags>,
+    pub flags: Cell<Flags>,
     pub sp: Cell<u8>,
     pub pc: Cell<u16>,
 

@@ -12,12 +12,29 @@ use tui::widgets::{Block, Borders, Paragraph, Row, Table, Widget, ListItem, List
 
 use crate::memory::AddressSpace;
 use crate::nes::{Nes, NesCycle, Stepper};
-use crate::cpu::Cpu;
+use crate::cpu::{Cpu, Flags};
 use crate::cpu::opcode::OpCode;
+use std::fmt::Display;
+use bitflags::_core::fmt::Formatter;
+
+impl Display for Flags {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for flag in vec![Flags::N, Flags::V, Flags::B, Flags::D, Flags::I, Flags::Z, Flags::C].into_iter() {
+            if *self & flag == flag {
+                write!(f, "{:?}", flag)?;
+            } else {
+                write!(f, "-")?;
+            }
+        }
+        Ok(())
+    }
+}
 
 fn cpu_block(nes: &Nes) -> Paragraph {
 
     let value_style = Style::default().add_modifier(Modifier::BOLD);
+
+    let mut flags = nes.cpu.flags.get();
 
     let state = Text::from(vec![
         Spans::from(vec![
@@ -38,11 +55,15 @@ fn cpu_block(nes: &Nes) -> Paragraph {
         ]),
         Spans::from(vec![
             Span::from(" P: "),
-            Span::styled(format!("{:02X}", nes.cpu.flags()), value_style)
+            Span::styled(format!("{:02X} {}", nes.cpu.flags(), flags), value_style)
         ]),
         Spans::from(vec![
             Span::from(" SP: "),
             Span::styled(format!("{:02X}", nes.cpu.sp.get()), value_style)
+        ]),
+        Spans::from(vec![
+            Span::from(" CYC: "),
+            Span::styled(format!("{}", nes.clocks.cpu_cycles.get()), value_style)
         ]),
     ]);
     Paragraph::new(state)
@@ -88,7 +109,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
 fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Length(9), Constraint::Percentage(100)].as_ref())
         .split(size);
 
     f.render_widget(cpu_block(nes), chunks[0]);
