@@ -92,7 +92,9 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
         let (OpCode(opcode, _), operand) = Cpu::decompile(addr, addr_space);
         let instr = Span::from(format!("{:04X} {:?} {}", addr, opcode, operand.0));
 
-        if addr == nes.cpu.pc.get() {
+        // We can be in the middle of an instruction which has incremented pc,
+        //   use the closest instruction to the current pc value if there's no exact match.
+        if addr <= nes.cpu.pc.get() {
             selected = Some(items.len());
         }
         items.push(ListItem::new(instr));
@@ -129,8 +131,6 @@ fn ram_block<'a>(
     base: u16,
     size: u16,
 ) -> impl Widget + 'a {
-    let header = (0..16).map(|_| "");
-
     let rows = (base..(base + size))
         .step_by(16)
         .map(move |base| {
@@ -142,7 +142,7 @@ fn ram_block<'a>(
         })
         .map(|row| Row::Data(row));
 
-    Table::new(header, rows)
+    Table::new(std::iter::empty::<&str>(), rows)
         .block(Block::default().title(name).borders(Borders::ALL))
         .widths(&[
             Constraint::Length(7),
