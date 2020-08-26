@@ -100,6 +100,8 @@ pub enum Op {
     XAA,
 }
 
+pub struct Operand(pub String, pub u8);
+
 #[derive(Debug, Clone, Copy)]
 pub enum AddressingMode {
     Immediate, // imm
@@ -124,36 +126,28 @@ pub enum AddressingMode {
 
 impl AddressingMode {
 
-    fn read_u8(addr: u16, cpu: &Cpu) -> u8 {
-        cpu.bus.read_u8(addr)
-    }
-
-    fn read_u16(addr: u16, cpu: &Cpu) -> u16 {
-        cpu.bus.read_u16(addr)
-    }
-
-    fn operand(&self, cpu: &Cpu) -> String {
-        let addr = cpu.pc.get().wrapping_add(1); // skip opcode
+    pub fn operand(&self, pc: u16, addr_space: &dyn AddressSpace) -> Operand {
+        let addr = pc.wrapping_add(1); // skip opcode
         match self {
-            AddressingMode::Immediate => format!("#${:02X}", Self::read_u8(addr, cpu)),
+            AddressingMode::Immediate => Operand(format!("#${:02X}", addr_space.read_u8(addr)), 1),
 
-            AddressingMode::ZeroPage => format!("z{:02X}", Self::read_u8(addr, cpu)),
-            AddressingMode::ZeroPageX => format!("z{:02X},X", Self::read_u8(addr, cpu)),
-            AddressingMode::ZeroPageY => format!("z{:02X},Y", Self::read_u8(addr, cpu)),
+            AddressingMode::ZeroPage => Operand(format!("${:02X}", addr_space.read_u8(addr)), 1),
+            AddressingMode::ZeroPageX => Operand(format!("${:02X},X", addr_space.read_u8(addr)), 1),
+            AddressingMode::ZeroPageY => Operand(format!("${:02X},Y", addr_space.read_u8(addr)), 1),
 
-            AddressingMode::Indirect => format!("(${:02X})", Self::read_u8(addr, cpu)),
-            AddressingMode::IndirectX => format!("(${:02X},X)", Self::read_u8(addr, cpu)),
-            AddressingMode::IndirectY => format!("(${:02X}),Y", Self::read_u8(addr, cpu)),
+            AddressingMode::Indirect => Operand(format!("(${:02X})", addr_space.read_u8(addr)), 1),
+            AddressingMode::IndirectX => Operand(format!("(${:02X},X)", addr_space.read_u8(addr)), 1),
+            AddressingMode::IndirectY => Operand(format!("(${:02X}),Y", addr_space.read_u8(addr)), 1),
 
-            AddressingMode::Absolute => format!("${:04X}", Self::read_u16(addr, cpu)),
-            AddressingMode::AbsoluteX => format!("${:04X},X", Self::read_u16(addr, cpu)),
-            AddressingMode::AbsoluteY => format!("${:04X},Y", Self::read_u16(addr, cpu)),
+            AddressingMode::Absolute => Operand(format!("${:04X}", addr_space.read_u16(addr)), 2),
+            AddressingMode::AbsoluteX => Operand(format!("${:04X},X", addr_space.read_u16(addr)), 2),
+            AddressingMode::AbsoluteY => Operand(format!("${:04X},Y", addr_space.read_u16(addr)), 2),
 
-            AddressingMode::Accumulator => "A".to_owned(),
+            AddressingMode::Accumulator => Operand("A".to_owned(), 0),
 
-            AddressingMode::Relative => format!("+{:04X}", Self::read_u16(addr, cpu)),
+            AddressingMode::Relative => Operand(format!("+${:02X}", addr_space.read_u8(addr)), 1),
 
-            AddressingMode::Implicit => "".to_owned()
+            AddressingMode::Implicit => Operand("".to_owned(), 0)
         }
     }
 }
@@ -205,7 +199,7 @@ impl Display for Cpu {
         let pc = self.pc.get();
         let opcode = self.bus.read_u8(pc);
         let OpCode(op, mode) = &OPCODES[opcode as usize];
-        let operand = mode.operand(self);
+        let Operand(operand, _) = mode.operand(self.pc.get(), &self.bus);
         let flags = format!("({:?})", self.flags.get());
         write!(f, "{:04X} {:?} {:<7} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} {:<27} SP:{:02X?}", pc, op, operand, self.acc.get(), self.x.get(), self.y.get(), self.flags.get().bits(), flags, self.sp.get())
     }
@@ -225,6 +219,7 @@ pub enum OpTrace {
     Implicit
 }
 
+#[derive(Debug)]
 pub enum CpuCycle {
     Tick,
     OpComplete(OpCode, OpTrace),
@@ -594,6 +589,11 @@ impl Cpu {
         }
     }
 
+    pub fn decompile(addr: u16, addr_space: &dyn AddressSpace) -> (OpCode, Operand) {
+        let opcode = OPCODES[addr_space.read_u8(addr) as usize].clone();
+        let operand = opcode.1.operand(addr, addr_space);
+        (opcode, operand)
+    }
 }
 
 trait BranchOperation {
@@ -624,7 +624,7 @@ trait WriteOperation {
 pub struct CpuBus {
     pub ram: Ram2KB,
     pub ppu_registers: MemoryMappedRegisters,
-    mapper: Rc<RefCell<Box<dyn Mapper>>>,
+    pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
     oam_dma: Cell<Option<u8>>
 }
 

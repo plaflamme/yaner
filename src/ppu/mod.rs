@@ -208,6 +208,7 @@ impl Ppu {
     }
 }
 
+#[derive(Debug)]
 pub enum PpuCycle {
     Tick,
     Frame

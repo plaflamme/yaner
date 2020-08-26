@@ -46,6 +46,8 @@ impl Clocks {
         (self.ppu_cycles.get() % 341) as u16
     }
 }
+
+#[derive(Debug)]
 pub enum NesCycle {
     PowerUp,
     PpuCycle(PpuCycle),
@@ -220,7 +222,7 @@ impl<'a> Stepper<'a> {
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
             match self.tick()? {
-                NesCycle::CpuCycle(cycle@CpuCycle::OpComplete(_, _), PpuCycle::Frame) => break Ok(cycle),
+                NesCycle::CpuCycle(cycle@CpuCycle::OpComplete(_, _), _) => break Ok(cycle),
                 NesCycle::CpuCycle(CpuCycle::Halt, _) => break Ok(CpuCycle::Halt),
                 _ => ()
             }
