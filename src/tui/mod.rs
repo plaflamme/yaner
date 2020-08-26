@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::io;
 
 use termion::event::Key;
@@ -8,14 +9,12 @@ use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Modifier, Style};
 use tui::text::{Span, Spans, Text};
-use tui::widgets::{Block, Borders, Paragraph, Row, Table, Widget, ListItem, List, ListState};
+use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
 
-use crate::memory::AddressSpace;
-use crate::nes::{Nes, NesCycle, Stepper};
 use crate::cpu::{Cpu, Flags};
 use crate::cpu::opcode::OpCode;
-use std::fmt::Display;
-use bitflags::_core::fmt::Formatter;
+use crate::memory::AddressSpace;
+use crate::nes::{Nes, Stepper};
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -33,8 +32,6 @@ impl Display for Flags {
 fn cpu_block(nes: &Nes) -> Paragraph {
 
     let value_style = Style::default().add_modifier(Modifier::BOLD);
-
-    let mut flags = nes.cpu.flags.get();
 
     let state = Text::from(vec![
         Spans::from(vec![
@@ -55,7 +52,7 @@ fn cpu_block(nes: &Nes) -> Paragraph {
         ]),
         Spans::from(vec![
             Span::from(" P: "),
-            Span::styled(format!("{:02X} {}", nes.cpu.flags(), flags), value_style)
+            Span::styled(format!("{:02X} {}", nes.cpu.flags(), nes.cpu.flags.get()), value_style)
         ]),
         Spans::from(vec![
             Span::from(" SP: "),
