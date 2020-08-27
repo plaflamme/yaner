@@ -100,7 +100,13 @@ impl Nes {
             yield NesCycle::PowerUp;
             loop {
                 let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
-                    GeneratorState::Yielded(cycle) => cycle,
+                    GeneratorState::Yielded(cycle) => {
+                        match cycle {
+                            PpuCycle::Nmi => self.cpu.nmi(),
+                            _ => ()
+                        }
+                        cycle
+                    },
                     GeneratorState::Complete(_) => panic!("ppu stopped"),
                 };
 

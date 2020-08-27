@@ -106,6 +106,9 @@ pub struct Ppu {
 
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
+
+    // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
+    supress_vbl: Cell<bool>,
 }
 
 impl Ppu {
@@ -124,6 +127,8 @@ impl Ppu {
             oam_data: Ram256::new(),
 
             open_bus: Cell::new(0),
+
+            supress_vbl: Cell::new(false),
         }
     }
 
@@ -135,6 +140,10 @@ impl Ppu {
 
         // reading PPUSTATUS resets the address latch
         self.addr_latch.set(false);
+
+        // use for vbl timing
+        //  ideally, we would only set this on the correct dot, but we don't have this information here
+        self.supress_vbl.set(true);
 
         status.bits()
     }
@@ -184,13 +193,19 @@ impl Ppu {
     }
 
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+        let mut generate_nmi = false;
         move || loop {
             for scanline in 0..262u16 {
                 for dot in 0..341u16 {
-                    if scanline == 241 && dot == 1 {
+                    if scanline == 241 && dot == 1 && !self.supress_vbl.get() {
                         let mut status = self.status.get();
                         status.insert(PpuStatus::V);
                         self.status.set(status);
+
+                        if self.ctrl.get() & PpuCtrl::V == PpuCtrl::V {
+                            // TODO: we also have to generate an nmi if PPUCTRL::V is set during vblank
+                            generate_nmi = true;
+                        }
                     }
                     if scanline == 261 && dot == 1 {
                         let mut status = self.status.get();
@@ -198,8 +213,13 @@ impl Ppu {
                         self.status.set(status);
                     }
 
+                    self.supress_vbl.set(false);
                     if dot < 340 || scanline < 261 {
-                        yield PpuCycle::Tick;
+                        if generate_nmi {
+                            yield PpuCycle::Nmi;
+                        } else {
+                            yield PpuCycle::Tick;
+                        }
                     } else {
                         yield PpuCycle::Frame;
                     }
@@ -212,6 +232,7 @@ impl Ppu {
 #[derive(Debug)]
 pub enum PpuCycle {
     Tick,
+    Nmi, // same as tick, but nmi should be triggered in the cpu
     Frame,
 }
 

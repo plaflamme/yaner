@@ -1,17 +1,8 @@
 use super::*;
 
-//  #  address R/W description
-// --- ------- --- -----------------------------------------------
-//  1    PC     R  fetch opcode, increment PC
-//  2    PC     R  read next instruction byte (and throw it away),
-//                 increment PC
-//  3  $0100,S  W  push PCH on stack (with B flag set), decrement S
-//  4  $0100,S  W  push PCL on stack, decrement S
-//  5  $0100,S  W  push P on stack, decrement S
-//  6   $FFFE   R  fetch PCL
-//  7   $FFFF   R  fetch PCH
-pub(in crate::cpu) fn brk<'a>(
+pub(in crate::cpu) fn interrupt<'a>(
     cpu: &'a Cpu,
+    interrupt_pc: u16,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let _ = cpu.next_pc_read_u8();
@@ -30,17 +21,33 @@ pub(in crate::cpu) fn brk<'a>(
         cpu.push_stack(p.bits());
         yield CpuCycle::Tick;
 
-        let pc_lo = cpu.bus.read_u8(0xFFFE) as u16;
+        let pc_lo = cpu.bus.read_u8(interrupt_pc) as u16;
         yield CpuCycle::Tick;
 
         cpu.set_flag(Flags::I, true);
 
-        let pc_hi = cpu.bus.read_u8(0xFFFF) as u16;
+        let pc_hi = cpu.bus.read_u8(interrupt_pc.wrapping_add(1)) as u16;
         let pc = pc_hi << 8 | pc_lo;
         cpu.pc.set(pc);
 
         OpTrace::Implicit
     }
+}
+
+//  #  address R/W description
+// --- ------- --- -----------------------------------------------
+//  1    PC     R  fetch opcode, increment PC
+//  2    PC     R  read next instruction byte (and throw it away),
+//                 increment PC
+//  3  $0100,S  W  push PCH on stack (with B flag set), decrement S
+//  4  $0100,S  W  push PCL on stack, decrement S
+//  5  $0100,S  W  push P on stack, decrement S
+//  6   $FFFE   R  fetch PCL
+//  7   $FFFF   R  fetch PCH
+pub(in crate::cpu) fn brk<'a>(
+    cpu: &'a Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+    interrupt(cpu, 0xFFFE)
 }
 
 //  #  address R/W description

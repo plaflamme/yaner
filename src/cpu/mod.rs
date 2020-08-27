@@ -198,6 +198,8 @@ pub struct Cpu {
     pub sp: Cell<u8>,
     pub pc: Cell<u16>,
 
+    nmi: Cell<bool>,
+
     pub bus: CpuBus,
 }
 
@@ -256,8 +258,13 @@ impl Cpu {
             sp: Cell::new(0xFD),
             pc: Cell::new(0),
 
+            nmi: Cell::new(false),
             bus,
         }
+    }
+
+    pub fn nmi(&self) {
+        self.nmi.set(true);
     }
 
     pub fn flags(&self) -> u8 {
@@ -336,6 +343,12 @@ impl Cpu {
         self.pc.set(pc);
 
         move || loop {
+
+            if self.nmi.get() {
+                self.nmi.set(false);
+                yield_complete!(stack::interrupt(self, 0xFFFA));
+            }
+
             let opcode = self.next_pc_read_u8();
             yield CpuCycle::Tick;
 
