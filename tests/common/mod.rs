@@ -5,6 +5,8 @@ use yaner::cartridge::Cartridge;
 use yaner::memory::AddressSpace;
 use yaner::nes::{Nes, Stepper};
 
+pub mod blargg;
+
 pub fn run_test(
     rom_path: &Path,
     start_at: Option<u16>,
