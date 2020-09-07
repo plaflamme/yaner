@@ -26,7 +26,7 @@ fn oam_stress() {
 #[test_case("01-vbl_basics")]
 #[test_case("02-vbl_set_time")]
 #[test_case("03-vbl_clear_time")]
-// #[test_case("04-nmi_control")]
+#[test_case("04-nmi_control")]
 // #[test_case("05-nmi_timing")]
 // #[test_case("06-suppression")]
 // #[test_case("07-nmi_on_timing")]

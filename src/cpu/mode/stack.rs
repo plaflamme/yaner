@@ -5,9 +5,6 @@ pub(in crate::cpu) fn interrupt<'a>(
     interrupt_pc: u16,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let _ = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
-
         let pc_hi = (cpu.pc.get() >> 8) as u8;
         cpu.push_stack(pc_hi);
         yield CpuCycle::Tick;
@@ -47,7 +44,12 @@ pub(in crate::cpu) fn interrupt<'a>(
 pub(in crate::cpu) fn brk<'a>(
     cpu: &'a Cpu,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
-    interrupt(cpu, 0xFFFE)
+    move || {
+        let _ = cpu.next_pc_read_u8();
+        yield CpuCycle::Tick;
+
+        yield_complete!(interrupt(cpu, 0xFFFE))
+    }
 }
 
 //  #  address R/W description

@@ -342,11 +342,19 @@ impl Cpu {
         let pc = start_at.unwrap_or_else(|| self.bus.read_u16(0xFFFC));
         self.pc.set(pc);
 
+        // used to delay nmi by one op
+        // TODO: generalize this when we implement interrupts
+        let mut run_nmi = false;
+
         move || loop {
 
+            if run_nmi {
+                run_nmi = false;
+                yield_complete!(stack::interrupt(self, 0xFFFA));
+            }
             if self.nmi.get() {
                 self.nmi.set(false);
-                yield_complete!(stack::interrupt(self, 0xFFFA));
+                run_nmi = true;
             }
 
             let opcode = self.next_pc_read_u8();
