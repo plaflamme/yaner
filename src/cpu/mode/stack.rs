@@ -2,8 +2,14 @@ use super::*;
 
 pub(in crate::cpu) fn interrupt<'a>(
     cpu: &'a Cpu,
-    interrupt_pc: u16,
+    interrupt: Interrupt,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+
+    let interrupt_pc = match interrupt {
+        Interrupt::Nmi => 0xFFFA,
+        Interrupt::Brk => 0xFFFE
+    };
+
     move || {
         let pc_hi = (cpu.pc.get() >> 8) as u8;
         cpu.push_stack(pc_hi);
@@ -48,7 +54,7 @@ pub(in crate::cpu) fn brk<'a>(
         let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
 
-        yield_complete!(interrupt(cpu, 0xFFFE))
+        yield_complete!(interrupt(cpu, Interrupt::Brk))
     }
 }
 

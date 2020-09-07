@@ -188,6 +188,12 @@ bitflags!(
     }
 );
 
+#[derive(Debug, Clone, Copy)]
+pub enum Interrupt {
+    Nmi,
+    Brk
+}
+
 // http://nesdev.com/6502_cpu.txt
 // http://wiki.nesdev.com/w/index.php/CPU_ALL
 pub struct Cpu {
@@ -197,8 +203,6 @@ pub struct Cpu {
     pub flags: Cell<Flags>,
     pub sp: Cell<u8>,
     pub pc: Cell<u16>,
-
-    nmi: Cell<bool>,
 
     pub bus: CpuBus,
 }
@@ -258,13 +262,8 @@ impl Cpu {
             sp: Cell::new(0xFD),
             pc: Cell::new(0),
 
-            nmi: Cell::new(false),
             bus,
         }
-    }
-
-    pub fn nmi(&self) {
-        self.nmi.set(true);
     }
 
     pub fn flags(&self) -> u8 {
@@ -342,20 +341,18 @@ impl Cpu {
         let pc = start_at.unwrap_or_else(|| self.bus.read_u16(0xFFFC));
         self.pc.set(pc);
 
-        // used to delay nmi by one op
-        // TODO: generalize this when we implement interrupts
-        let mut run_nmi = false;
+        // used to delay interrupts by one op
+        // TODO: this probably requires more granular timing
+        let mut interrupt: Option<Interrupt> = None;
 
         move || loop {
 
-            if run_nmi {
-                run_nmi = false;
-                yield_complete!(stack::interrupt(self, 0xFFFA));
+            if let Some(intr) = interrupt {
+                interrupt = None;
+                yield_complete!(stack::interrupt(self, intr));
             }
-            if self.nmi.get() {
-                self.nmi.set(false);
-                run_nmi = true;
-            }
+
+            interrupt = self.bus.intr_latch();
 
             let opcode = self.next_pc_read_u8();
             yield CpuCycle::Tick;
@@ -666,6 +663,7 @@ pub struct CpuBus {
     pub ram: Ram2KB,
     pub ppu_registers: MemoryMappedRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
+    pub intr: Cell<Option<Interrupt>>,
     oam_dma: Cell<Option<u8>>,
 }
 
@@ -675,6 +673,7 @@ impl CpuBus {
             ram: Ram2KB::new(),
             ppu_registers,
             mapper,
+            intr: Cell::new(None),
             oam_dma: Cell::new(None),
         }
     }
@@ -685,6 +684,14 @@ impl CpuBus {
         if v.is_some() {
             self.oam_dma.set(None)
         };
+        v
+    }
+
+    pub fn intr_latch(&self) -> Option<Interrupt> {
+        let v = self.intr.get();
+        if v.is_some() {
+            self.intr.set(None);
+        }
         v
     }
 }

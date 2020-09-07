@@ -7,7 +7,7 @@ use std::rc::Rc;
 use dma::DmaCycle;
 
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle};
+use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt};
 use crate::memory::AddressSpace;
 use crate::nes::dma::Dma;
 use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
@@ -102,7 +102,7 @@ impl Nes {
                 let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
                     GeneratorState::Yielded(cycle) => {
                         match cycle {
-                            PpuCycle::Nmi => self.cpu.nmi(),
+                            PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
                             _ => ()
                         }
                         cycle
