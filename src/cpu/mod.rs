@@ -348,11 +348,9 @@ impl Cpu {
         move || loop {
 
             if let Some(intr) = interrupt {
-                interrupt = None;
-                yield_complete!(stack::interrupt(self, intr));
+                let trace = yield_complete!(stack::interrupt(self, intr));
+                yield CpuCycle::OpComplete(OPCODES[0x00].clone(), trace);
             }
-
-            interrupt = self.bus.intr_latch();
 
             let opcode = self.next_pc_read_u8();
             yield CpuCycle::Tick;
@@ -618,6 +616,10 @@ impl Cpu {
                     unimplemented!()
                 }
             };
+
+            // poll the nmi line
+            // TODO: this doesn't seem to be quite at the right spot...
+            interrupt = self.bus.intr_latch();
 
             let opcode = &OPCODES[opcode as usize];
             match opcode.0 {
