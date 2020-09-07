@@ -153,7 +153,6 @@ impl Ppu {
         match (self.scanline.get(), self.dot.get()) {
             (241, 1) => {
                 self.suppress_vbl.set(true);
-                self.suppress_nmi.set(true);
             },
             (_, 2..=3) => self.suppress_nmi.set(true),
             _ => (),
@@ -232,11 +231,10 @@ impl Ppu {
                 self.scanline.update(|sc| (sc + 1) % 262);
             }
 
-            let ctrl = self.ctrl.get();
-
-            self.suppress_vbl.set(false);
+            let previous_ctrl = self.ctrl.get();
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
+                self.suppress_vbl.set(false);
                 self.suppress_nmi.set(false);
                 yield PpuCycle::Frame
             } else {
@@ -246,8 +244,10 @@ impl Ppu {
                     yield PpuCycle::Tick
                 }
             }
-            // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-            generate_nmi = !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) && !ctrl.contains(PpuCtrl::V);
+            if self.status.get().contains(PpuStatus::V) {
+                // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
+                generate_nmi = !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) && !previous_ctrl.contains(PpuCtrl::V);
+            }
         }
     }
 }
