@@ -59,7 +59,7 @@ pub enum NesCycle {
 
 pub struct Nes {
     pub cpu: Cpu,
-    ppu: Rc<Ppu>,
+    pub ppu: Rc<Ppu>,
     dma: Dma,
     pub clocks: Clocks,
     // TODO: apu
@@ -181,6 +181,7 @@ impl Display for StepperError {
 impl Error for StepperError {}
 
 pub struct Stepper<'a> {
+    nes: &'a Nes,
     steps: Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'a>,
     halted: bool,
 }
@@ -189,6 +190,7 @@ impl<'a> Stepper<'a> {
     // TODO: normally, this should consume `Nes`, but this requires more refactoring
     pub fn new(nes: &'a Nes, start_at: Option<u16>) -> Self {
         Stepper {
+            nes,
             steps: Box::new(nes.ppu_steps(start_at)),
             halted: false,
         }
@@ -212,6 +214,15 @@ impl<'a> Stepper<'a> {
                 }
                 GeneratorState::Yielded(cycle) => Ok(cycle),
                 GeneratorState::Complete(_) => Err(StepperError::Halted),
+            }
+        }
+    }
+
+    pub fn tick_until(&mut self, mut stop: impl FnMut(&Nes) -> bool) -> Result<(), StepperError> {
+        loop {
+            self.tick()?;
+            if stop(&self.nes) {
+               break Ok(());
             }
         }
     }

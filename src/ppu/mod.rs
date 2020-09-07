@@ -68,7 +68,7 @@ impl Default for PpuMask {
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
-    struct PpuStatus: u8 {
+    pub struct PpuStatus: u8 {
         const O = 1 << 5; // Sprite overflow
         const S = 1 << 6; // Sprite 0 Hit
         const V = 1 << 7; // vblank
@@ -89,10 +89,10 @@ impl Default for PpuStatus {
 }
 
 pub struct Ppu {
-    ctrl: Cell<PpuCtrl>,
+    pub ctrl: Cell<PpuCtrl>,
     mask: Cell<PpuMask>,
-    status: Cell<PpuStatus>,
-    oam_addr: Cell<u8>,
+    pub status: Cell<PpuStatus>,
+    pub oam_addr: Cell<u8>,
 
     scroll_addr: Cell<u16>,
     data_addr: Cell<u16>,

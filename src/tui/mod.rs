@@ -12,7 +12,8 @@ use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Ta
 use tui::{Frame, Terminal};
 
 use crate::cpu::opcode::OpCode;
-use crate::cpu::{Cpu, Flags};
+use crate::cpu::{Cpu, Flags, Interrupt};
+use crate::ppu::{PpuStatus, PpuCtrl};
 use crate::memory::AddressSpace;
 use crate::nes::{Nes, Stepper};
 
@@ -28,6 +29,49 @@ impl Display for Flags {
             Flags::C,
         ]
         .into_iter()
+        {
+            if *self & flag == flag {
+                write!(f, "{:?}", flag)?;
+            } else {
+                write!(f, "-")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for PpuCtrl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for flag in vec![
+            // PpuCtrl::N_LO,
+            // PpuCtrl::N_HI,
+            PpuCtrl::I,
+            PpuCtrl::S,
+            PpuCtrl::B,
+            PpuCtrl::H,
+            PpuCtrl::P,
+            PpuCtrl::V,
+        ]
+            .into_iter()
+        {
+            if *self & flag == flag {
+                write!(f, "{:?}", flag)?;
+            } else {
+                write!(f, "-")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for PpuStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for flag in vec![
+            PpuStatus::O,
+            PpuStatus::S,
+            PpuStatus::V,
+        ]
+            .into_iter()
         {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
@@ -71,11 +115,41 @@ fn cpu_block(nes: &Nes) -> Paragraph {
             Span::styled(format!("{:02X}", nes.cpu.sp.get()), value_style),
         ]),
         Spans::from(vec![
+            Span::from(" INTR: "),
+            Span::styled(format!("{:?}", nes.cpu.bus.intr.get()), value_style),
+        ]),
+        Spans::from(vec![
             Span::from(" CYC: "),
             Span::styled(format!("{}", nes.clocks.cpu_cycles.get()), value_style),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
+}
+
+fn ppu_block(nes: &Nes) -> Paragraph {
+    let value_style = Style::default().add_modifier(Modifier::BOLD);
+
+    let state = Text::from(vec![
+        Spans::from(vec![
+            Span::from(" C: "),
+            Span::styled(
+                format!("{:02X} {}", nes.ppu.ctrl.get(), nes.ppu.ctrl.get()),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" S: "),
+            Span::styled(
+                format!("{:02X} {}", nes.ppu.status.get(), nes.ppu.status.get()),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" OAM: "),
+            Span::styled(format!("{:04X}", nes.ppu.oam_addr.get()), value_style),
+        ]),
+    ]);
+    Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
 }
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
@@ -100,7 +174,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
         items.push(ListItem::new(instr));
 
         addr = addr.saturating_add(1).saturating_add(operand.1 as u16);
-        if addr >= 0xFFFC {
+        if addr >= 0xFFFE {
             break;
         }
     }
@@ -118,11 +192,12 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
 fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(9), Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Length(10), Constraint::Length(5), Constraint::Percentage(100)].as_ref())
         .split(size);
 
     f.render_widget(cpu_block(nes), chunks[0]);
-    prg_rom(f, &nes, chunks[1]);
+    f.render_widget(ppu_block(nes), chunks[1]);
+    prg_rom(f, &nes, chunks[2]);
 }
 
 fn ram_block<'a>(
@@ -130,8 +205,9 @@ fn ram_block<'a>(
     addr_space: &'a dyn AddressSpace,
     base: u16,
     size: u16,
+    shift: u16,
 ) -> impl Widget + 'a {
-    let rows = (base..(base + size))
+    let rows = (base + (shift * 16)..base.saturating_add(size))
         .step_by(16)
         .map(move |base| {
             std::iter::once(format!("${:04X}:", base)).chain(
@@ -166,7 +242,7 @@ fn ram_block<'a>(
         .header_gap(0)
 }
 
-fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, size: Rect) {
+fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, shift: u16, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(
@@ -179,18 +255,22 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, size: Rect) {
         )
         .split(size);
 
-    f.render_widget(ram_block("RAM", &nes.cpu.bus.ram, 0, 0x800), chunks[0]);
+    f.render_widget(ram_block("RAM", &nes.cpu.bus.ram, 0, 0x800, shift), chunks[0]);
     f.render_widget(
-        ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800),
+        ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800, shift),
         chunks[1],
     );
     f.render_widget(
-        ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000),
+        ram_block("PRG-ROM", &nes.cpu.bus, 0x8000, 0x8000, shift),
         chunks[2],
     );
+    // f.render_widget(
+    //     ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000, shift),
+    //     chunks[2],
+    // );
 }
 
-fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes) -> Result<(), io::Error> {
+fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes, shift: u16) -> Result<(), io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()
@@ -198,7 +278,7 @@ fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes) -> Result<(), io::Err
             .constraints([Constraint::Percentage(90), Constraint::Min(10)].as_ref())
             .split(size);
 
-        rams(f, &nes, chunks[0]);
+        rams(f, &nes, shift, chunks[0]);
         rightbar(f, &nes, chunks[1]);
     })
 }
@@ -213,6 +293,7 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
     let mut input = termion::async_stdin().keys();
 
     let mut running = false;
+    let mut shift = 0u16;
 
     // powerup
     stepper.tick()?;
@@ -220,7 +301,7 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
         if running && !stepper.halted() {
             stepper.tick()?;
         }
-        draw(&mut terminal, nes)?;
+        draw(&mut terminal, nes, shift)?;
         if let Some(input_result) = input.next() {
             match input_result? {
                 Key::Ctrl('c') | Key::Char('q') => break,
@@ -233,7 +314,24 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
                 Key::Char('s') => {
                     stepper.tick()?;
                 }
+                Key::Char('v') => {
+                    stepper.tick_until(|nes|{
+                        nes.ppu.status.get().contains(PpuStatus::V)
+                    })?;
+                }
+                Key::Char('n') => {
+                    stepper.tick_until(|nes|{
+                        match nes.cpu.bus.intr.get() {
+                            Some(Interrupt::Nmi) => true,
+                            _ => false
+                        }
+                    })?;
+                }
                 Key::Char('r') => running = !running,
+                Key::Down => shift = shift.saturating_add(1),
+                Key::PageDown => shift = shift.saturating_add(16),
+                Key::PageUp => shift = shift.saturating_sub(16),
+                Key::Up => shift = shift.saturating_sub(1),
                 _ => (),
             }
         }
