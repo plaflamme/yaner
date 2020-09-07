@@ -9,11 +9,9 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 
-mod renderer;
-
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
-    struct PpuCtrl: u8 {
+    pub struct PpuCtrl: u8 {
         const N_LO = 1 << 0;
         const N_HI = 1 << 1;
         const N = Self::N_LO.bits | Self::N_HI.bits; // Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
@@ -107,8 +105,12 @@ pub struct Ppu {
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 
+    scanline: Cell<u16>,
+    dot: Cell<u16>,
+
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
-    supress_vbl: Cell<bool>,
+    suppress_vbl: Cell<bool>,
+    suppress_nmi: Cell<bool>,
 }
 
 impl Ppu {
@@ -128,22 +130,34 @@ impl Ppu {
 
             open_bus: Cell::new(0),
 
-            supress_vbl: Cell::new(false),
+            scanline: Cell::new(0),
+            dot: Cell::new(0),
+
+            suppress_vbl: Cell::new(false),
+            suppress_nmi: Cell::new(false),
         }
     }
 
     fn status(&self) -> u8 {
         let status = self.status.get();
-        let mut cleared = status.clone();
-        cleared.remove(PpuStatus::V);
-        self.status.set(cleared);
+        self.status.update(|s| s - PpuStatus::V);
 
         // reading PPUSTATUS resets the address latch
         self.addr_latch.set(false);
 
-        // use for vbl timing
-        //  ideally, we would only set this on the correct dot, but we don't have this information here
-        self.supress_vbl.set(true);
+        // interactions between vbl and PPUSTATUS reads:
+        //   Reading PPUSTATUS one PPU clock before reads it as clear and never sets the flag
+        //     or generates NMI for that frame
+        //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
+        //     and suppresses the NMI for that frame
+        match (self.scanline.get(), self.dot.get()) {
+            (241, 1) => {
+                self.suppress_vbl.set(true);
+                self.suppress_nmi.set(true);
+            },
+            (_, 2..=3) => self.suppress_nmi.set(true),
+            _ => (),
+        }
 
         status.bits()
     }
@@ -195,36 +209,45 @@ impl Ppu {
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         move || loop {
-            for scanline in 0..262u16 {
-                for dot in 0..341u16 {
-                    if scanline == 241 && dot == 1 && !self.supress_vbl.get() {
-                        let mut status = self.status.get();
-                        status.insert(PpuStatus::V);
-                        self.status.set(status);
+            match (self.scanline.get(), self.dot.get()) {
+                (241, 1) => {
+                    if !self.suppress_vbl.get() {
+                        // enable vblank
+                        self.status.update(|s| s | PpuStatus::V);
 
-                        if self.ctrl.get() & PpuCtrl::V == PpuCtrl::V {
-                            // TODO: we also have to generate an nmi if PPUCTRL::V is set during vblank
+                        if !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) {
                             generate_nmi = true;
                         }
                     }
-                    if scanline == 261 && dot == 1 {
-                        let mut status = self.status.get();
-                        status.remove(PpuStatus::V);
-                        self.status.set(status);
-                    }
+                },
+                (261, 1) => {
+                    self.status.update(|s| s - PpuStatus::V);
+                },
 
-                    self.supress_vbl.set(false);
-                    if dot < 340 || scanline < 261 {
-                        if generate_nmi {
-                            yield PpuCycle::Nmi;
-                        } else {
-                            yield PpuCycle::Tick;
-                        }
-                    } else {
-                        yield PpuCycle::Frame;
-                    }
+                _ => (),
+            }
+
+            self.dot.update(|dot| (dot + 1) % 341);
+            if self.dot.get() == 0 {
+                self.scanline.update(|sc| (sc + 1) % 262);
+            }
+
+            let ctrl = self.ctrl.get();
+
+            self.suppress_vbl.set(false);
+
+            if self.scanline.get() == 0 && self.dot.get() == 0 {
+                self.suppress_nmi.set(false);
+                yield PpuCycle::Frame
+            } else {
+                if !self.suppress_nmi.get() && generate_nmi && self.status.get().contains(PpuStatus::V) {
+                    yield PpuCycle::Nmi
+                } else {
+                    yield PpuCycle::Tick
                 }
             }
+            // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
+            generate_nmi = !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) && !ctrl.contains(PpuCtrl::V);
         }
     }
 }
