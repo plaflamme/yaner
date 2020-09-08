@@ -139,7 +139,7 @@ impl Ppu {
     }
 
     fn status(&self) -> u8 {
-        let status = self.status.get();
+        let mut status = self.status.get();
         self.status.update(|s| s - PpuStatus::V);
 
         // reading PPUSTATUS resets the address latch
@@ -151,10 +151,21 @@ impl Ppu {
         //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
         //     and suppresses the NMI for that frame
         match (self.scanline.get(), self.dot.get()) {
-            (241, 1) => {
+            (241, 0) => {
                 self.suppress_vbl.set(true);
+                self.suppress_nmi.set(true);
             },
-            (_, 2..=3) => self.suppress_nmi.set(true),
+            (241, 1) => {
+                // the ppu would have set it on this clock tick
+                status = status | PpuStatus::V;
+                self.suppress_vbl.set(true); // so we don't set it
+                self.suppress_nmi.set(true);
+            },
+            (241, 2..=3) => self.suppress_nmi.set(true),
+            (261, 1) => {
+                // the ppu will clear it on this tick
+                status = status - PpuStatus::V;
+            },
             _ => (),
         }
 

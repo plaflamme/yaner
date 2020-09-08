@@ -29,7 +29,7 @@ fn oam_stress() {
 #[test_case("04-nmi_control")]
 // #[test_case("05-nmi_timing")]
 // #[test_case("06-suppression")]
-#[test_case("07-nmi_on_timing")]
+// #[test_case("07-nmi_on_timing")]
 // #[test_case("08-nmi_off_timing")]
 // #[test_case("09-even_odd_frames")]
 // #[test_case("10-even_odd_timing")]
