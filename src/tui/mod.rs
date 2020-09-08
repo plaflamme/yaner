@@ -148,6 +148,10 @@ fn ppu_block(nes: &Nes) -> Paragraph {
             Span::from(" OAM: "),
             Span::styled(format!("{:04X}", nes.ppu.oam_addr.get()), value_style),
         ]),
+        Spans::from(vec![
+            Span::from(" CYC: "),
+            Span::styled(format!("{},{}", nes.ppu.scanline.get(), nes.ppu.dot.get()), value_style),
+        ]),
     ]);
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
 }
@@ -192,7 +196,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
 fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(10), Constraint::Length(5), Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Length(10), Constraint::Length(6), Constraint::Percentage(100)].as_ref())
         .split(size);
 
     f.render_widget(cpu_block(nes), chunks[0]);

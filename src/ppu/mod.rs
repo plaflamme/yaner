@@ -105,8 +105,8 @@ pub struct Ppu {
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 
-    scanline: Cell<u16>,
-    dot: Cell<u16>,
+    pub scanline: Cell<u16>,
+    pub dot: Cell<u16>,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
