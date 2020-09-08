@@ -43,8 +43,8 @@ impl Display for Flags {
 impl Display for PpuCtrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for flag in vec![
-            // PpuCtrl::N_LO,
-            // PpuCtrl::N_HI,
+            PpuCtrl::N_LO,
+            PpuCtrl::N_HI,
             PpuCtrl::I,
             PpuCtrl::S,
             PpuCtrl::B,
@@ -86,6 +86,11 @@ impl Display for PpuStatus {
 fn cpu_block(nes: &Nes) -> Paragraph {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
+    let intr_display = match nes.cpu.bus.intr.get() {
+        None => String::from("-"),
+        Some(intr) => format!("{:?}", intr)
+    };
+
     let state = Text::from(vec![
         Spans::from(vec![
             Span::from(" PC: "),
@@ -116,7 +121,7 @@ fn cpu_block(nes: &Nes) -> Paragraph {
         ]),
         Spans::from(vec![
             Span::from(" INTR: "),
-            Span::styled(format!("{:?}", nes.cpu.bus.intr.get()), value_style),
+            Span::styled(format!("{}", intr_display), value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
@@ -264,14 +269,14 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, shift: u16, size: Rect) 
         ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800, shift),
         chunks[1],
     );
-    f.render_widget(
-        ram_block("PRG-ROM", &nes.cpu.bus, 0x8000, 0x8000, shift),
-        chunks[2],
-    );
     // f.render_widget(
-    //     ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000, shift),
+    //     ram_block("PRG-ROM", &nes.cpu.bus, 0x8000, 0x8000, shift),
     //     chunks[2],
     // );
+    f.render_widget(
+        ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000, shift),
+        chunks[2],
+    );
 }
 
 fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes, shift: u16) -> Result<(), io::Error> {
