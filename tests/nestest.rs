@@ -15,7 +15,7 @@ use nom::combinator::map_res;
 use nom::{AsChar, IResult};
 
 use yaner::cartridge::Cartridge;
-use yaner::cpu::CpuCycle;
+use yaner::cpu::{CpuCycle, Flags};
 use yaner::nes::{Nes, NesCycle};
 
 #[derive(Debug)]
@@ -107,19 +107,20 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
 }
 
 fn assert_log(nes: &Nes, line: &LogLine) {
+    let state = nes.debug();
     assert_eq!(
         nes.clocks.cpu_cycles.get(),
         line.cpu_cyc as u64,
         "incorrect cpu cycle at {}",
         line
     );
-    assert_eq!(nes.cpu.pc.get(), line.pc, "incorrect pc at {}", line);
-    assert_eq!(nes.cpu.acc.get(), line.a, "incorrect acc at {}", line);
-    assert_eq!(nes.cpu.x.get(), line.x, "incorrect x at {}", line);
-    assert_eq!(nes.cpu.y.get(), line.y, "incorrect y at {}", line);
-    assert_eq!(nes.cpu.flags(), line.flags, "incorrect flags at {}", line);
+    assert_eq!(state.cpu.pc, line.pc, "incorrect pc at {}", line);
+    assert_eq!(state.cpu.a, line.a, "incorrect acc at {}", line);
+    assert_eq!(state.cpu.x, line.x, "incorrect x at {}", line);
+    assert_eq!(state.cpu.y, line.y, "incorrect y at {}", line);
+    assert_eq!(state.cpu.flags, Flags::from_bits_truncate(line.flags), "incorrect flags at {}", line);
     assert_eq!(
-        nes.cpu.sp.get(),
+        state.cpu.sp,
         line.sp,
         "incorrect stack pointer at {}",
         line

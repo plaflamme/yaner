@@ -16,6 +16,7 @@ use crate::cpu::{Cpu, Flags, Interrupt};
 use crate::ppu::{PpuStatus, PpuCtrl};
 use crate::memory::AddressSpace;
 use crate::nes::{Nes, Stepper};
+use crate::nes::debug::NesState;
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -83,10 +84,10 @@ impl Display for PpuStatus {
     }
 }
 
-fn cpu_block(nes: &Nes) -> Paragraph {
+fn cpu_block(state: &NesState) -> Paragraph {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
-    let intr_display = match nes.cpu.bus.intr.get() {
+    let intr_display = match state.cpu.intr {
         None => String::from("-"),
         Some(intr) => format!("{:?}", intr)
     };
@@ -94,30 +95,30 @@ fn cpu_block(nes: &Nes) -> Paragraph {
     let state = Text::from(vec![
         Spans::from(vec![
             Span::from(" PC: "),
-            Span::styled(format!("{:04X}", nes.cpu.pc.get()), value_style),
+            Span::styled(format!("{:04X}", state.cpu.pc), value_style),
         ]),
         Spans::from(vec![
             Span::from(" A: "),
-            Span::styled(format!("{:02X}", nes.cpu.acc.get()), value_style),
+            Span::styled(format!("{:02X}", state.cpu.a), value_style),
         ]),
         Spans::from(vec![
             Span::from(" X: "),
-            Span::styled(format!("{:02X}", nes.cpu.x.get()), value_style),
+            Span::styled(format!("{:02X}", state.cpu.x), value_style),
         ]),
         Spans::from(vec![
             Span::from(" Y: "),
-            Span::styled(format!("{:02X}", nes.cpu.y.get()), value_style),
+            Span::styled(format!("{:02X}", state.cpu.y), value_style),
         ]),
         Spans::from(vec![
             Span::from(" P: "),
             Span::styled(
-                format!("{:02X} {}", nes.cpu.flags(), nes.cpu.flags.get()),
+                format!("{:02X} {}", state.cpu.flags, state.cpu.flags),
                 value_style,
             ),
         ]),
         Spans::from(vec![
             Span::from(" SP: "),
-            Span::styled(format!("{:02X}", nes.cpu.sp.get()), value_style),
+            Span::styled(format!("{:02X}", state.cpu.sp), value_style),
         ]),
         Spans::from(vec![
             Span::from(" INTR: "),
@@ -125,47 +126,44 @@ fn cpu_block(nes: &Nes) -> Paragraph {
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
-            Span::styled(format!("{}", nes.clocks.cpu_cycles.get()), value_style),
+            Span::styled(format!("{}", state.clocks.cpu_cycles), value_style),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
 }
 
-fn ppu_block(nes: &Nes) -> Paragraph {
+fn ppu_block(nes: &NesState) -> Paragraph {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
     let state = Text::from(vec![
         Spans::from(vec![
             Span::from(" C: "),
             Span::styled(
-                format!("{:02X} {}", nes.ppu.ctrl.get(), nes.ppu.ctrl.get()),
+                format!("{:02X} {}", nes.ppu.ctrl, nes.ppu.ctrl),
                 value_style,
             ),
         ]),
         Spans::from(vec![
             Span::from(" S: "),
             Span::styled(
-                format!("{:02X} {}", nes.ppu.status.get(), nes.ppu.status.get()),
+                format!("{:02X} {}", nes.ppu.status, nes.ppu.status),
                 value_style,
             ),
         ]),
         Spans::from(vec![
             Span::from(" OAM: "),
-            Span::styled(format!("{:04X}", nes.ppu.oam_addr.get()), value_style),
+            Span::styled(format!("{:04X}", nes.ppu.oam_addr), value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
-            Span::styled(format!("{},{}", nes.ppu.scanline.get(), nes.ppu.dot.get()), value_style),
+            Span::styled(format!("{},{}", nes.ppu.scanline, nes.ppu.dot), value_style),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
 }
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
-fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
-    let mapper = nes.cpu.bus.mapper.borrow();
-    let addr_space = mapper.cpu_addr_space();
-
+fn prg_rom<B: Backend>(f: &mut Frame<B>, state: &NesState, addr_space: &dyn AddressSpace, chunk: Rect) {
     let start = 0x8000;
 
     let mut items = Vec::new();
@@ -177,7 +175,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
 
         // We can be in the middle of an instruction which has incremented pc,
         //   use the closest instruction to the current pc value if there's no exact match.
-        if addr <= nes.cpu.pc.get() {
+        if addr <= state.cpu.pc {
             selected = Some(items.len());
         }
         items.push(ListItem::new(instr));
@@ -198,7 +196,7 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, nes: &Nes, chunk: Rect) {
     f.render_stateful_widget(list, chunk, &mut state);
 }
 
-fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
+fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &NesState, addr_space: &dyn AddressSpace, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(10), Constraint::Length(6), Constraint::Percentage(100)].as_ref())
@@ -206,7 +204,7 @@ fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &Nes, size: Rect) {
 
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
-    prg_rom(f, &nes, chunks[2]);
+    prg_rom(f, &nes, addr_space, chunks[2]);
 }
 
 fn ram_block<'a>(
@@ -287,8 +285,10 @@ fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes, shift: u16) -> Result
             .constraints([Constraint::Percentage(90), Constraint::Min(10)].as_ref())
             .split(size);
 
+        let state = nes.debug();
+
         rams(f, &nes, shift, chunks[0]);
-        rightbar(f, &nes, chunks[1]);
+        rightbar(f, &state, nes.cpu.bus.mapper.borrow().cpu_addr_space(), chunks[1]);
     })
 }
 
@@ -325,7 +325,7 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
                 }
                 Key::Char('v') => {
                     stepper.tick_until(|nes|{
-                        nes.ppu.status.get().contains(PpuStatus::V)
+                        nes.debug().ppu.status.contains(PpuStatus::V)
                     })?;
                 }
                 Key::Char('n') => {

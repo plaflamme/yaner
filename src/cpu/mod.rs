@@ -10,6 +10,7 @@ mod mode;
 use mode::*;
 mod instr;
 pub mod opcode;
+pub mod debug;
 
 pub mod generator;
 
@@ -197,12 +198,12 @@ pub enum Interrupt {
 // http://nesdev.com/6502_cpu.txt
 // http://wiki.nesdev.com/w/index.php/CPU_ALL
 pub struct Cpu {
-    pub acc: Cell<u8>,
-    pub x: Cell<u8>,
-    pub y: Cell<u8>,
-    pub flags: Cell<Flags>,
-    pub sp: Cell<u8>,
-    pub pc: Cell<u16>,
+    acc: Cell<u8>,
+    x: Cell<u8>,
+    y: Cell<u8>,
+    flags: Cell<Flags>,
+    sp: Cell<u8>,
+    pc: Cell<u16>,
 
     pub bus: CpuBus,
 }
@@ -264,10 +265,6 @@ impl Cpu {
 
             bus,
         }
-    }
-
-    pub fn flags(&self) -> u8 {
-        self.flags.get().bits
     }
 
     // reads pc and advances by one

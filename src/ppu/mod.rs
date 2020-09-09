@@ -9,6 +9,8 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 
+pub mod debug;
+
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
     pub struct PpuCtrl: u8 {
@@ -47,7 +49,7 @@ impl PpuCtrl {
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
-    struct PpuMask: u8 {
+    pub struct PpuMask: u8 {
         const GREYSCALE = 1 << 0; // Greyscale
         const m = 1 << 1; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
         const M = 1 << 2; // 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
@@ -89,10 +91,10 @@ impl Default for PpuStatus {
 }
 
 pub struct Ppu {
-    pub ctrl: Cell<PpuCtrl>,
+    ctrl: Cell<PpuCtrl>,
     mask: Cell<PpuMask>,
-    pub status: Cell<PpuStatus>,
-    pub oam_addr: Cell<u8>,
+    status: Cell<PpuStatus>,
+    oam_addr: Cell<u8>,
 
     scroll_addr: Cell<u16>,
     data_addr: Cell<u16>,
@@ -105,8 +107,8 @@ pub struct Ppu {
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 
-    pub scanline: Cell<u16>,
-    pub dot: Cell<u16>,
+    scanline: Cell<u16>,
+    dot: Cell<u16>,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,

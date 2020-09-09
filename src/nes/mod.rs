@@ -15,6 +15,7 @@ use std::borrow::BorrowMut;
 use std::error::Error;
 
 mod dma;
+pub mod debug;
 
 pub struct Clocks {
     pub cpu_cycles: Cell<u64>,
@@ -80,6 +81,10 @@ impl Nes {
             dma: Dma::new(),
             clocks: Clocks::new(),
         }
+    }
+
+    pub fn debug(&self) -> debug::NesState {
+        debug::NesState::new(self)
     }
 
     pub fn ram(&self) -> &dyn AddressSpace {
