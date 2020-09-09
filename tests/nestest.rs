@@ -1,4 +1,5 @@
 #![feature(generators, generator_trait)]
+#![allow(deprecated)] // for ws! nom macro
 
 #[macro_use]
 extern crate nom;

@@ -1,6 +1,6 @@
 #![feature(generators, generator_trait)]
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::convert::TryFrom;
 use std::path::Path;
 
@@ -11,7 +11,7 @@ extern crate yaner;
 
 fn run(stepper: &mut Stepper, frames: u64) {
     for _ in 0..frames {
-        stepper.step_frame();
+        stepper.step_frame().unwrap();
     }
 }
 

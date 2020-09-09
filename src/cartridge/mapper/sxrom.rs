@@ -56,7 +56,7 @@ enum ChrBankMode {
 
 bitflags!(
     struct Ctrl: u8 {
-        const Mirroring = 0b0000_0011;
+        const MIRRORING = 0b0000_0011;
         const PRG_BANK_0 = 0b0000_0100;
         const PRG_BANK_1 = 0b0000_1000;
         const CHR_BANK_MODE = 0b0001_0000; // 0: switch 8KB at a time; 1: switch 4KB separately

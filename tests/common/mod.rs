@@ -17,7 +17,7 @@ pub fn run_test(
     {
         let mut clock = Stepper::new(&nes, start_at);
         loop {
-            clock.step_frame();
+            clock.step_frame().unwrap();
             if halt(&nes.debug()) {
                 break;
             }
