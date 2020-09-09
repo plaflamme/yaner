@@ -1,6 +1,6 @@
 use crate::cpu::debug::CpuState;
-use crate::ppu::debug::PpuState;
 use crate::memory::AddressSpace;
+use crate::ppu::debug::PpuState;
 
 pub struct ClockState {
     pub cpu_cycles: u64,
@@ -36,5 +36,4 @@ impl<'a> NesState<'a> {
             chr_rom: &nes.cpu.bus.ppu_registers.bus, // TODO: use mapper directly
         }
     }
-
 }

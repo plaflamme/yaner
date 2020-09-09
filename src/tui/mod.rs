@@ -13,10 +13,10 @@ use tui::{Frame, Terminal};
 
 use crate::cpu::opcode::OpCode;
 use crate::cpu::{Cpu, Flags, Interrupt};
-use crate::ppu::{PpuStatus, PpuCtrl};
 use crate::memory::AddressSpace;
-use crate::nes::{Nes, Stepper};
 use crate::nes::debug::NesState;
+use crate::nes::{Nes, Stepper};
+use crate::ppu::{PpuCtrl, PpuStatus};
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -53,7 +53,7 @@ impl Display for PpuCtrl {
             PpuCtrl::P,
             PpuCtrl::V,
         ]
-            .into_iter()
+        .into_iter()
         {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
@@ -67,13 +67,7 @@ impl Display for PpuCtrl {
 
 impl Display for PpuStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![
-            PpuStatus::O,
-            PpuStatus::S,
-            PpuStatus::V,
-        ]
-            .into_iter()
-        {
+        for flag in vec![PpuStatus::O, PpuStatus::S, PpuStatus::V].into_iter() {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
             } else {
@@ -89,7 +83,7 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
 
     let intr_display = match state.cpu.intr {
         None => String::from("-"),
-        Some(intr) => format!("{:?}", intr)
+        Some(intr) => format!("{:?}", intr),
     };
 
     let state = Text::from(vec![
@@ -163,7 +157,12 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 }
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
-fn prg_rom<B: Backend>(f: &mut Frame<B>, state: &NesState, addr_space: &dyn AddressSpace, chunk: Rect) {
+fn prg_rom<B: Backend>(
+    f: &mut Frame<B>,
+    state: &NesState,
+    addr_space: &dyn AddressSpace,
+    chunk: Rect,
+) {
     let start = 0x8000;
 
     let mut items = Vec::new();
@@ -196,10 +195,22 @@ fn prg_rom<B: Backend>(f: &mut Frame<B>, state: &NesState, addr_space: &dyn Addr
     f.render_stateful_widget(list, chunk, &mut state);
 }
 
-fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &NesState, addr_space: &dyn AddressSpace, size: Rect) {
+fn rightbar<B: Backend>(
+    f: &mut Frame<B>,
+    nes: &NesState,
+    addr_space: &dyn AddressSpace,
+    size: Rect,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(10), Constraint::Length(6), Constraint::Percentage(100)].as_ref())
+        .constraints(
+            [
+                Constraint::Length(10),
+                Constraint::Length(6),
+                Constraint::Percentage(100),
+            ]
+            .as_ref(),
+        )
         .split(size);
 
     f.render_widget(cpu_block(nes), chunks[0]);
@@ -215,13 +226,12 @@ struct MemoryBlock<'a> {
 }
 
 impl<'a> MemoryBlock<'a> {
-
     fn new(name: &'a str, addr_space: &'a dyn AddressSpace, base: u16, size: u16) -> Self {
         MemoryBlock {
             name,
             addr_space,
             base,
-            size
+            size,
         }
     }
 
@@ -260,49 +270,50 @@ impl<'a> MemoryBlock<'a> {
             ])
             .header_gap(0)
     }
-
 }
 
-fn h_rams<'a, B: Backend>(f: &mut Frame<B>, left: &MemoryBlock<'a>, right: &MemoryBlock<'a>, shift: u16, size: Rect) {
+fn h_rams<'a, B: Backend>(
+    f: &mut Frame<B>,
+    left: &MemoryBlock<'a>,
+    right: &MemoryBlock<'a>,
+    shift: u16,
+    size: Rect,
+) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(
-            vec![
-                Constraint::Length(55),
-                Constraint::Length(55),
-            ],
-        )
+        .constraints(vec![Constraint::Length(55), Constraint::Length(55)])
         .split(size);
     f.render_widget(left.to_block(shift), chunks[0]);
-    f.render_widget(right.to_block(shift),chunks[1]);
+    f.render_widget(right.to_block(shift), chunks[1]);
 }
 
 fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(
-            vec![
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
-            ],
-        )
+        .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(size);
 
-    h_rams(f,
-           &MemoryBlock::new("RAM", nes.ram, 0, 0x0800),
-           &MemoryBlock::new("VRAM", nes.vram, 0x2000, 0x0800),
-           shift,
-           chunks[0]
+    h_rams(
+        f,
+        &MemoryBlock::new("RAM", nes.ram, 0, 0x0800),
+        &MemoryBlock::new("VRAM", nes.vram, 0x2000, 0x0800),
+        shift,
+        chunks[0],
     );
-    h_rams(f,
-           &MemoryBlock::new("PRG-ROM", nes.prg_rom, 0x8000, 0x8000),
-           &MemoryBlock::new("CHR-ROM", nes.chr_rom, 0x0, 0x2000),
-           shift,
-           chunks[1]
+    h_rams(
+        f,
+        &MemoryBlock::new("PRG-ROM", nes.prg_rom, 0x8000, 0x8000),
+        &MemoryBlock::new("CHR-ROM", nes.chr_rom, 0x0, 0x2000),
+        shift,
+        chunks[1],
     );
 }
 
-fn draw<'a, B: Backend>(terminal: &mut Terminal<B>, state: &NesState<'a>, shift: u16) -> Result<(), io::Error> {
+fn draw<'a, B: Backend>(
+    terminal: &mut Terminal<B>,
+    state: &NesState<'a>,
+    shift: u16,
+) -> Result<(), io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()
@@ -347,16 +358,12 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
                     stepper.tick()?;
                 }
                 Key::Char('v') => {
-                    stepper.tick_until(|nes|{
-                        nes.debug().ppu.status.contains(PpuStatus::V)
-                    })?;
+                    stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                 }
                 Key::Char('n') => {
-                    stepper.tick_until(|nes|{
-                        match nes.cpu.bus.intr.get() {
-                            Some(Interrupt::Nmi) => true,
-                            _ => false
-                        }
+                    stepper.tick_until(|nes| match nes.cpu.bus.intr.get() {
+                        Some(Interrupt::Nmi) => true,
+                        _ => false,
                     })?;
                 }
                 Key::Char('r') => running = !running,

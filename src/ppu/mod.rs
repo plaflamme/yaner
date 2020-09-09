@@ -156,18 +156,18 @@ impl Ppu {
             (241, 0) => {
                 self.suppress_vbl.set(true);
                 self.suppress_nmi.set(true);
-            },
+            }
             (241, 1) => {
                 // the ppu would have set it on this clock tick
                 status = status | PpuStatus::V;
                 self.suppress_vbl.set(true); // so we don't set it
                 self.suppress_nmi.set(true);
-            },
+            }
             (241, 2..=3) => self.suppress_nmi.set(true),
             (261, 1) => {
                 // the ppu will clear it on this tick
                 status = status - PpuStatus::V;
-            },
+            }
             _ => (),
         }
 
@@ -231,10 +231,10 @@ impl Ppu {
                             generate_nmi = true;
                         }
                     }
-                },
+                }
                 (261, 1) => {
                     self.status.update(|s| s - PpuStatus::V);
-                },
+                }
 
                 _ => (),
             }
@@ -251,7 +251,10 @@ impl Ppu {
                 self.suppress_nmi.set(false);
                 yield PpuCycle::Frame
             } else {
-                if !self.suppress_nmi.get() && generate_nmi && self.status.get().contains(PpuStatus::V) {
+                if !self.suppress_nmi.get()
+                    && generate_nmi
+                    && self.status.get().contains(PpuStatus::V)
+                {
                     yield PpuCycle::Nmi
                 } else {
                     yield PpuCycle::Tick
@@ -259,7 +262,9 @@ impl Ppu {
             }
             if self.status.get().contains(PpuStatus::V) {
                 // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-                generate_nmi = !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) && !previous_ctrl.contains(PpuCtrl::V);
+                generate_nmi = !self.suppress_nmi.get()
+                    && self.ctrl.get().contains(PpuCtrl::V)
+                    && !previous_ctrl.contains(PpuCtrl::V);
             }
         }
     }

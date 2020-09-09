@@ -1,4 +1,4 @@
-use crate::ppu::{PpuCtrl, PpuMask, PpuStatus, Ppu};
+use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus};
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,

@@ -119,13 +119,13 @@ fn assert_log(nes: &Nes, line: &LogLine) {
     assert_eq!(state.cpu.a, line.a, "incorrect acc at {}", line);
     assert_eq!(state.cpu.x, line.x, "incorrect x at {}", line);
     assert_eq!(state.cpu.y, line.y, "incorrect y at {}", line);
-    assert_eq!(state.cpu.flags, Flags::from_bits_truncate(line.flags), "incorrect flags at {}", line);
     assert_eq!(
-        state.cpu.sp,
-        line.sp,
-        "incorrect stack pointer at {}",
+        state.cpu.flags,
+        Flags::from_bits_truncate(line.flags),
+        "incorrect flags at {}",
         line
     );
+    assert_eq!(state.cpu.sp, line.sp, "incorrect stack pointer at {}", line);
     assert_eq!(
         nes.clocks.ppu_frame(),
         line.ppu_frame as u64,

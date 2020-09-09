@@ -13,8 +13,8 @@ use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
 use std::borrow::BorrowMut;
 use std::error::Error;
 
-mod dma;
 pub mod debug;
+mod dma;
 
 pub struct Clocks {
     pub cpu_cycles: Cell<u64>,
@@ -103,10 +103,10 @@ impl Nes {
                     GeneratorState::Yielded(cycle) => {
                         match cycle {
                             PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
-                            _ => ()
+                            _ => (),
                         }
                         cycle
-                    },
+                    }
                     GeneratorState::Complete(_) => panic!("ppu stopped"),
                 };
 
@@ -222,7 +222,7 @@ impl<'a> Stepper<'a> {
         loop {
             self.tick()?;
             if stop(&self.nes) {
-               break Ok(());
+                break Ok(());
             }
         }
     }

@@ -7,9 +7,7 @@ use test_case::test_case;
 
 #[test]
 fn ppu_open_bus() {
-    run_blargg_test(
-        "roms/nes-test-roms/ppu_open_bus/ppu_open_bus.nes",
-    );
+    run_blargg_test("roms/nes-test-roms/ppu_open_bus/ppu_open_bus.nes");
 }
 
 #[test]

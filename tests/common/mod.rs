@@ -2,8 +2,8 @@ use std::convert::TryFrom;
 use std::path::Path;
 
 use yaner::cartridge::Cartridge;
-use yaner::nes::{Nes, Stepper};
 use yaner::nes::debug::NesState;
+use yaner::nes::{Nes, Stepper};
 
 pub mod blargg;
 

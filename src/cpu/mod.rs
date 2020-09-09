@@ -8,9 +8,9 @@ use std::ops::Generator;
 
 mod mode;
 use mode::*;
+pub mod debug;
 mod instr;
 pub mod opcode;
-pub mod debug;
 
 pub mod generator;
 
@@ -192,7 +192,7 @@ bitflags!(
 #[derive(Debug, Clone, Copy)]
 pub enum Interrupt {
     Nmi,
-    Brk
+    Brk,
 }
 
 // http://nesdev.com/6502_cpu.txt
@@ -343,7 +343,6 @@ impl Cpu {
         let mut interrupt: Option<Interrupt> = None;
 
         move || loop {
-
             if let Some(intr) = interrupt {
                 let trace = yield_complete!(stack::interrupt(self, intr));
                 yield CpuCycle::OpComplete(OPCODES[0x00].clone(), trace);

@@ -4,10 +4,9 @@ pub(in crate::cpu) fn interrupt<'a>(
     cpu: &'a Cpu,
     interrupt: Interrupt,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
-
     let interrupt_pc = match interrupt {
         Interrupt::Nmi => 0xFFFA,
-        Interrupt::Brk => 0xFFFE
+        Interrupt::Brk => 0xFFFE,
     };
 
     move || {
