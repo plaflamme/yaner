@@ -12,11 +12,12 @@ extern crate yaner;
 
 fn run(nes: &yaner::nes::Nes) {
     consume_generator!(nes.cpu.run(None), {
-        if nes.ram().read_u8(0x6001) == 0xDE
-            && nes.ram().read_u8(0x6002) == 0xB0
-            && nes.ram().read_u8(0x6003) == 0x61
+        let state = nes.debug();
+        if state.cpu_bus.read_u8(0x6001) == 0xDE
+            && state.cpu_bus.read_u8(0x6002) == 0xB0
+            && state.cpu_bus.read_u8(0x6003) == 0x61
         {
-            match nes.ram().read_u8(0x6000) {
+            match state.cpu_bus.read_u8(0x6000) {
                 0x80 => (),
                 _ => break,
             }

@@ -189,6 +189,6 @@ fn test_nestest() {
         };
     }
 
-    let result = nes.ram().read_u16(0x02);
+    let result = nes.debug().ram.read_u16(0x02);
     assert_eq!(0x00, result);
 }

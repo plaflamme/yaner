@@ -70,7 +70,7 @@ fn main() {
             let nes = Nes::new(cartridge);
             nes.run(pc);
             if let Some(addr) = output {
-                let value = nes.ram().read_u16(addr);
+                let value = nes.debug().cpu_bus.read_u16(addr);
                 println!("{:#04X} -> {:#04X}", addr, value);
             }
         }

@@ -8,7 +8,6 @@ use dma::DmaCycle;
 
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt};
-use crate::memory::AddressSpace;
 use crate::nes::dma::Dma;
 use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
 use std::borrow::BorrowMut;
@@ -85,10 +84,6 @@ impl Nes {
 
     pub fn debug(&self) -> debug::NesState {
         debug::NesState::new(self)
-    }
-
-    pub fn ram(&self) -> &dyn AddressSpace {
-        &self.cpu.bus
     }
 
     // yields on every nes ppu tick

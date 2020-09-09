@@ -84,7 +84,7 @@ impl Display for PpuStatus {
     }
 }
 
-fn cpu_block(state: &NesState) -> Paragraph {
+fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
     let intr_display = match state.cpu.intr {
@@ -132,7 +132,7 @@ fn cpu_block(state: &NesState) -> Paragraph {
     Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
 }
 
-fn ppu_block(nes: &NesState) -> Paragraph {
+fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
     let state = Text::from(vec![
@@ -207,77 +207,102 @@ fn rightbar<B: Backend>(f: &mut Frame<B>, nes: &NesState, addr_space: &dyn Addre
     prg_rom(f, &nes, addr_space, chunks[2]);
 }
 
-fn ram_block<'a>(
+struct MemoryBlock<'a> {
     name: &'a str,
     addr_space: &'a dyn AddressSpace,
     base: u16,
     size: u16,
-    shift: u16,
-) -> impl Widget + 'a {
-    let rows = (base + (shift * 16)..base.saturating_add(size))
-        .step_by(16)
-        .map(move |base| {
-            std::iter::once(format!("${:04X}:", base)).chain(
-                (0..16)
-                    .map(move |low| addr_space.read_u8(base + low))
-                    .map(|v| format!("{:02X}", v)),
-            )
-        })
-        .map(|row| Row::Data(row));
-
-    Table::new(std::iter::empty::<&str>(), rows)
-        .block(Block::default().title(name).borders(Borders::ALL))
-        .widths(&[
-            Constraint::Length(7),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-        ])
-        .header_gap(0)
 }
 
-fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &'a Nes, shift: u16, size: Rect) {
+impl<'a> MemoryBlock<'a> {
+
+    fn new(name: &'a str, addr_space: &'a dyn AddressSpace, base: u16, size: u16) -> Self {
+        MemoryBlock {
+            name,
+            addr_space,
+            base,
+            size
+        }
+    }
+
+    fn to_block(&self, shift: u16) -> impl Widget + '_ {
+        let rows = (self.base + (shift * 16)..self.base.saturating_add(self.size))
+            .step_by(16)
+            .map(move |base| {
+                std::iter::once(format!("${:04X}:", base)).chain(
+                    (0..16)
+                        .map(move |low| self.addr_space.read_u8(base + low))
+                        .map(|v| format!("{:02X}", v)),
+                )
+            })
+            .map(|row| Row::Data(row));
+
+        Table::new(std::iter::empty::<&str>(), rows)
+            .block(Block::default().title(self.name).borders(Borders::ALL))
+            .widths(&[
+                Constraint::Length(7),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+                Constraint::Length(2),
+            ])
+            .header_gap(0)
+    }
+
+}
+
+fn h_rams<'a, B: Backend>(f: &mut Frame<B>, left: &MemoryBlock<'a>, right: &MemoryBlock<'a>, shift: u16, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(
-            [
+            vec![
                 Constraint::Length(55),
                 Constraint::Length(55),
-                Constraint::Length(55),
-            ]
-            .as_ref(),
+            ],
+        )
+        .split(size);
+    f.render_widget(left.to_block(shift), chunks[0]);
+    f.render_widget(right.to_block(shift),chunks[1]);
+}
+
+fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            vec![
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ],
         )
         .split(size);
 
-    f.render_widget(ram_block("RAM", &nes.cpu.bus.ram, 0, 0x800, shift), chunks[0]);
-    f.render_widget(
-        ram_block("VRAM", &nes.cpu.bus.ppu_registers.bus.vram, 0x2000, 0x800, shift),
-        chunks[1],
+    h_rams(f,
+           &MemoryBlock::new("RAM", nes.ram, 0, 0x0800),
+           &MemoryBlock::new("VRAM", nes.vram, 0x2000, 0x0800),
+           shift,
+           chunks[0]
     );
-    // f.render_widget(
-    //     ram_block("PRG-ROM", &nes.cpu.bus, 0x8000, 0x8000, shift),
-    //     chunks[2],
-    // );
-    f.render_widget(
-        ram_block("CHR-ROM", &nes.cpu.bus.ppu_registers.bus, 0, 0x2000, shift),
-        chunks[2],
+    h_rams(f,
+           &MemoryBlock::new("PRG-ROM", nes.prg_rom, 0x8000, 0x8000),
+           &MemoryBlock::new("CHR-ROM", nes.chr_rom, 0x0, 0x2000),
+           shift,
+           chunks[1]
     );
 }
 
-fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes, shift: u16) -> Result<(), io::Error> {
+fn draw<'a, B: Backend>(terminal: &mut Terminal<B>, state: &NesState<'a>, shift: u16) -> Result<(), io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()
@@ -285,10 +310,8 @@ fn draw<B: Backend>(terminal: &mut Terminal<B>, nes: &Nes, shift: u16) -> Result
             .constraints([Constraint::Percentage(90), Constraint::Min(10)].as_ref())
             .split(size);
 
-        let state = nes.debug();
-
-        rams(f, &nes, shift, chunks[0]);
-        rightbar(f, &state, nes.cpu.bus.mapper.borrow().cpu_addr_space(), chunks[1]);
+        rams(f, &state, shift, chunks[0]);
+        rightbar(f, &state, state.prg_rom, chunks[1]);
     })
 }
 
@@ -310,7 +333,7 @@ pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
         if running && !stepper.halted() {
             stepper.tick()?;
         }
-        draw(&mut terminal, nes, shift)?;
+        draw(&mut terminal, &nes.debug(), shift)?;
         if let Some(input_result) = input.next() {
             match input_result? {
                 Key::Ctrl('c') | Key::Char('q') => break,

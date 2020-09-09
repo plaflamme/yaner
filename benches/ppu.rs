@@ -6,7 +6,6 @@ use std::path::Path;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::{Nes, Stepper};
-use yaner::ppu::PpuCycle;
 
 extern crate yaner;
 

@@ -24,20 +24,20 @@ pub fn run_blargg_test(rom_path: &str) {
 pub fn blargg_test(rom_path: &Path, expect_success: bool) {
     let mut result = 0xFF;
     let mut result_str = String::new();
-    run_test(rom_path, None, |addr_space| {
+    run_test(rom_path, None, |state| {
         let marker = (
-            addr_space.read_u8(0x6001),
-            addr_space.read_u8(0x6002),
-            addr_space.read_u8(0x6003),
+            state.cpu_bus.read_u8(0x6001),
+            state.cpu_bus.read_u8(0x6002),
+            state.cpu_bus.read_u8(0x6003),
         );
         match marker {
             // this marker indicates that 0x6000 is useful
             (0xDE, 0xB0, 0x61) => {
-                match addr_space.read_u8(0x6000) {
+                match state.cpu_bus.read_u8(0x6000) {
                     0x80 => false, // test is running
                     done => {
                         result = done;
-                        result_str = read_zero_terminated_string(addr_space, 0x6004);
+                        result_str = read_zero_terminated_string(state.cpu_bus, 0x6004);
                         true
                     }
                 }
