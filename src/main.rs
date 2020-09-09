@@ -77,7 +77,8 @@ fn main() {
         Debug { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
-            yaner::tui::main(&nes, pc).unwrap();
+            let debugger = yaner::tui::Debugger::new(nes);
+            debugger.start(pc).unwrap();
         }
         Generate => yaner::cpu::generator::generate_opcode_table(),
     }

@@ -326,55 +326,64 @@ fn draw<'a, B: Backend>(
     })
 }
 
-pub fn main(nes: &Nes, start_at: Option<u16>) -> Result<(), anyhow::Error> {
-    let stdout = io::stdout().into_raw_mode()?;
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
+// TODO: implement debugger state here.
+pub struct Debugger {
+    nes: Nes,
+}
 
-    let mut stepper = Stepper::new(nes, start_at);
-    let mut input = termion::async_stdin().keys();
-
-    let mut running = false;
-    let mut shift = 0u16;
-
-    // powerup
-    stepper.tick()?;
-    loop {
-        if running && !stepper.halted() {
-            stepper.tick()?;
-        }
-        draw(&mut terminal, &nes.debug(), shift)?;
-        if let Some(input_result) = input.next() {
-            match input_result? {
-                Key::Ctrl('c') | Key::Char('q') => break,
-                Key::Char('f') => {
-                    stepper.step_frame()?;
-                }
-                Key::Char('o') => {
-                    stepper.step_cpu()?;
-                }
-                Key::Char('s') => {
-                    stepper.tick()?;
-                }
-                Key::Char('v') => {
-                    stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
-                }
-                Key::Char('n') => {
-                    stepper.tick_until(|nes| match nes.cpu.bus.intr.get() {
-                        Some(Interrupt::Nmi) => true,
-                        _ => false,
-                    })?;
-                }
-                Key::Char('r') => running = !running,
-                Key::Down => shift = shift.saturating_add(1),
-                Key::PageDown => shift = shift.saturating_add(16),
-                Key::PageUp => shift = shift.saturating_sub(16),
-                Key::Up => shift = shift.saturating_sub(1),
-                _ => (),
-            }
+impl Debugger {
+    pub fn new(nes: Nes) -> Self {
+        Debugger {
+            nes,
         }
     }
 
-    Ok(())
+    pub fn start(&self, start_at: Option<u16>) -> Result<(), anyhow::Error> {
+        let stdout = io::stdout().into_raw_mode()?;
+        let backend = TermionBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+        terminal.clear()?;
+
+        let mut stepper = Stepper::new(&self.nes, start_at);
+        let mut input = io::stdin().keys();
+
+        let mut shift = 0u16;
+
+        loop {
+            if stepper.halted() {
+                break;
+            }
+            draw(&mut terminal, &self.nes.debug(), shift)?;
+            if let Some(input_result) = input.next() {
+                match input_result? {
+                    Key::Ctrl('c') | Key::Char('q') => break,
+                    Key::Char('f') => {
+                        stepper.step_frame()?;
+                    }
+                    Key::Char('o') => {
+                        stepper.step_cpu()?;
+                    }
+                    Key::Char(' ') | Key::Char('s') => {
+                        stepper.tick()?;
+                    }
+                    Key::Char('v') => {
+                        stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                    }
+                    Key::Char('n') => {
+                        stepper.tick_until(|nes| match nes.debug().cpu.intr {
+                            Some(Interrupt::Nmi) => true,
+                            _ => false,
+                        })?;
+                    }
+                    Key::Down => shift = shift.saturating_add(1),
+                    Key::PageDown => shift = shift.saturating_add(16),
+                    Key::PageUp => shift = shift.saturating_sub(16),
+                    Key::Up => shift = shift.saturating_sub(1),
+                    _ => (),
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
