@@ -218,10 +218,68 @@ impl Ppu {
         }
     }
 
+    fn evaluate_sprites(&self, pre_render: bool) {
+        match self.dot.get() {
+            1 => {
+                // TODO: clear secondary OAM
+                if pre_render {
+                    // Clear sprite overflow and 0hit
+                    self.status.update(|s| s - PpuStatus::S - PpuStatus::O);
+                }
+            }
+            256 => (),// TODO: sprite evaluation is done (for next scanline) at this point
+            320 => (),// TODO: sprite tile fetching is done (for next scanline) at this point
+            _ => (),
+        }
+    }
+
+    fn render_pixel(&self) {
+        match self.dot.get() {
+            2..=257 => {
+                // NOTE: on the second tick, we draw pixel 0
+                // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
+                let pixel = self.dot.get() - 2;
+                let bg_color = self.render_background_pixel(pixel);
+                let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
+
+                let colors = if sprite_behind {
+                    [bg_color, sprite_color]
+                } else {
+                    [sprite_color, bg_color]
+                };
+
+                let _pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
+            }
+            _ => (),
+        }
+    }
+
+    fn render_sprite_pixel(&self, _dot: u16) -> (u8, bool) {
+        if !self.mask.get().contains(PpuMask::s) {
+            (0, false)
+        } else {
+            // TODO
+            (0, false)
+        }
+    }
+
+    fn render_background_pixel(&self, _dot: u16) -> u8 {
+        if !self.mask.get().contains(PpuMask::b) {
+            0
+        } else {
+            // TODO
+            0
+        }
+    }
+
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
+                (0..=239, _) => {
+                    self.evaluate_sprites(false);
+                    self.render_pixel();
+                }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
                         // enable vblank
@@ -232,8 +290,11 @@ impl Ppu {
                         }
                     }
                 }
-                (261, 1) => {
-                    self.status.update(|s| s - PpuStatus::V);
+                (261, _) => {
+                    if self.dot.get() == 1 {
+                        self.status.update(|s| s - PpuStatus::V);
+                    }
+                    self.evaluate_sprites(true);
                 }
 
                 _ => (),
