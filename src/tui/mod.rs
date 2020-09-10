@@ -145,8 +145,20 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             ),
         ]),
         Spans::from(vec![
-            Span::from(" OAM: "),
-            Span::styled(format!("{:04X}", nes.ppu.oam_addr), value_style),
+            Span::from(" T: "),
+            Span::styled(format!("FY:{} NT:{}", nes.ppu.t_addr.fine_y(), nes.ppu.t_addr.nametable()), value_style),
+        ]),
+        Spans::from(vec![
+            Span::from("    "),
+            Span::styled(format!("CY:{} CX:{}", nes.ppu.t_addr.coarse_y(), nes.ppu.t_addr.coarse_x()), value_style),
+        ]),
+        Spans::from(vec![
+            Span::from(" V: "),
+            Span::styled(format!("FY:{} NT:{}", nes.ppu.v_addr.fine_y(), nes.ppu.v_addr.nametable()), value_style),
+        ]),
+        Spans::from(vec![
+            Span::from("    "),
+            Span::styled(format!("CY:{} CX:{}", nes.ppu.v_addr.coarse_y(), nes.ppu.v_addr.coarse_x()), value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
@@ -206,7 +218,7 @@ fn rightbar<B: Backend>(
         .constraints(
             [
                 Constraint::Length(10),
-                Constraint::Length(6),
+                Constraint::Length(9),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -318,7 +330,7 @@ fn draw<'a, B: Backend>(
         let size = f.size();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(90), Constraint::Min(10)].as_ref())
+            .constraints([Constraint::Length(110), Constraint::Min(15)].as_ref())
             .split(size);
 
         rams(f, &state, shift, chunks[0]);
