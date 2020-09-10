@@ -9,7 +9,7 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 use bitregions::bitregions;
-
+use std::ops::{BitAnd, BitOr};
 pub mod debug;
 
 bitflags! {
@@ -44,6 +44,15 @@ impl PpuCtrl {
             32
         } else {
             1
+        }
+    }
+
+    fn bg_pattern_table_address(&self) -> u16 {
+        // (0: $0000; 1: $1000)
+        if self.contains(PpuCtrl::B) {
+            0x0000
+        } else {
+            0x1000
         }
     }
 }
@@ -91,16 +100,38 @@ impl Default for PpuStatus {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct RegisterPair<T> {
-    low: T,
-    high: T,
+    low: Cell<T>,
+    high: Cell<T>,
 }
 
-#[derive(Clone, Copy, Default)]
 struct LatchedPair<T> {
     latch: RegisterPair<u8>,
     value: RegisterPair<T>,
+    mask: T,
+}
+
+impl<T> LatchedPair<T>
+where
+    T: From<u8>,
+    T: Default,
+    T: Copy,
+    T: BitAnd<T, Output = T>,
+    T: BitOr<T, Output = T>,
+{
+    fn new(mask: T) -> Self {
+        LatchedPair {
+            latch: RegisterPair::default(),
+            value: RegisterPair::default(),
+            mask,
+        }
+    }
+
+    fn latch(&self) {
+        self.value.low.update(|v| (v & self.mask) | self.latch.low.get().into());
+        self.value.high.update(|v| (v & self.mask) | self.latch.high.get().into());
+    }
 }
 
 bitregions! {
@@ -146,6 +177,11 @@ pub struct Ppu {
     // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
     attribute_data: LatchedPair<u8>,
 
+    // Temporary storage for tile fetching pipeline
+    fetch_addr: Cell<u16>,
+    nametable_entry: Cell<u8>,
+    attribute_entry: Cell<u8>,
+
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
@@ -172,8 +208,12 @@ impl Ppu {
 
             scanline: Cell::new(0),
             dot: Cell::new(0),
-            pattern_data: LatchedPair::default(),
-            attribute_data: LatchedPair::default(),
+            pattern_data: LatchedPair::new(0xFF00),
+            attribute_data: LatchedPair::new(0xFF),
+
+            fetch_addr: Cell::new(0),
+            nametable_entry: Cell::new(0),
+            attribute_entry: Cell::new(0),
 
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
@@ -329,6 +369,49 @@ impl Ppu {
         }
     }
 
+    fn fetch_tile(&self, _pre_render: bool) {
+        match self.dot.get() % 8 {
+            1 => {
+                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+                let v: u16 = self.v_addr.get().into();
+                // TODO: read base address from PPUCTRL?
+                self.fetch_addr.set(0x2000 | (v & 0x0FFF));
+
+                self.pattern_data.latch();
+                // TODO: not sure what we're supposed to do for attribute_data
+            },
+            2 => {
+                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                self.nametable_entry.set(entry);
+            },
+            3 => {
+                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+                let v: u16 = self.v_addr.get().into();
+                let attr_addr = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
+                self.fetch_addr.set(attr_addr);
+            },
+            4 => {
+                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                self.attribute_entry.set(entry);
+            },
+            5 => {
+                self.fetch_addr.set(self.nametable_entry.get() as u16 + self.ctrl.get().bg_pattern_table_address());
+            },
+            6 => {
+                let pattern = self.bus.read_u8(self.fetch_addr.get());
+                self.pattern_data.latch.low.set(pattern);
+            },
+            7 =>  {
+                self.fetch_addr.update(|v| v + 8);
+            }
+            0 => {
+                let pattern = self.bus.read_u8(self.fetch_addr.get());
+                self.pattern_data.latch.high.set(pattern);
+            },
+            _ => unreachable!("match on % 8 is exhaustive")
+        }
+    }
+
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         move || loop {
@@ -336,6 +419,7 @@ impl Ppu {
                 (0..=239, _) => {
                     self.evaluate_sprites(false);
                     self.render_pixel();
+                    self.fetch_tile(false);
                 }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
