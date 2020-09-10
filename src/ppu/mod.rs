@@ -90,25 +90,70 @@ impl Default for PpuStatus {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+struct RegisterPair<T> {
+    low: T,
+    high: T,
+}
+
+#[derive(Clone, Copy, Default)]
+struct LatchedPair<T> {
+    latch: RegisterPair<u8>,
+    value: RegisterPair<T>,
+}
+
+// TODO: use bitregions or bitbash
+bitflags! {
+    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
+    struct VramAddressMask: u16 {
+        const FY = 0b111_00_00000_00000; // Fine y scroll
+        const NT = 0b000_11_00000_00000; // Nametable select
+        const CY = 0b000_00_11111_00000; // Coarse y scroll
+        const CX = 0b000_00_00000_11111; // Coarse x scroll
+    }
+}
+
+struct VramAddress {
+    value: Cell<u16>
+}
+
+impl VramAddress {
+    fn new() -> Self {
+        VramAddress { value: Cell::new(0) }
+    }
+
+    fn write(&self, _mask: VramAddressMask, _value: u8) {
+        unimplemented!()
+    }
+}
+
 pub struct Ppu {
     ctrl: Cell<PpuCtrl>,
     mask: Cell<PpuMask>,
     status: Cell<PpuStatus>,
-    oam_addr: Cell<u8>,
 
-    scroll_addr: Cell<u16>,
-    data_addr: Cell<u16>,
+    oam_addr: Cell<u8>, // OAMADDR
 
-    // shared by scroll and data
-    addr_latch: Cell<bool>,
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#PPU_internal_registers
+    // Accessed through PPUSCROLL and PPUADDR
+    t_addr: VramAddress,
+    v_addr: VramAddress,
+    addr_latch: Cell<bool>, // this is referred to as w in the wiki
+    fine_x: Cell<u8>,
 
+    // internal OAM memory, enough for 64 sprites of 4 bytes each
     oam_data: Ram256,
 
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 
+    // Rendering state
     scanline: Cell<u16>,
     dot: Cell<u16>,
+    // 2 16-bit shift registers. These contain the pattern table data for two tiles [...]
+    pattern_data: LatchedPair<u16>,
+    // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
+    attribute_data: LatchedPair<u8>,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
@@ -123,10 +168,10 @@ impl Ppu {
             status: Cell::new(PpuStatus::default()),
             oam_addr: Cell::new(0x00),
 
-            scroll_addr: Cell::new(0),
-            data_addr: Cell::new(0),
-
+            t_addr: VramAddress::new(),
+            v_addr: VramAddress::new(),
             addr_latch: Cell::new(false),
+            fine_x: Cell::new(0),
 
             oam_data: Ram256::new(),
 
@@ -134,6 +179,8 @@ impl Ppu {
 
             scanline: Cell::new(0),
             dot: Cell::new(0),
+            pattern_data: LatchedPair::default(),
+            attribute_data: LatchedPair::default(),
 
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
@@ -174,39 +221,46 @@ impl Ppu {
         status.bits()
     }
 
-    // This explains the way the addresses should be decoded into t, v and x.
-    // http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
-    fn latched_write(&self, target: &Cell<u16>, value: u8) {
+    fn write_scroll(&self, value: u8) {
         let latch = self.addr_latch.get();
-        let current = target.get();
-
-        let addr = if latch {
-            let addr_lo = value as u16;
-            let addr_hi = current & 0xFF00;
-            addr_hi | addr_lo
+        if latch {
+            self.t_addr.write(VramAddressMask::FY, value);
+            self.t_addr.write(VramAddressMask::CY, value >> 3);
         } else {
-            let addr_lo = current & 0x00FF;
-            let addr_hi = (value as u16) << 8;
-            addr_hi | addr_lo
-        };
+            self.fine_x.set(value & 0b0000_0111);
+            self.t_addr.write(VramAddressMask::CX,value >> 3);
+        }
+        self.addr_latch.set(!latch);
+    }
 
-        target.set(addr);
+    fn write_addr(&self, value: u8) {
+        let u16_value = value as u16;
+        let latch = self.addr_latch.get();
+        if latch {
+            self.t_addr.value.update(|v| (v & 0xFF00) | u16_value);
+            // transfers to the v register
+            self.v_addr.value.set(self.t_addr.value.get());
+        } else {
+            self.t_addr.value.update(|v| (v & 0x00FF) | (u16_value << 8));
+        }
         self.addr_latch.set(!latch);
     }
 
     fn vram_read_u8(&self, addr_space: &dyn AddressSpace) -> u8 {
-        let addr = self.data_addr.get();
+        // TODO: verify how this works with v_addr now
+        let addr = self.v_addr.value.get();
         let data = addr_space.read_u8(addr);
         let step = self.ctrl.get().vram_inc_step();
-        self.data_addr.set(addr.wrapping_add(step));
+        self.v_addr.value.update(|v| v.wrapping_add(step));
         data
     }
 
     fn vram_write_u8(&self, addr_space: &dyn AddressSpace, value: u8) {
-        let addr = self.data_addr.get();
+        // TODO: verify how this works with v_addr now
+        let addr = self.v_addr.value.get();
         addr_space.write_u8(addr, value);
         let step = self.ctrl.get().vram_inc_step();
-        self.data_addr.set(addr.wrapping_add(step));
+        self.v_addr.value.update(|v| v.wrapping_add(step));
     }
 
     pub fn decay_open_bus(&self) {
@@ -392,8 +446,6 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2001 => self.ppu.open_bus.get(),
             0x2002 => self.ppu.status() | (self.ppu.open_bus.get() & 0b0001_1111),
             0x2003 => self.ppu.open_bus.get(),
-            0x2005 => self.ppu.open_bus.get(),
-            0x2006 => self.ppu.open_bus.get(),
             0x2004 => {
                 // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_2
                 // bits 2-4 of byte 2 are "unimplemented" and thus, should be cleared
@@ -401,8 +453,10 @@ impl AddressSpace for MemoryMappedRegisters {
                 let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
                 self.ppu.oam_data.read_u8(addr) & mask
             }
+            0x2005 => self.ppu.open_bus.get(),
+            0x2006 => self.ppu.open_bus.get(),
             0x2007 => {
-                let bus_mask = match self.ppu.data_addr.get() {
+                let bus_mask = match self.ppu.v_addr.value.get() {
                     0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
                     _ => 0x00,
                 };
@@ -417,7 +471,11 @@ impl AddressSpace for MemoryMappedRegisters {
     fn write_u8(&self, addr: u16, value: u8) {
         self.ppu.open_bus.set(value);
         match addr {
-            0x2000 => self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value)),
+            0x2000 => {
+                self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value));
+                // writing to the control register also sets the resulting nametable bits in t_addr
+                self.ppu.t_addr.write(VramAddressMask::NT, value);
+            },
             0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
             0x2002 => (),
             0x2003 => self.ppu.oam_addr.set(value),
@@ -428,8 +486,8 @@ impl AddressSpace for MemoryMappedRegisters {
                 let addr = self.ppu.oam_addr.get();
                 self.ppu.oam_addr.set(addr.wrapping_add(1));
             }
-            0x2005 => self.ppu.latched_write(&self.ppu.scroll_addr, value),
-            0x2006 => self.ppu.latched_write(&self.ppu.data_addr, value),
+            0x2005 => self.ppu.write_scroll(value),
+            0x2006 => self.ppu.write_addr(value),
             0x2007 => self.ppu.vram_write_u8(&self.bus, value),
             _ => invalid_address!(addr),
         }
