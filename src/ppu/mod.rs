@@ -43,7 +43,7 @@ impl PpuCtrl {
         if self.contains(PpuCtrl::I) {
             32
         } else {
-            0
+            1
         }
     }
 }
@@ -242,7 +242,6 @@ impl Ppu {
     }
 
     fn vram_read_u8(&self, addr_space: &dyn AddressSpace) -> u8 {
-        // TODO: verify how this works with v_addr now
         let addr: u16 = self.v_addr.get().into();
         let data = addr_space.read_u8(addr);
         let step = self.ctrl.get().vram_inc_step();
@@ -254,7 +253,6 @@ impl Ppu {
     }
 
     fn vram_write_u8(&self, addr_space: &dyn AddressSpace, value: u8) {
-        // TODO: verify how this works with v_addr now
         let addr: u16 = self.v_addr.get().into();
         addr_space.write_u8(addr, value);
         let step = self.ctrl.get().vram_inc_step();
