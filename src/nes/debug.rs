@@ -31,9 +31,9 @@ impl<'a> NesState<'a> {
 
             cpu_bus: &nes.cpu.bus,
             ram: &nes.cpu.bus.ram,
-            vram: &nes.cpu.bus.ppu_registers.bus.vram,
+            vram: &nes.ppu.bus.vram,
             prg_rom: &nes.cpu.bus, // TODO: use mapper directly
-            chr_rom: &nes.cpu.bus.ppu_registers.bus, // TODO: use mapper directly
+            chr_rom: &nes.ppu.bus, // TODO: use mapper directly
         }
     }
 }

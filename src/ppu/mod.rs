@@ -117,6 +117,8 @@ bitregions! {
 }
 
 pub struct Ppu {
+    pub bus: PpuBus,
+
     ctrl: Cell<PpuCtrl>,
     mask: Cell<PpuMask>,
     status: Cell<PpuStatus>,
@@ -150,8 +152,10 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new() -> Self {
+    pub fn new(mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
         Ppu {
+            bus: PpuBus::new(mapper),
+
             ctrl: Cell::new(PpuCtrl::default()),
             mask: Cell::new(PpuMask::default()),
             status: Cell::new(PpuStatus::default()),
@@ -241,9 +245,9 @@ impl Ppu {
         self.addr_latch.set(!latch);
     }
 
-    fn vram_read_u8(&self, addr_space: &dyn AddressSpace) -> u8 {
+    fn vram_read_u8(&self) -> u8 {
         let addr: u16 = self.v_addr.get().into();
-        let data = addr_space.read_u8(addr);
+        let data = self.bus.read_u8(addr);
         let step = self.ctrl.get().vram_inc_step();
         self.v_addr.update(|mut v| {
             v.increment(step);
@@ -252,9 +256,9 @@ impl Ppu {
         data
     }
 
-    fn vram_write_u8(&self, addr_space: &dyn AddressSpace, value: u8) {
+    fn vram_write_u8(&self, value: u8) {
         let addr: u16 = self.v_addr.get().into();
-        addr_space.write_u8(addr, value);
+        self.bus.write_u8(addr, value);
         let step = self.ctrl.get().vram_inc_step();
         self.v_addr.update(|mut v| {
             v.increment(step);
@@ -428,13 +432,12 @@ impl AddressSpace for PpuBus {
 }
 
 pub struct MemoryMappedRegisters {
-    pub bus: PpuBus,
     ppu: Rc<Ppu>,
 }
 
 impl MemoryMappedRegisters {
-    pub fn new(ppu: Rc<Ppu>, bus: PpuBus) -> Self {
-        MemoryMappedRegisters { bus, ppu }
+    pub fn new(ppu: Rc<Ppu>) -> Self {
+        MemoryMappedRegisters { ppu }
     }
 }
 
@@ -459,7 +462,7 @@ impl AddressSpace for MemoryMappedRegisters {
                     0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
                     _ => 0x00,
                 };
-                self.ppu.vram_read_u8(&self.bus) | bus_mask
+                self.ppu.vram_read_u8() | bus_mask
             }
             _ => invalid_address!(addr),
         };
@@ -490,7 +493,7 @@ impl AddressSpace for MemoryMappedRegisters {
             }
             0x2005 => self.ppu.write_scroll(value),
             0x2006 => self.ppu.write_addr(value),
-            0x2007 => self.ppu.vram_write_u8(&self.bus, value),
+            0x2007 => self.ppu.vram_write_u8(value),
             _ => invalid_address!(addr),
         }
     }

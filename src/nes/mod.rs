@@ -9,7 +9,7 @@ use dma::DmaCycle;
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt};
 use crate::nes::dma::Dma;
-use crate::ppu::{MemoryMappedRegisters, Ppu, PpuBus, PpuCycle};
+use crate::ppu::{MemoryMappedRegisters, Ppu, PpuCycle};
 use std::borrow::BorrowMut;
 use std::error::Error;
 
@@ -68,10 +68,9 @@ pub struct Nes {
 
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
-        let ppu = Rc::new(Ppu::new());
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
-        let ppu_bus = PpuBus::new(mapper.clone());
-        let ppu_mem_registers = MemoryMappedRegisters::new(ppu.clone(), ppu_bus);
+        let ppu = Rc::new(Ppu::new(mapper.clone()));
+        let ppu_mem_registers = MemoryMappedRegisters::new(ppu.clone());
         let cpu_bus = CpuBus::new(ppu_mem_registers, mapper.clone());
 
         Nes {
