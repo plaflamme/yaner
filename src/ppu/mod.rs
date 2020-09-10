@@ -8,6 +8,7 @@ use rand::{thread_rng, Rng};
 use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
+use bitregions::bitregions;
 
 pub mod debug;
 
@@ -102,28 +103,16 @@ struct LatchedPair<T> {
     value: RegisterPair<T>,
 }
 
-// TODO: use bitregions or bitbash
-bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
-    struct VramAddressMask: u16 {
-        const FY = 0b111_00_00000_00000; // Fine y scroll
-        const NT = 0b000_11_00000_00000; // Nametable select
-        const CY = 0b000_00_11111_00000; // Coarse y scroll
-        const CX = 0b000_00_00000_11111; // Coarse x scroll
-    }
-}
-
-struct VramAddress {
-    value: Cell<u16>
-}
-
-impl VramAddress {
-    fn new() -> Self {
-        VramAddress { value: Cell::new(0) }
+bitregions! {
+    VramAddress u16 {
+        FINE_Y: 0b111_00_00000_00000, // Fine y scroll
+        NAMETABLE: 0b000_11_00000_00000, // Nametable select
+        COARSE_Y: 0b000_00_11111_00000, // Coarse y scroll
+        COARSE_X: 0b000_00_00000_11111, // Coarse x scroll
     }
 
-    fn write(&self, _mask: VramAddressMask, _value: u8) {
-        unimplemented!()
+    fn increment(&mut self, step: u16) {
+        self.0 = self.0.wrapping_add(step);
     }
 }
 
@@ -136,8 +125,8 @@ pub struct Ppu {
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#PPU_internal_registers
     // Accessed through PPUSCROLL and PPUADDR
-    t_addr: VramAddress,
-    v_addr: VramAddress,
+    t_addr: Cell<VramAddress>,
+    v_addr: Cell<VramAddress>,
     addr_latch: Cell<bool>, // this is referred to as w in the wiki
     fine_x: Cell<u8>,
 
@@ -168,8 +157,8 @@ impl Ppu {
             status: Cell::new(PpuStatus::default()),
             oam_addr: Cell::new(0x00),
 
-            t_addr: VramAddress::new(),
-            v_addr: VramAddress::new(),
+            t_addr: Cell::new(VramAddress::default()),
+            v_addr: Cell::new(VramAddress::default()),
             addr_latch: Cell::new(false),
             fine_x: Cell::new(0),
 
@@ -224,11 +213,17 @@ impl Ppu {
     fn write_scroll(&self, value: u8) {
         let latch = self.addr_latch.get();
         if latch {
-            self.t_addr.write(VramAddressMask::FY, value);
-            self.t_addr.write(VramAddressMask::CY, value >> 3);
+            self.t_addr.update(|mut t| {
+                t.set_fine_y(value & 0b0000_0111);
+                t.set_coarse_y(value >> 3);
+                t
+            });
         } else {
             self.fine_x.set(value & 0b0000_0111);
-            self.t_addr.write(VramAddressMask::CX,value >> 3);
+            self.t_addr.update(|mut t| {
+                t.set_coarse_x(value >> 3);
+                t
+            });
         }
         self.addr_latch.set(!latch);
     }
@@ -237,30 +232,36 @@ impl Ppu {
         let u16_value = value as u16;
         let latch = self.addr_latch.get();
         if latch {
-            self.t_addr.value.update(|v| (v & 0xFF00) | u16_value);
+            self.t_addr.update(|v| (v & 0xFF00u16) | u16_value);
             // transfers to the v register
-            self.v_addr.value.set(self.t_addr.value.get());
+            self.v_addr.set(self.t_addr.get());
         } else {
-            self.t_addr.value.update(|v| (v & 0x00FF) | (u16_value << 8));
+            self.t_addr.update(|v| (v & 0x00FFu16) | (u16_value << 8));
         }
         self.addr_latch.set(!latch);
     }
 
     fn vram_read_u8(&self, addr_space: &dyn AddressSpace) -> u8 {
         // TODO: verify how this works with v_addr now
-        let addr = self.v_addr.value.get();
+        let addr: u16 = self.v_addr.get().into();
         let data = addr_space.read_u8(addr);
         let step = self.ctrl.get().vram_inc_step();
-        self.v_addr.value.update(|v| v.wrapping_add(step));
+        self.v_addr.update(|mut v| {
+            v.increment(step);
+            v
+        });
         data
     }
 
     fn vram_write_u8(&self, addr_space: &dyn AddressSpace, value: u8) {
         // TODO: verify how this works with v_addr now
-        let addr = self.v_addr.value.get();
+        let addr: u16 = self.v_addr.get().into();
         addr_space.write_u8(addr, value);
         let step = self.ctrl.get().vram_inc_step();
-        self.v_addr.value.update(|v| v.wrapping_add(step));
+        self.v_addr.update(|mut v| {
+            v.increment(step);
+            v
+        });
     }
 
     pub fn decay_open_bus(&self) {
@@ -456,7 +457,7 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2005 => self.ppu.open_bus.get(),
             0x2006 => self.ppu.open_bus.get(),
             0x2007 => {
-                let bus_mask = match self.ppu.v_addr.value.get() {
+                let bus_mask = match self.ppu.v_addr.get().into() {
                     0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
                     _ => 0x00,
                 };
@@ -474,7 +475,10 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2000 => {
                 self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value));
                 // writing to the control register also sets the resulting nametable bits in t_addr
-                self.ppu.t_addr.write(VramAddressMask::NT, value);
+                self.ppu.t_addr.update(|mut t| {
+                    t.set_nametable(value & 0b0000_0011);
+                    t
+                });
             },
             0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
             0x2002 => (),

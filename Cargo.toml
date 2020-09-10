@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 structopt = "0.3.4"
 bitflags = "1.2.1"
+bitregions = "0.2.4"
 nom = "5.1.2"
 log = "0.4.8"
 stderrlog = "0.4.3"

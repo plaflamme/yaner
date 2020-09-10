@@ -51,6 +51,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "bitregions"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f9143eed84e42f3cd7dd76e7c63844bb728496cb7c4ce7fbbe9019f8ffd941c"
+dependencies = [
+ "bitregions-impl",
+]
+
+[[package]]
+name = "bitregions-impl"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527f6198ddbd2a1af3c671a022e09a2880060368c23ae23d5d2aa4736f42e804"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -967,6 +987,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitflags",
+ "bitregions",
  "criterion",
  "log",
  "nom",
