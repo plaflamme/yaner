@@ -141,9 +141,25 @@ bitregions! {
         COARSE_Y: 0b000_00_11111_00000, // Coarse y scroll
         COARSE_X: 0b000_00_00000_11111, // Coarse x scroll
     }
+}
 
+impl VramAddress {
     fn increment(&mut self, step: u16) {
         self.0 = self.0.wrapping_add(step);
+    }
+
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+    // this value as an address into the nametable
+    fn nametable_addr(&mut self) -> u16 {
+        // TODO: don't we need to factor in base address in PPUCTRL?
+        0x2000 | (self.0 & 0x0FFF)
+    }
+
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+    // this value as an address into the attribute table
+    fn attribute_addr(&mut self) -> u16 {
+        let v: u16 = self.0.into();
+        0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
     }
 }
 
@@ -176,6 +192,8 @@ pub struct Ppu {
     pattern_data: LatchedPair<u16>,
     // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
     attribute_data: LatchedPair<u8>,
+
+    frame_pixels: Cell<[u8; 256 * 240]>,
 
     // Temporary storage for tile fetching pipeline
     fetch_addr: Cell<u16>,
@@ -210,6 +228,7 @@ impl Ppu {
             dot: Cell::new(0),
             pattern_data: LatchedPair::new(0xFF00),
             attribute_data: LatchedPair::new(0xFF),
+            frame_pixels: Cell::new([0u8; 256 * 240]),
 
             fetch_addr: Cell::new(0),
             nametable_entry: Cell::new(0),
@@ -345,7 +364,12 @@ impl Ppu {
                     [sprite_color, bg_color]
                 };
 
-                let _pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
+                let pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
+                let pixel_index = pixel + self.scanline.get() * 256;
+
+                let s: &Cell<[u8]> = &self.frame_pixels;
+                let pixels = s.as_slice_of_cells();
+                pixels[pixel_index as usize].set(pixel_color);
             }
             _ => (),
         }
@@ -364,18 +388,17 @@ impl Ppu {
         if !self.mask.get().contains(PpuMask::b) {
             0
         } else {
-            // TODO
-            0
+            // TODO: scrolling affects this
+            let high = self.pattern_data.value.high.get() >> 15 & 0x01;
+            let low = self.pattern_data.value.low.get() >> 15 & 0x01;
+            (high << 1 | low) as u8
         }
     }
 
     fn fetch_tile(&self, _pre_render: bool) {
         match self.dot.get() % 8 {
             1 => {
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
-                let v: u16 = self.v_addr.get().into();
-                // TODO: read base address from PPUCTRL?
-                self.fetch_addr.set(0x2000 | (v & 0x0FFF));
+                self.fetch_addr.set(self.v_addr.get().nametable_addr());
 
                 self.pattern_data.latch();
                 // TODO: not sure what we're supposed to do for attribute_data
@@ -385,17 +408,17 @@ impl Ppu {
                 self.nametable_entry.set(entry);
             },
             3 => {
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
-                let v: u16 = self.v_addr.get().into();
-                let attr_addr = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07);
-                self.fetch_addr.set(attr_addr);
+                self.fetch_addr.set(self.v_addr.get().attribute_addr());
             },
             4 => {
                 let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                // TODO: Scrolling affects this.
                 self.attribute_entry.set(entry);
             },
             5 => {
-                self.fetch_addr.set(self.nametable_entry.get() as u16 + self.ctrl.get().bg_pattern_table_address());
+                // TODO: Scrolling affects this.
+                let index = self.nametable_entry.get() as u16 * 16;
+                self.fetch_addr.set(index + self.ctrl.get().bg_pattern_table_address());
             },
             6 => {
                 let pattern = self.bus.read_u8(self.fetch_addr.get());
