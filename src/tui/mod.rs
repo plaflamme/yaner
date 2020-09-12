@@ -16,7 +16,7 @@ use crate::cpu::{Cpu, Flags, Interrupt};
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, Stepper};
-use crate::ppu::{PpuCtrl, PpuStatus};
+use crate::ppu::{PpuCtrl, PpuStatus, PpuMask};
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -55,6 +55,19 @@ impl Display for PpuCtrl {
         ]
         .into_iter()
         {
+            if *self & flag == flag {
+                write!(f, "{:?}", flag)?;
+            } else {
+                write!(f, "-")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for PpuMask {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for flag in vec![PpuMask::M, PpuMask::m, PpuMask::b, PpuMask::s, PpuMask::R, PpuMask::G, PpuMask::B].into_iter() {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
             } else {
@@ -138,6 +151,13 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             ),
         ]),
         Spans::from(vec![
+            Span::from(" M: "),
+            Span::styled(
+                format!("{:02X} {}", nes.ppu.mask, nes.ppu.mask),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
             Span::from(" S: "),
             Span::styled(
                 format!("{:02X} {}", nes.ppu.status, nes.ppu.status),
@@ -159,6 +179,20 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
         Spans::from(vec![
             Span::from("    "),
             Span::styled(format!("CY:{} CX:{}", nes.ppu.v_addr.coarse_y(), nes.ppu.v_addr.coarse_x()), value_style),
+        ]),
+        Spans::from(vec![
+            Span::from(" P: "),
+            Span::styled(
+                format!("{:02X} {:04X} {:02X} {:04X}", nes.ppu.pattern_data.latch.high.get(), nes.ppu.pattern_data.value.high.get(), nes.ppu.pattern_data.latch.low.get(), nes.ppu.pattern_data.value.low.get()),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" NEFA: "),
+            Span::styled(
+                format!("{:02X} {:04X}", nes.ppu.ne, nes.ppu.fa),
+                value_style,
+            ),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
@@ -218,7 +252,7 @@ fn rightbar<B: Backend>(
         .constraints(
             [
                 Constraint::Length(10),
-                Constraint::Length(9),
+                Constraint::Length(12),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -321,6 +355,25 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: 
     );
 }
 
+fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, size: Rect) {
+    let mut frame = Vec::new();
+    for sl in 0..240 {
+        let mut line = String::from("");
+        for dot in 0..256 {
+            let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
+            if pixel != 0 {
+                line.push('█');
+            } else {
+                line.push(' ');
+            }
+        }
+        frame.push(Spans::from(Span::from(line)));
+    }
+    let widget = Paragraph::new(Text::from(frame)).block(Block::default().title("Frame").borders(Borders::ALL));
+
+    f.render_widget(widget, size);
+}
+
 fn draw<'a, B: Backend>(
     terminal: &mut Terminal<B>,
     state: &NesState<'a>,
@@ -333,7 +386,8 @@ fn draw<'a, B: Backend>(
             .constraints([Constraint::Length(110), Constraint::Min(15)].as_ref())
             .split(size);
 
-        rams(f, &state, shift, chunks[0]);
+        // rams(f, &state, shift, chunks[0]);
+        frame(f, &state, chunks[0]);
         rightbar(f, &state, state.prg_rom, chunks[1]);
     })
 }

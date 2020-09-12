@@ -50,9 +50,9 @@ impl PpuCtrl {
     fn bg_pattern_table_address(&self) -> u16 {
         // (0: $0000; 1: $1000)
         if self.contains(PpuCtrl::B) {
-            0x0000
-        } else {
             0x1000
+        } else {
+            0x0000
         }
     }
 }
@@ -100,37 +100,26 @@ impl Default for PpuStatus {
     }
 }
 
-#[derive(Default)]
-struct RegisterPair<T> {
-    low: Cell<T>,
-    high: Cell<T>,
+#[derive(Clone, Default)]
+pub struct RegisterPair<T: Copy> {
+    pub low: Cell<T>,
+    pub high: Cell<T>,
 }
 
-struct LatchedPair<T> {
-    latch: RegisterPair<u8>,
-    value: RegisterPair<T>,
-    mask: T,
+#[derive(Clone, Default)]
+pub struct LatchedPair<T: Copy> {
+    pub latch: RegisterPair<u8>,
+    pub value: RegisterPair<T>
 }
 
-impl<T> LatchedPair<T>
-where
-    T: From<u8>,
-    T: Default,
-    T: Copy,
-    T: BitAnd<T, Output = T>,
-    T: BitOr<T, Output = T>,
-{
-    fn new(mask: T) -> Self {
-        LatchedPair {
-            latch: RegisterPair::default(),
-            value: RegisterPair::default(),
-            mask,
-        }
-    }
-
+impl LatchedPair<u16> {
     fn latch(&self) {
-        self.value.low.update(|v| (v & self.mask) | self.latch.low.get().into());
-        self.value.high.update(|v| (v & self.mask) | self.latch.high.get().into());
+        self.value.low.update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
+        self.value.high.update(|v| (v & 0xFF00) | self.latch.high.get() as u16);
+    }
+    fn shift(&self) {
+        self.value.low.update(|v| v << 1);
+        self.value.high.update(|v| v << 1);
     }
 }
 
@@ -150,16 +139,45 @@ impl VramAddress {
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the nametable
-    fn nametable_addr(&mut self) -> u16 {
+    fn nametable_addr(&self) -> u16 {
         // TODO: don't we need to factor in base address in PPUCTRL?
         0x2000 | (self.0 & 0x0FFF)
     }
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the attribute table
-    fn attribute_addr(&mut self) -> u16 {
+    fn attribute_addr(&self) -> u16 {
         let v: u16 = self.0.into();
         0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
+    }
+
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Coarse_X_increment
+    fn incr_x(&mut self) {
+        if self.coarse_x() == 31 {
+            self.set_coarse_x(0u16);
+            self.0 ^= 0x0400;
+        } else {
+            self.set_coarse_x(self.coarse_x() + 1);
+        }
+    }
+
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Y_increment
+    fn incr_y(&mut self) {
+        let fy = self.fine_y();
+        if fy < 7 {
+            self.set_fine_y(fy + 1);
+        } else {
+            self.set_fine_y(0u16);
+            let cy = self.coarse_y();
+            if cy == 29 {
+                self.set_coarse_y(0u16);
+                self.0 ^= 0x0800;
+            } else if cy == 31 {
+                self.set_coarse_y(0u16);
+            } else {
+                self.set_coarse_y(cy + 1);
+            }
+        }
     }
 }
 
@@ -226,8 +244,8 @@ impl Ppu {
 
             scanline: Cell::new(0),
             dot: Cell::new(0),
-            pattern_data: LatchedPair::new(0xFF00),
-            attribute_data: LatchedPair::new(0xFF),
+            pattern_data: LatchedPair::default(),
+            attribute_data: LatchedPair::default(),
             frame_pixels: Cell::new([0u8; 256 * 240]),
 
             fetch_addr: Cell::new(0),
@@ -351,25 +369,29 @@ impl Ppu {
 
     fn render_pixel(&self) {
         match self.dot.get() {
-            2..=257 => {
+            2..=257 | 322..=337 => {
                 // NOTE: on the second tick, we draw pixel 0
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
                 let bg_color = self.render_background_pixel(pixel);
-                let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
+                // let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
+                //
+                // let colors = if sprite_behind {
+                //     [bg_color, sprite_color]
+                // } else {
+                //     [sprite_color, bg_color]
+                // };
 
-                let colors = if sprite_behind {
-                    [bg_color, sprite_color]
-                } else {
-                    [sprite_color, bg_color]
-                };
+                // let pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
+                if self.scanline.get() < 241 && self.dot.get() < 257 {
+                    let pixel_index = pixel + self.scanline.get() * 256;
 
-                let pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
-                let pixel_index = pixel + self.scanline.get() * 256;
+                    let s: &Cell<[u8]> = &self.frame_pixels;
+                    let pixels = s.as_slice_of_cells();
+                    pixels[pixel_index as usize].set(bg_color);
+                }
 
-                let s: &Cell<[u8]> = &self.frame_pixels;
-                let pixels = s.as_slice_of_cells();
-                pixels[pixel_index as usize].set(pixel_color);
+                self.pattern_data.shift();
             }
             _ => (),
         }
@@ -389,49 +411,85 @@ impl Ppu {
             0
         } else {
             // TODO: scrolling affects this
-            let high = self.pattern_data.value.high.get() >> 15 & 0x01;
-            let low = self.pattern_data.value.low.get() >> 15 & 0x01;
-            (high << 1 | low) as u8
+            let high = (self.pattern_data.value.high.get() >> 14) & 0b0000_0010;
+            let low = (self.pattern_data.value.low.get() >> 15) & 0x01;
+            (high | low) as u8
         }
     }
 
-    fn fetch_tile(&self, _pre_render: bool) {
-        match self.dot.get() % 8 {
-            1 => {
-                self.fetch_addr.set(self.v_addr.get().nametable_addr());
+    fn fetch_tile(&self, pre_render: bool) {
+        match self.dot.get() {
+            1..=256 | 321..=337 => {
+                match self.dot.get() % 8 {
+                    1 => {
+                        self.fetch_addr.set(self.v_addr.get().nametable_addr());
 
+                        if self.dot.get() > 1 && self.dot.get() < 321 {
+                            self.pattern_data.latch();
+                            // TODO: not sure what we're supposed to do for attribute_data
+                        }
+                    },
+                    2 => {
+                        let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                        self.nametable_entry.set(entry);
+                    },
+                    3 => {
+                        self.fetch_addr.set(self.v_addr.get().attribute_addr());
+                    },
+                    4 => {
+                        let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                        // TODO: Scrolling affects this.
+                        self.attribute_entry.set(entry);
+                    },
+                    5 => {
+                        // TODO: Scrolling affects this.
+                        let index = self.nametable_entry.get() as u16 * 16 | (self.v_addr.get().fine_y() as u16);
+                        self.fetch_addr.set(index + self.ctrl.get().bg_pattern_table_address());
+                    },
+                    6 => {
+                        let pattern = self.bus.read_u8(self.fetch_addr.get());
+                        self.pattern_data.latch.low.set(pattern);
+                    },
+                    7 =>  {
+                        self.fetch_addr.update(|v| v + 8);
+                    }
+                    0 => {
+                        let pattern = self.bus.read_u8(self.fetch_addr.get());
+                        self.pattern_data.latch.high.set(pattern);
+                        if self.mask.get().contains(PpuMask::b) { // TODO also for sprite rendering
+                            self.v_addr.update(|mut v| {
+                                if self.dot.get() == 256 {
+                                    v.incr_y();
+                                } else {
+                                    v.incr_x();
+                                }
+                                v
+                            });
+                        }
+                    },
+                    _ => unreachable!("match on % 8 is exhaustive")
+                }
+            }
+            257 => {
                 self.pattern_data.latch();
-                // TODO: not sure what we're supposed to do for attribute_data
+                // TODO: scrolling, copy t into x
+            }
+            280..=304 => if pre_render {
+                // TODO: scrolling, copy t into y
             },
-            2 => {
+            338 => {
                 let entry = self.bus.vram.read_u8(self.fetch_addr.get());
                 self.nametable_entry.set(entry);
-            },
-            3 => {
-                self.fetch_addr.set(self.v_addr.get().attribute_addr());
-            },
-            4 => {
-                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                // TODO: Scrolling affects this.
-                self.attribute_entry.set(entry);
-            },
-            5 => {
-                // TODO: Scrolling affects this.
-                let index = self.nametable_entry.get() as u16 * 16;
-                self.fetch_addr.set(index + self.ctrl.get().bg_pattern_table_address());
-            },
-            6 => {
-                let pattern = self.bus.read_u8(self.fetch_addr.get());
-                self.pattern_data.latch.low.set(pattern);
-            },
-            7 =>  {
-                self.fetch_addr.update(|v| v + 8);
             }
-            0 => {
-                let pattern = self.bus.read_u8(self.fetch_addr.get());
-                self.pattern_data.latch.high.set(pattern);
-            },
-            _ => unreachable!("match on % 8 is exhaustive")
+            339 => {
+                self.fetch_addr.set(self.v_addr.get().nametable_addr());
+            }
+            340 => {
+                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
+                self.nametable_entry.set(entry);
+            }
+
+            _ => (),
         }
     }
 
@@ -441,8 +499,8 @@ impl Ppu {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
                     self.evaluate_sprites(false);
-                    self.render_pixel();
                     self.fetch_tile(false);
+                    self.render_pixel();
                 }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
@@ -459,6 +517,8 @@ impl Ppu {
                         self.status.update(|s| s - PpuStatus::V);
                     }
                     self.evaluate_sprites(true);
+                    self.fetch_tile(true);
+                    self.render_pixel();
                 }
 
                 _ => (),
