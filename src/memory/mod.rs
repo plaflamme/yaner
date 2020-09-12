@@ -170,7 +170,7 @@ impl<T: AddressSpace> Mirrored<T> {
     }
 
     fn translate(&self, addr: u16) -> u16 {
-        (addr - self.base_addr) % self.size
+        (addr.saturating_sub(self.base_addr)) % self.size
     }
 }
 
