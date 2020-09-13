@@ -78,6 +78,12 @@ impl Default for PpuMask {
     }
 }
 
+impl PpuMask {
+    fn is_rendering(&self) -> bool {
+        self.contains(PpuMask::b) | self.contains(PpuMask::s)
+    }
+}
+
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
     pub struct PpuStatus: u8 {
@@ -149,6 +155,16 @@ impl VramAddress {
     fn attribute_addr(&self) -> u16 {
         let v: u16 = self.0.into();
         0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
+    }
+
+    fn copy_horizontal_bits(&mut self, from: &VramAddress) {
+        self.0 &= !0b000_01_00000_11111;
+        self.0 |= from.0 & 0b000_01_00000_11111;
+    }
+
+    fn copy_vertical_bits(&mut self, from: &VramAddress) {
+        self.0 &= !0b111_10_11111_00000;
+        self.0 |= from.0 & 0b111_10_11111_00000;
     }
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Coarse_X_increment
@@ -456,7 +472,7 @@ impl Ppu {
                     0 => {
                         let pattern = self.bus.read_u8(self.fetch_addr.get());
                         self.pattern_data.latch.high.set(pattern);
-                        if self.mask.get().contains(PpuMask::b) { // TODO also for sprite rendering
+                        if self.mask.get().is_rendering() {
                             self.v_addr.update(|mut v| {
                                 if self.dot.get() == 256 {
                                     v.incr_y();
@@ -472,10 +488,22 @@ impl Ppu {
             }
             257 => {
                 self.pattern_data.latch();
-                // TODO: scrolling, copy t into x
+                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
+                if self.mask.get().is_rendering() {
+                    self.v_addr.update(|mut v| {
+                        v.copy_horizontal_bits(&self.t_addr.get());
+                        v
+                    });
+                }
             }
             280..=304 => if pre_render {
-                // TODO: scrolling, copy t into y
+                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
+                if self.mask.get().is_rendering() {
+                    self.v_addr.update(|mut v| {
+                        v.copy_vertical_bits(&self.t_addr.get());
+                        v
+                    });
+                }
             },
             338 => {
                 let entry = self.bus.vram.read_u8(self.fetch_addr.get());
