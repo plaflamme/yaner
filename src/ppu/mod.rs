@@ -9,7 +9,9 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 use bitregions::bitregions;
+
 pub mod debug;
+pub mod rgb;
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -258,6 +260,15 @@ impl PaletteColor {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Pixel(u8);
+
+impl Pixel {
+    pub fn rgb(&self) -> rgb::Rgb {
+        rgb::SYSTEM_PALETTE[self.0 as usize]
+    }
+}
+
 pub struct Ppu {
     pub bus: PpuBus,
 
@@ -288,7 +299,7 @@ pub struct Ppu {
     // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
     attribute_data: AttributeData,
 
-    frame_pixels: Cell<[u8; 256 * 240]>,
+    frame_pixels: Cell<[Pixel; 256 * 240]>,
 
     // Temporary storage for tile fetching pipeline
     fetch_addr: Cell<u16>,
@@ -323,7 +334,7 @@ impl Ppu {
             dot: Cell::new(0),
             pattern_data: PatternData::default(),
             attribute_data: AttributeData::default(),
-            frame_pixels: Cell::new([0u8; 256 * 240]),
+            frame_pixels: Cell::new([Pixel::default(); 256 * 240]),
 
             fetch_addr: Cell::new(0),
             nametable_entry: Cell::new(0),
@@ -463,10 +474,10 @@ impl Ppu {
                 if self.scanline.get() < 241 && self.dot.get() < 257 {
                     let pixel_index = pixel + self.scanline.get() * 256;
 
-                    let s: &Cell<[u8]> = &self.frame_pixels;
+                    let s: &Cell<[Pixel]> = &self.frame_pixels;
                     let pixels = s.as_slice_of_cells();
-                    let palette_color = self.bus.read_u8(pixel_color.address());
-                    pixels[pixel_index as usize].set(palette_color);
+                    let pixel_value = Pixel(self.bus.read_u8(pixel_color.address()));
+                    pixels[pixel_index as usize].set(pixel_value);
                 }
 
                 self.pattern_data.shift();
