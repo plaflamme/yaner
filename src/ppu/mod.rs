@@ -618,6 +618,7 @@ impl Ppu {
 
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
+        let mut odd_frame = false;
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
@@ -642,6 +643,10 @@ impl Ppu {
                     self.evaluate_sprites(true);
                     self.render_pixel();
                     self.fetch_tile(true);
+
+                    if odd_frame && self.mask.get().is_rendering() && self.dot.get() == 339 {
+                        self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
+                    }
                 }
 
                 _ => (),
@@ -657,7 +662,8 @@ impl Ppu {
             if self.scanline.get() == 0 && self.dot.get() == 0 {
                 self.suppress_vbl.set(false);
                 self.suppress_nmi.set(false);
-                yield PpuCycle::Frame
+                yield PpuCycle::Frame;
+                odd_frame = !odd_frame;
             } else {
                 if !self.suppress_nmi.get()
                     && generate_nmi
