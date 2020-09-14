@@ -457,7 +457,7 @@ impl Ppu {
 
     fn render_pixel(&self) {
         match self.dot.get() {
-            2..=257 | 322..=337 => {
+            2..=257 | 321..=337 => {
                 // NOTE: on the second tick, we draw pixel 0
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
@@ -576,6 +576,7 @@ impl Ppu {
             }
             257 => {
                 self.pattern_data.latch();
+                self.attribute_data.latch(self.attribute_entry.get());
                 // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
                 if self.mask.get().is_rendering() {
                     self.v_addr.update(|mut v| {
@@ -615,8 +616,8 @@ impl Ppu {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
                     self.evaluate_sprites(false);
-                    self.fetch_tile(false);
                     self.render_pixel();
+                    self.fetch_tile(false);
                 }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
@@ -633,8 +634,8 @@ impl Ppu {
                         self.status.update(|s| s - PpuStatus::V);
                     }
                     self.evaluate_sprites(true);
-                    self.fetch_tile(true);
                     self.render_pixel();
+                    self.fetch_tile(true);
                 }
 
                 _ => (),
