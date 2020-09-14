@@ -355,13 +355,15 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: 
     );
 }
 
-fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, size: Rect) {
+fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: Rect) {
+    // read the value of the bg color
+    let bg = nes.ppu_bus.read_u8(0x3F00);
     let mut frame = Vec::new();
-    for sl in 0..240 {
+    for sl in shift..240 {
         let mut line = String::from("");
         for dot in 0..256 {
             let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
-            if pixel != 0 {
+            if pixel != bg {
                 line.push('█');
             } else {
                 line.push(' ');
@@ -383,11 +385,11 @@ fn draw<'a, B: Backend>(
         let size = f.size();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(110), Constraint::Min(15)].as_ref())
+            .constraints([Constraint::Length(256), Constraint::Min(15)].as_ref())
             .split(size);
 
         // rams(f, &state, shift, chunks[0]);
-        frame(f, &state, chunks[0]);
+        frame(f, &state, shift, chunks[0]);
         rightbar(f, &state, state.prg_rom, chunks[1]);
     })
 }

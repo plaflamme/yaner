@@ -1,4 +1,4 @@
-use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus, VramAddress, LatchedPair};
+use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus, VramAddress, PatternData};
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,
@@ -9,7 +9,7 @@ pub struct PpuState {
     pub oam_addr: u8,
     pub ne: u8,
     pub fa: u16,
-    pub pattern_data: LatchedPair<u16>,
+    pub pattern_data: PatternData,
     pub frame: [u8; 256 * 240],
     pub scanline: u16,
     pub dot: u16,

@@ -9,8 +9,24 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 use bitregions::bitregions;
-use std::ops::{BitAnd, BitOr};
 pub mod debug;
+
+// NOTES:
+//   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
+//   Pattern table - these are 16 bytes values that contains the pattern that should be displayed on screen.
+//     The 2 8-byte values are comined together to form 64 2-bit values (or 8x8 2-bit values)
+//     The 2-bit values are indices into the color palette
+//   Palettes - the NES has a static system palette that contains 64 colors. and each frame has its own palette which is a subset of the system palette.
+//     Frame palette - the frame palette is 8 groups of 4 colours. Groups are indexed 0-7 and individual colors 0-3.
+//       Palettes 0-3 are for the backgrounds, palettes 4-7 are for the sprites.
+//       The frame palette is selected from the attribute table which is part of the nametable (thus also setup by the CPU, presumably during vblank)
+//   Attribute table - the attribute table divides the frame into blocks of 4x4 tiles. Each block is also divided into 4 regions of 2x2 tiles.
+//     Each byte in the attribute table represents a single block of 4x4 tiles.
+//     Each byte is divided into 4 2-bit values, one per block region (2x2 tiles).
+//       * top-left:  ------xx
+//       * top-right: ----xx--
+//       * bot-left:  --xx----
+//       * bot-right: xx------
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
@@ -113,19 +129,39 @@ pub struct RegisterPair<T: Copy> {
 }
 
 #[derive(Clone, Default)]
-pub struct LatchedPair<T: Copy> {
+pub struct PatternData {
     pub latch: RegisterPair<u8>,
-    pub value: RegisterPair<T>
+    pub value: RegisterPair<u16>
 }
 
-impl LatchedPair<u16> {
+impl PatternData {
     fn latch(&self) {
         self.value.low.update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
         self.value.high.update(|v| (v & 0xFF00) | self.latch.high.get() as u16);
     }
+
     fn shift(&self) {
         self.value.low.update(|v| v << 1);
         self.value.high.update(|v| v << 1);
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct AttributeData {
+    pub latch: RegisterPair<u8>, // this is actually a 1bit latch
+    pub value: RegisterPair<u8>
+}
+
+impl AttributeData {
+
+    fn latch(&self, attribute_entry: u8) {
+        self.latch.low.update(|v| attribute_entry & 0x01);
+        self.latch.high.update(|v| (attribute_entry & 0x10) >> 1);
+    }
+
+    fn shift(&self) {
+        self.value.low.update(|v| v << 1 | self.latch.low.get());
+        self.value.high.update(|v| v << 1 | self.latch.high.get());
     }
 }
 
@@ -197,6 +233,31 @@ impl VramAddress {
     }
 }
 
+bitregions! {
+    pub PaletteColor u8 {
+        COLOR: 0b0000_0011,
+        PALETTE: 0b0000_1100,
+    }
+}
+
+impl PaletteColor {
+
+    fn from(palette: u8, color: u8) -> Self {
+        let mut p = PaletteColor::default();
+        p.set_color(color);
+        p.set_palette(palette);
+        p
+    }
+
+    fn address(&self) -> u16 {
+        0x3F00 + self.palette() as u16 * 4 + self.color() as u16
+    }
+
+    fn is_transparent(&self) -> bool {
+        self.color() == 0
+    }
+}
+
 pub struct Ppu {
     pub bus: PpuBus,
 
@@ -223,9 +284,9 @@ pub struct Ppu {
     scanline: Cell<u16>,
     dot: Cell<u16>,
     // 2 16-bit shift registers. These contain the pattern table data for two tiles [...]
-    pattern_data: LatchedPair<u16>,
+    pattern_data: PatternData,
     // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
-    attribute_data: LatchedPair<u8>,
+    attribute_data: AttributeData,
 
     frame_pixels: Cell<[u8; 256 * 240]>,
 
@@ -260,8 +321,8 @@ impl Ppu {
 
             scanline: Cell::new(0),
             dot: Cell::new(0),
-            pattern_data: LatchedPair::default(),
-            attribute_data: LatchedPair::default(),
+            pattern_data: PatternData::default(),
+            attribute_data: AttributeData::default(),
             frame_pixels: Cell::new([0u8; 256 * 240]),
 
             fetch_addr: Cell::new(0),
@@ -390,46 +451,57 @@ impl Ppu {
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
                 let bg_color = self.render_background_pixel(pixel);
-                // let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
-                //
-                // let colors = if sprite_behind {
-                //     [bg_color, sprite_color]
-                // } else {
-                //     [sprite_color, bg_color]
-                // };
+                let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
 
-                // let pixel_color = if colors[0] == 0 { colors[1] } else { colors[0] };
+                let colors = if sprite_behind {
+                    [bg_color, sprite_color]
+                } else {
+                    [sprite_color, bg_color]
+                };
+
+                let pixel_color = if colors[0].is_transparent() { colors[1] } else { colors[0] };
                 if self.scanline.get() < 241 && self.dot.get() < 257 {
                     let pixel_index = pixel + self.scanline.get() * 256;
 
                     let s: &Cell<[u8]> = &self.frame_pixels;
                     let pixels = s.as_slice_of_cells();
-                    pixels[pixel_index as usize].set(bg_color);
+                    let palette_color = self.bus.read_u8(pixel_color.address());
+                    pixels[pixel_index as usize].set(palette_color);
                 }
 
                 self.pattern_data.shift();
+                self.attribute_data.shift();
             }
             _ => (),
         }
     }
 
-    fn render_sprite_pixel(&self, _dot: u16) -> (u8, bool) {
+    fn render_sprite_pixel(&self, _dot: u16) -> (PaletteColor, bool) {
         if !self.mask.get().contains(PpuMask::s) {
-            (0, false)
+            (PaletteColor::default(), false)
         } else {
             // TODO
-            (0, false)
+            (PaletteColor::default(), false)
         }
     }
 
-    fn render_background_pixel(&self, _dot: u16) -> u8 {
+    fn render_background_pixel(&self, _dot: u16) -> PaletteColor {
         if !self.mask.get().contains(PpuMask::b) {
-            0
+            PaletteColor::default()
         } else {
             // TODO: scrolling affects this
-            let high = (self.pattern_data.value.high.get() >> 14) & 0b0000_0010;
+            let high = (self.pattern_data.value.high.get() >> 14) & 0b10;
             let low = (self.pattern_data.value.low.get() >> 15) & 0x01;
-            (high | low) as u8
+
+            let mut color = (high | low) as u8;
+
+            // TODO: fine_x
+            let high = (self.attribute_data.value.high.get() >> 6) & 0b10;
+            let low = (self.attribute_data.value.low.get() >> 7) & 0x01;
+
+            let palette = (high | low) as u8;
+
+            PaletteColor::from(palette, color)
         }
     }
 
@@ -442,7 +514,7 @@ impl Ppu {
 
                         if self.dot.get() > 1 && self.dot.get() < 321 {
                             self.pattern_data.latch();
-                            // TODO: not sure what we're supposed to do for attribute_data
+                            self.attribute_data.latch(self.attribute_entry.get());
                         }
                     },
                     2 => {

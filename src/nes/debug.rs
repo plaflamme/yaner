@@ -13,6 +13,7 @@ pub struct NesState<'a> {
     pub clocks: ClockState,
 
     pub cpu_bus: &'a dyn AddressSpace,
+    pub ppu_bus: &'a dyn AddressSpace,
     pub ram: &'a dyn AddressSpace,
     pub vram: &'a dyn AddressSpace,
     pub prg_rom: &'a dyn AddressSpace,
@@ -30,6 +31,7 @@ impl<'a> NesState<'a> {
             },
 
             cpu_bus: &nes.cpu.bus,
+            ppu_bus: &nes.ppu.bus,
             ram: &nes.cpu.bus.ram,
             vram: &nes.ppu.bus.vram,
             prg_rom: &nes.cpu.bus, // TODO: use mapper directly
