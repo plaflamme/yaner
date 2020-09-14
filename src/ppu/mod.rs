@@ -252,7 +252,7 @@ impl PaletteColor {
     }
 
     fn address(&self) -> u16 {
-        0x3F00 + self.palette() as u16 * 4 + self.color() as u16
+        0x3F00 | (self.palette() as u16) << 2 | self.color() as u16
     }
 
     fn is_transparent(&self) -> bool {
@@ -537,8 +537,13 @@ impl Ppu {
                     },
                     4 => {
                         let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                        // TODO: Scrolling affects this.
                         self.attribute_entry.set(entry);
+                        if self.v_addr.get().coarse_y() & 2 != 0 {
+                            self.attribute_entry.update(|v| v >> 4);
+                        }
+                        if self.v_addr.get().coarse_x() & 2 != 0 {
+                            self.attribute_entry.update(|v| v >> 2);
+                        }
                     },
                     5 => {
                         // TODO: Scrolling affects this.
