@@ -156,9 +156,9 @@ pub struct AttributeData {
 
 impl AttributeData {
 
-    fn latch(&self, attribute_entry: u8) {
-        self.latch.low.update(|v| attribute_entry & 0x01);
-        self.latch.high.update(|v| (attribute_entry & 0x10) >> 1);
+    fn latch(&self) {
+        self.value.low.update(|v| (v & 0xFE) | self.latch.low.get() & 1);
+        self.value.high.update(|v| (v & 0xFE) | self.latch.high.get() & 1);
     }
 
     fn shift(&self) {
@@ -304,7 +304,6 @@ pub struct Ppu {
     // Temporary storage for tile fetching pipeline
     fetch_addr: Cell<u16>,
     nametable_entry: Cell<u8>,
-    attribute_entry: Cell<u8>,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
@@ -338,7 +337,6 @@ impl Ppu {
 
             fetch_addr: Cell::new(0),
             nametable_entry: Cell::new(0),
-            attribute_entry: Cell::new(0),
 
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
@@ -500,11 +498,18 @@ impl Ppu {
         if !self.mask.get().contains(PpuMask::b) {
             PaletteColor::default()
         } else {
+
+            // From http://wiki.nesdev.com/w/index.php/PPU_rendering
+            //   Every cycle, a bit is fetched from the 4 background shift registers in order to create a pixel on screen.
+            //   Exactly which bit is fetched depends on the fine X scroll, set by $2005 (this is how fine X scrolling is possible).
+            //   Afterwards, the shift registers are shifted once, to the data for the next pixel.
+            // The last step is implemented in self.shift()
+
             // TODO: scrolling affects this
             let high = (self.pattern_data.value.high.get() >> 14) & 0b10;
             let low = (self.pattern_data.value.low.get() >> 15) & 0x01;
 
-            let mut color = (high | low) as u8;
+            let color = (high | low) as u8;
 
             // TODO: fine_x
             let high = (self.attribute_data.value.high.get() >> 6) & 0b10;
@@ -525,7 +530,7 @@ impl Ppu {
 
                         if self.dot.get() > 1 && self.dot.get() < 321 {
                             self.pattern_data.latch();
-                            self.attribute_data.latch(self.attribute_entry.get());
+                            self.attribute_data.latch();
                         }
                     },
                     2 => {
@@ -536,14 +541,15 @@ impl Ppu {
                         self.fetch_addr.set(self.v_addr.get().attribute_addr());
                     },
                     4 => {
-                        let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                        self.attribute_entry.set(entry);
+                        let mut entry = self.bus.vram.read_u8(self.fetch_addr.get());
                         if self.v_addr.get().coarse_y() & 2 != 0 {
-                            self.attribute_entry.update(|v| v >> 4);
+                            entry >>= 4;
                         }
                         if self.v_addr.get().coarse_x() & 2 != 0 {
-                            self.attribute_entry.update(|v| v >> 2);
+                            entry >>= 2;
                         }
+                        self.attribute_data.latch.low.set(entry & 1);
+                        self.attribute_data.latch.high.set((entry & 2) >> 1);
                     },
                     5 => {
                         // TODO: Scrolling affects this.
@@ -576,7 +582,7 @@ impl Ppu {
             }
             257 => {
                 self.pattern_data.latch();
-                self.attribute_data.latch(self.attribute_entry.get());
+                self.attribute_data.latch();
                 // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
                 if self.mask.get().is_rendering() {
                     self.v_addr.update(|mut v| {
