@@ -10,12 +10,14 @@ use std::rc::Rc;
 use bitregions::bitregions;
 
 pub mod reg;
+pub mod renderer;
 pub mod vram_address;
 pub mod debug;
 pub mod rgb;
 
 use reg::{PpuCtrl, PpuMask, PpuStatus};
 use vram_address::VramAddress;
+use renderer::{AttributeData, PatternData};
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -33,49 +35,6 @@ use vram_address::VramAddress;
 //       * top-right: ----xx--
 //       * bot-left:  --xx----
 //       * bot-right: xx------
-
-#[derive(Clone, Default)]
-pub struct RegisterPair<T: Copy> {
-    pub low: Cell<T>,
-    pub high: Cell<T>,
-}
-
-#[derive(Clone, Default)]
-pub struct PatternData {
-    pub latch: RegisterPair<u8>,
-    pub value: RegisterPair<u16>
-}
-
-impl PatternData {
-    fn latch(&self) {
-        self.value.low.update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
-        self.value.high.update(|v| (v & 0xFF00) | self.latch.high.get() as u16);
-    }
-
-    fn shift(&self) {
-        self.value.low.update(|v| v << 1);
-        self.value.high.update(|v| v << 1);
-    }
-}
-
-#[derive(Clone, Default)]
-pub struct AttributeData {
-    pub latch: RegisterPair<u8>, // this is actually a 1bit latch
-    pub value: RegisterPair<u8>
-}
-
-impl AttributeData {
-
-    fn latch(&self) {
-        self.value.low.update(|v| (v & 0xFE) | self.latch.low.get() & 1);
-        self.value.high.update(|v| (v & 0xFE) | self.latch.high.get() & 1);
-    }
-
-    fn shift(&self) {
-        self.value.low.update(|v| v << 1 | self.latch.low.get());
-        self.value.high.update(|v| v << 1 | self.latch.high.get());
-    }
-}
 
 bitregions! {
     pub PaletteColor u8 {
