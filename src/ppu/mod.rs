@@ -49,11 +49,6 @@ struct Registers {
     addr_latch: Cell<bool>, // this is referred to as w in the wiki
 
     pub fine_x: Cell<u8>,
-
-    // These probably need to go in the renderer
-    // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
-    suppress_vbl: Cell<bool>,
-    suppress_nmi: Cell<bool>,
 }
 
 impl Registers {
@@ -68,45 +63,17 @@ impl Registers {
             v_addr: Cell::new(VramAddress::default()),
             addr_latch: Cell::new(false),
             fine_x: Cell::new(0),
-
-            suppress_vbl: Cell::new(false),
-            suppress_nmi: Cell::new(false),
         }
     }
 
     // read PPUSTATUS, with side effects
-    fn read_status(&self, scanline: u16, dot: u16) -> u8 {
-        let mut status = self.status.get();
+    fn read_status(&self) -> PpuStatus {
+        let status = self.status.get();
+        // reading PPUSTATUS always clears VBL
         self.status.update(|s| s - PpuStatus::V);
-
         // reading PPUSTATUS resets the address latch
         self.addr_latch.set(false);
-
-        // interactions between vbl and PPUSTATUS reads:
-        //   Reading PPUSTATUS one PPU clock before reads it as clear and never sets the flag
-        //     or generates NMI for that frame
-        //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
-        //     and suppresses the NMI for that frame
-        match (scanline, dot) {
-            (241, 0) => {
-                self.suppress_vbl.set(true);
-                self.suppress_nmi.set(true);
-            }
-            (241, 1) => {
-                // the ppu would have set it on this clock tick
-                status = status | PpuStatus::V;
-                self.suppress_vbl.set(true); // so we don't set it
-                self.suppress_nmi.set(true);
-            }
-            (241, 2..=3) => self.suppress_nmi.set(true),
-            (261, 1) => {
-                // the ppu will clear it on this tick
-                status = status - PpuStatus::V;
-            }
-            _ => (),
-        }
-
-        status.bits()
+        status
     }
 
     fn write_scroll(&self, value: u8) {
@@ -166,7 +133,10 @@ impl Ppu {
 
     // read PPUSTATUS with side effects
     fn read_status(&self) -> u8 {
-        self.registers.read_status(self.renderer.scanline.get(), self.renderer.dot.get())
+        let mut status = self.registers.read_status();
+        // allow the renderer to suppress vbl and nmi
+        self.renderer.ppustatus_read(&mut status);
+        status.bits()
     }
 
     // read from VRAM with side effects

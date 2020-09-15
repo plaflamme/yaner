@@ -98,6 +98,10 @@ pub struct Renderer {
     pub(super) nametable_entry: Cell<u8>,
 
     pub(super) frame_pixels: Cell<[Pixel; 256 * 240]>,
+
+    // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
+    suppress_vbl: Cell<bool>,
+    suppress_nmi: Cell<bool>,
 }
 
 impl Renderer {
@@ -111,7 +115,33 @@ impl Renderer {
             frame_pixels: Cell::new([Pixel::default(); 256 * 240]),
             fetch_addr: Cell::new(0),
             nametable_entry: Cell::new(0),
+            suppress_vbl: Cell::new(false),
+            suppress_nmi: Cell::new(false),
         }
+    }
+
+    // interactions between vbl and PPUSTATUS reads:
+    //   Reading PPUSTATUS one PPU clock before reads it as clear and never sets the flag
+    //     or generates NMI for that frame
+    //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
+    //     and suppresses the NMI for that frame
+    pub(super) fn ppustatus_read(&self, status: &mut PpuStatus) {
+        match (self.scanline.get(), self.dot.get()) {
+            (241, 0) => {
+                self.suppress_vbl.set(true);
+                self.suppress_nmi.set(true);
+            }
+            (241, 1) => {
+                // the ppu would have set it on this clock tick
+                status.insert(PpuStatus::V);
+                self.suppress_vbl.set(true); // so we don't set it
+                self.suppress_nmi.set(true);
+            }
+            (241, 2..=3) => self.suppress_nmi.set(true),
+            // the ppu will clear it on this tick
+            (261, 1) => status.remove(PpuStatus::V),
+            _ => (),
+        };
     }
 
     fn evaluate_sprites(&self, registers: &Registers, pre_render: bool) {
@@ -302,11 +332,11 @@ impl Renderer {
                     self.fetch_tile(registers, bus, false);
                 }
                 (241, 1) => {
-                    if !registers.suppress_vbl.get() {
+                    if !self.suppress_vbl.get() {
                         // enable vblank
                         registers.status.update(|s| s | PpuStatus::V);
 
-                        if !registers.suppress_nmi.get() && registers.ctrl.get().contains(PpuCtrl::V) {
+                        if !self.suppress_nmi.get() && registers.ctrl.get().contains(PpuCtrl::V) {
                             generate_nmi = true;
                         }
                     }
@@ -335,13 +365,13 @@ impl Renderer {
             let previous_ctrl = registers.ctrl.get();
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
-                registers.suppress_vbl.set(false);
-                registers.suppress_nmi.set(false);
+                self.suppress_vbl.set(false);
+                self.suppress_nmi.set(false);
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
             } else {
-                if !registers.suppress_nmi.get()
+                if !self.suppress_nmi.get()
                     && generate_nmi
                     && registers.status.get().contains(PpuStatus::V)
                 {
@@ -352,7 +382,7 @@ impl Renderer {
             }
             if registers.status.get().contains(PpuStatus::V) {
                 // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-                generate_nmi = !registers.suppress_nmi.get()
+                generate_nmi = !self.suppress_nmi.get()
                     && registers.ctrl.get().contains(PpuCtrl::V)
                     && !previous_ctrl.contains(PpuCtrl::V);
             }
