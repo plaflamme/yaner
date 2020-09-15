@@ -16,7 +16,8 @@ use crate::cpu::{Cpu, Flags, Interrupt};
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, Stepper};
-use crate::ppu::{PpuCtrl, PpuStatus, PpuMask};
+use crate::ppu::{PpuStatus, PpuMask};
+use crate::ppu::reg::PpuCtrl;
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
