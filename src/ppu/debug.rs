@@ -1,4 +1,5 @@
-use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus, VramAddress, PatternData, Pixel, AttributeData};
+use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus, VramAddress};
+use crate::ppu::renderer::{Pixel, PatternData, AttributeData};
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,
@@ -27,13 +28,13 @@ impl PpuState {
             v_addr: ppu.v_addr.get(),
             fine_x: ppu.fine_x.get(),
             oam_addr: ppu.oam_addr.get(),
-            ne: ppu.nametable_entry.get(),
-            fa: ppu.fetch_addr.get(),
-            pattern_data: ppu.pattern_data.clone(),
-            attribute_data: ppu.attribute_data.clone(),
-            frame: ppu.frame_pixels.get(),
-            scanline: ppu.scanline.get(),
-            dot: ppu.dot.get(),
+            ne: ppu.renderer.nametable_entry.get(),
+            fa: ppu.renderer.fetch_addr.get(),
+            pattern_data: ppu.renderer.pattern_data.clone(),
+            attribute_data: ppu.renderer.attribute_data.clone(),
+            frame: ppu.renderer.frame_pixels.get(),
+            scanline: ppu.renderer.scanline.get(),
+            dot: ppu.renderer.dot.get(),
         }
     }
 }

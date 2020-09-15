@@ -7,7 +7,6 @@ use rand::{thread_rng, Rng};
 use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
-use bitregions::bitregions;
 
 pub mod reg;
 pub mod renderer;
@@ -17,7 +16,7 @@ pub mod rgb;
 
 use reg::{PpuCtrl, PpuMask, PpuStatus};
 use vram_address::VramAddress;
-use renderer::{AttributeData, PatternData};
+use renderer::Renderer;
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -35,40 +34,6 @@ use renderer::{AttributeData, PatternData};
 //       * top-right: ----xx--
 //       * bot-left:  --xx----
 //       * bot-right: xx------
-
-bitregions! {
-    pub PaletteColor u8 {
-        COLOR: 0b0000_0011,
-        PALETTE: 0b0000_1100,
-    }
-}
-
-impl PaletteColor {
-
-    fn from(palette: u8, color: u8) -> Self {
-        let mut p = PaletteColor::default();
-        p.set_color(color);
-        p.set_palette(palette);
-        p
-    }
-
-    fn address(&self) -> u16 {
-        0x3F00 | (self.palette() as u16) << 2 | self.color() as u16
-    }
-
-    fn is_transparent(&self) -> bool {
-        self.color() == 0
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct Pixel(u8);
-
-impl Pixel {
-    pub fn rgb(&self) -> rgb::Rgb {
-        rgb::SYSTEM_PALETTE[self.0 as usize]
-    }
-}
 
 pub struct Ppu {
     pub bus: PpuBus,
@@ -92,19 +57,7 @@ pub struct Ppu {
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 
-    // Rendering state
-    scanline: Cell<u16>,
-    dot: Cell<u16>,
-    // 2 16-bit shift registers. These contain the pattern table data for two tiles [...]
-    pattern_data: PatternData,
-    // 2 8-bit shift registers. These contain the palette attributes for the lower 8 pixels of the 16-bit shift register [...]
-    attribute_data: AttributeData,
-
-    frame_pixels: Cell<[Pixel; 256 * 240]>,
-
-    // Temporary storage for tile fetching pipeline
-    fetch_addr: Cell<u16>,
-    nametable_entry: Cell<u8>,
+    renderer: Renderer,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
@@ -130,14 +83,7 @@ impl Ppu {
 
             open_bus: Cell::new(0),
 
-            scanline: Cell::new(0),
-            dot: Cell::new(0),
-            pattern_data: PatternData::default(),
-            attribute_data: AttributeData::default(),
-            frame_pixels: Cell::new([Pixel::default(); 256 * 240]),
-
-            fetch_addr: Cell::new(0),
-            nametable_entry: Cell::new(0),
+            renderer: Renderer::new(),
 
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
@@ -156,7 +102,7 @@ impl Ppu {
         //     or generates NMI for that frame
         //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
         //     and suppresses the NMI for that frame
-        match (self.scanline.get(), self.dot.get()) {
+        match (self.renderer.scanline.get(), self.renderer.dot.get()) {
             (241, 0) => {
                 self.suppress_vbl.set(true);
                 self.suppress_nmi.set(true);
@@ -239,249 +185,8 @@ impl Ppu {
         }
     }
 
-    fn evaluate_sprites(&self, pre_render: bool) {
-        match self.dot.get() {
-            1 => {
-                // TODO: clear secondary OAM
-                if pre_render {
-                    // Clear sprite overflow and 0hit
-                    self.status.update(|s| s - PpuStatus::S - PpuStatus::O);
-                }
-            }
-            256 => (),// TODO: sprite evaluation is done (for next scanline) at this point
-            320 => (),// TODO: sprite tile fetching is done (for next scanline) at this point
-            _ => (),
-        }
-    }
-
-    fn render_pixel(&self) {
-        match self.dot.get() {
-            2..=257 | 321..=337 => {
-                // NOTE: on the second tick, we draw pixel 0
-                // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
-                let pixel = self.dot.get() - 2;
-                let bg_color = self.render_background_pixel(pixel);
-                let (sprite_color, sprite_behind) = self.render_sprite_pixel(pixel);
-
-                let colors = if sprite_behind {
-                    [bg_color, sprite_color]
-                } else {
-                    [sprite_color, bg_color]
-                };
-
-                let pixel_color = if colors[0].is_transparent() { colors[1] } else { colors[0] };
-                if self.scanline.get() < 241 && self.dot.get() < 257 {
-                    let pixel_index = pixel + self.scanline.get() * 256;
-
-                    let s: &Cell<[Pixel]> = &self.frame_pixels;
-                    let pixels = s.as_slice_of_cells();
-                    let pixel_value = Pixel(self.bus.read_u8(pixel_color.address()));
-                    pixels[pixel_index as usize].set(pixel_value);
-                }
-
-                self.pattern_data.shift();
-                self.attribute_data.shift();
-            }
-            _ => (),
-        }
-    }
-
-    fn render_sprite_pixel(&self, _dot: u16) -> (PaletteColor, bool) {
-        if !self.mask.get().contains(PpuMask::s) {
-            (PaletteColor::default(), false)
-        } else {
-            // TODO
-            (PaletteColor::default(), false)
-        }
-    }
-
-    fn render_background_pixel(&self, _dot: u16) -> PaletteColor {
-        if !self.mask.get().contains(PpuMask::b) {
-            PaletteColor::default()
-        } else {
-
-            // From http://wiki.nesdev.com/w/index.php/PPU_rendering
-            //   Every cycle, a bit is fetched from the 4 background shift registers in order to create a pixel on screen.
-            //   Exactly which bit is fetched depends on the fine X scroll, set by $2005 (this is how fine X scrolling is possible).
-            //   Afterwards, the shift registers are shifted once, to the data for the next pixel.
-            // The last step is implemented in self.shift()
-
-            // TODO: scrolling affects this
-            let high = (self.pattern_data.value.high.get() >> 14) & 0b10;
-            let low = (self.pattern_data.value.low.get() >> 15) & 0x01;
-
-            let color = (high | low) as u8;
-
-            let high = (self.attribute_data.value.high.get() >> (6 - self.fine_x.get())) & 0b10 ;
-            let low = (self.attribute_data.value.low.get() >> (7 - self.fine_x.get())) & 0x01;
-
-            let palette = (high | low) as u8;
-
-            PaletteColor::from(palette, color)
-        }
-    }
-
-    fn fetch_tile(&self, pre_render: bool) {
-        match self.dot.get() {
-            1..=256 | 321..=337 => {
-                match self.dot.get() % 8 {
-                    1 => {
-                        self.fetch_addr.set(self.v_addr.get().nametable_addr());
-
-                        if self.dot.get() > 1 && self.dot.get() < 321 {
-                            self.pattern_data.latch();
-                            self.attribute_data.latch();
-                        }
-                    },
-                    2 => {
-                        let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                        self.nametable_entry.set(entry);
-                    },
-                    3 => {
-                        self.fetch_addr.set(self.v_addr.get().attribute_addr());
-                    },
-                    4 => {
-                        let mut entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                        if self.v_addr.get().coarse_y() & 2 != 0 {
-                            entry >>= 4;
-                        }
-                        if self.v_addr.get().coarse_x() & 2 != 0 {
-                            entry >>= 2;
-                        }
-                        self.attribute_data.latch.low.set(entry & 1);
-                        self.attribute_data.latch.high.set((entry & 2) >> 1);
-                    },
-                    5 => {
-                        // TODO: Scrolling affects this.
-                        let index = self.nametable_entry.get() as u16 * 16 | (self.v_addr.get().fine_y() as u16);
-                        self.fetch_addr.set(index + self.ctrl.get().bg_pattern_table_address());
-                    },
-                    6 => {
-                        let pattern = self.bus.read_u8(self.fetch_addr.get());
-                        self.pattern_data.latch.low.set(pattern);
-                    },
-                    7 =>  {
-                        self.fetch_addr.update(|v| v + 8);
-                    }
-                    0 => {
-                        let pattern = self.bus.read_u8(self.fetch_addr.get());
-                        self.pattern_data.latch.high.set(pattern);
-                        if self.mask.get().is_rendering() {
-                            self.v_addr.update(|mut v| {
-                                if self.dot.get() == 256 {
-                                    v.incr_y();
-                                } else {
-                                    v.incr_x();
-                                }
-                                v
-                            });
-                        }
-                    },
-                    _ => unreachable!("match on % 8 is exhaustive")
-                }
-            }
-            257 => {
-                self.pattern_data.latch();
-                self.attribute_data.latch();
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
-                if self.mask.get().is_rendering() {
-                    self.v_addr.update(|mut v| {
-                        v.copy_horizontal_bits(&self.t_addr.get());
-                        v
-                    });
-                }
-            }
-            280..=304 => if pre_render {
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
-                if self.mask.get().is_rendering() {
-                    self.v_addr.update(|mut v| {
-                        v.copy_vertical_bits(&self.t_addr.get());
-                        v
-                    });
-                }
-            },
-            338 => {
-                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                self.nametable_entry.set(entry);
-            }
-            339 => {
-                self.fetch_addr.set(self.v_addr.get().nametable_addr());
-            }
-            340 => {
-                let entry = self.bus.vram.read_u8(self.fetch_addr.get());
-                self.nametable_entry.set(entry);
-            }
-
-            _ => (),
-        }
-    }
-
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
-        let mut generate_nmi = false;
-        let mut odd_frame = false;
-        move || loop {
-            match (self.scanline.get(), self.dot.get()) {
-                (0..=239, _) => {
-                    self.evaluate_sprites(false);
-                    self.render_pixel();
-                    self.fetch_tile(false);
-                }
-                (241, 1) => {
-                    if !self.suppress_vbl.get() {
-                        // enable vblank
-                        self.status.update(|s| s | PpuStatus::V);
-
-                        if !self.suppress_nmi.get() && self.ctrl.get().contains(PpuCtrl::V) {
-                            generate_nmi = true;
-                        }
-                    }
-                }
-                (261, _) => {
-                    if self.dot.get() == 1 {
-                        self.status.update(|s| s - PpuStatus::V);
-                    }
-                    self.evaluate_sprites(true);
-                    self.render_pixel();
-                    self.fetch_tile(true);
-
-                    if odd_frame && self.mask.get().is_rendering() && self.dot.get() == 339 {
-                        self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
-                    }
-                }
-
-                _ => (),
-            }
-
-            self.dot.update(|dot| (dot + 1) % 341);
-            if self.dot.get() == 0 {
-                self.scanline.update(|sc| (sc + 1) % 262);
-            }
-
-            let previous_ctrl = self.ctrl.get();
-
-            if self.scanline.get() == 0 && self.dot.get() == 0 {
-                self.suppress_vbl.set(false);
-                self.suppress_nmi.set(false);
-                yield PpuCycle::Frame;
-                self.frame_pixels.set([Pixel::default(); 256 * 240]);
-                odd_frame = !odd_frame;
-            } else {
-                if !self.suppress_nmi.get()
-                    && generate_nmi
-                    && self.status.get().contains(PpuStatus::V)
-                {
-                    yield PpuCycle::Nmi
-                } else {
-                    yield PpuCycle::Tick
-                }
-            }
-            if self.status.get().contains(PpuStatus::V) {
-                // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-                generate_nmi = !self.suppress_nmi.get()
-                    && self.ctrl.get().contains(PpuCtrl::V)
-                    && !previous_ctrl.contains(PpuCtrl::V);
-            }
-        }
+        self.renderer.run(&self)
     }
 }
 
