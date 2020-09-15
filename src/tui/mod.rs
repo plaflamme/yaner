@@ -378,7 +378,7 @@ fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: Shift, siz
             let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
             let (r,g,b) = pixel.rgb();
             let style = Style::default().fg(Color::Rgb(r,g,b));
-            line.push(Span::styled(String::from('█'), style));
+            line.push(Span::styled(String::from(tui::symbols::block::FULL), style));
         }
         frame.push(Spans::from(line));
     }
