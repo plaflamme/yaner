@@ -14,7 +14,7 @@ pub mod reg;
 pub mod debug;
 pub mod rgb;
 
-use reg::PpuCtrl;
+use reg::{PpuCtrl, PpuMask};
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -32,33 +32,6 @@ use reg::PpuCtrl;
 //       * top-right: ----xx--
 //       * bot-left:  --xx----
 //       * bot-right: xx------
-
-bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
-    pub struct PpuMask: u8 {
-        const GREYSCALE = 1 << 0; // Greyscale
-        const m = 1 << 1; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
-        const M = 1 << 2; // 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
-        const b = 1 << 3; // Show background
-
-        const s = 1 << 4; // Show sprites
-        const R = 1 << 5; // Emphasize red
-        const G = 1 << 6; // Emphasize green
-        const B = 1 << 7; // Emphasize blue
-    }
-}
-
-impl Default for PpuMask {
-    fn default() -> Self {
-        Self::empty()
-    }
-}
-
-impl PpuMask {
-    fn is_rendering(&self) -> bool {
-        self.contains(PpuMask::b) | self.contains(PpuMask::s)
-    }
-}
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS

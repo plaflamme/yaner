@@ -45,6 +45,33 @@ impl PpuCtrl {
     }
 }
 
+bitflags! {
+    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
+    pub struct PpuMask: u8 {
+        const GREYSCALE = 1 << 0; // Greyscale
+        const m = 1 << 1; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
+        const M = 1 << 2; // 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
+        const b = 1 << 3; // Show background
+
+        const s = 1 << 4; // Show sprites
+        const R = 1 << 5; // Emphasize red
+        const G = 1 << 6; // Emphasize green
+        const B = 1 << 7; // Emphasize blue
+    }
+}
+
+impl Default for PpuMask {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl PpuMask {
+    pub fn is_rendering(&self) -> bool {
+        self.contains(PpuMask::b) | self.contains(PpuMask::s)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -53,7 +80,7 @@ mod test {
     fn test_ctrl_vram_address_increment() {
         let mut ctrl = PpuCtrl::default();
         assert_eq!(ctrl.vram_inc_step(), 1);
-        ctrl.set(PpuCtrl::I, true);
+        ctrl.toggle(PpuCtrl::I);
         assert_eq!(ctrl.vram_inc_step(), 32);
     }
 
@@ -61,8 +88,22 @@ mod test {
     fn test_ctrl_background_pattern_table() {
         let mut ctrl = PpuCtrl::default();
         assert_eq!(ctrl.bg_pattern_table_address(), 0x0000);
-        ctrl.set(PpuCtrl::B, true);
+        ctrl.toggle(PpuCtrl::B);
         assert_eq!(ctrl.bg_pattern_table_address(), 0x1000);
+    }
+
+    #[test]
+    fn test_mask_is_rendering() {
+        let mut mask = PpuMask::default();
+        assert_eq!(mask.is_rendering(), false);
+        mask.toggle(PpuMask::s);
+        assert_eq!(mask.is_rendering(), true);
+        mask.toggle(PpuMask::b);
+        assert_eq!(mask.is_rendering(), true);
+        mask.toggle(PpuMask::s);
+        assert_eq!(mask.is_rendering(), true);
+        mask.toggle(PpuMask::b);
+        assert_eq!(mask.is_rendering(), false);
     }
 
 }
