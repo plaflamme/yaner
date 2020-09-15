@@ -10,10 +10,12 @@ use std::rc::Rc;
 use bitregions::bitregions;
 
 pub mod reg;
+pub mod vram_address;
 pub mod debug;
 pub mod rgb;
 
 use reg::{PpuCtrl, PpuMask, PpuStatus};
+use vram_address::VramAddress;
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -72,74 +74,6 @@ impl AttributeData {
     fn shift(&self) {
         self.value.low.update(|v| v << 1 | self.latch.low.get());
         self.value.high.update(|v| v << 1 | self.latch.high.get());
-    }
-}
-
-bitregions! {
-    pub VramAddress u16 {
-        FINE_Y: 0b111_00_00000_00000, // Fine y scroll
-        NAMETABLE: 0b000_11_00000_00000, // Nametable select
-        COARSE_Y: 0b000_00_11111_00000, // Coarse y scroll
-        COARSE_X: 0b000_00_00000_11111, // Coarse x scroll
-    }
-}
-
-impl VramAddress {
-    fn increment(&mut self, step: u16) {
-        self.0 = self.0.wrapping_add(step);
-    }
-
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
-    // this value as an address into the nametable
-    fn nametable_addr(&self) -> u16 {
-        // TODO: don't we need to factor in base address in PPUCTRL?
-        0x2000 | (self.0 & 0x0FFF)
-    }
-
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
-    // this value as an address into the attribute table
-    fn attribute_addr(&self) -> u16 {
-        let v: u16 = self.0.into();
-        0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
-    }
-
-    fn copy_horizontal_bits(&mut self, from: &VramAddress) {
-        self.0 &= !0b000_01_00000_11111;
-        self.0 |= from.0 & 0b000_01_00000_11111;
-    }
-
-    fn copy_vertical_bits(&mut self, from: &VramAddress) {
-        self.0 &= !0b111_10_11111_00000;
-        self.0 |= from.0 & 0b111_10_11111_00000;
-    }
-
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Coarse_X_increment
-    fn incr_x(&mut self) {
-        if self.coarse_x() == 31 {
-            self.set_coarse_x(0u16);
-            self.0 ^= 0x0400;
-        } else {
-            self.set_coarse_x(self.coarse_x() + 1);
-        }
-    }
-
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Y_increment
-    fn incr_y(&mut self) {
-        let fy = self.fine_y();
-        if fy < 7 {
-            self.set_fine_y(fy + 1);
-        } else {
-            self.set_fine_y(0u16);
-            let cy = self.coarse_y();
-            if cy == 29 {
-                self.set_coarse_y(0u16);
-                self.0 ^= 0x0800;
-            } else if cy == 31 {
-                self.set_coarse_y(0u16);
-            } else {
-                self.set_coarse_y(cy + 1);
-            }
-        }
     }
 }
 
