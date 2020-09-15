@@ -3,7 +3,6 @@
 use crate::cartridge::Mapper;
 use crate::memory::Ram256;
 use crate::memory::{AddressSpace, Mirrored, Ram2KB, Ram32};
-use bitflags::bitflags;
 use rand::{thread_rng, Rng};
 use std::cell::{Cell, RefCell};
 use std::ops::Generator;
@@ -14,7 +13,7 @@ pub mod reg;
 pub mod debug;
 pub mod rgb;
 
-use reg::{PpuCtrl, PpuMask};
+use reg::{PpuCtrl, PpuMask, PpuStatus};
 
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
@@ -32,28 +31,6 @@ use reg::{PpuCtrl, PpuMask};
 //       * top-right: ----xx--
 //       * bot-left:  --xx----
 //       * bot-right: xx------
-
-bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
-    pub struct PpuStatus: u8 {
-        const O = 1 << 5; // Sprite overflow
-        const S = 1 << 6; // Sprite 0 Hit
-        const V = 1 << 7; // vblank
-    }
-}
-
-// http://wiki.nesdev.com/w/index.php/PPU_power_up_state
-impl Default for PpuStatus {
-    fn default() -> Self {
-        let mut status = Self::empty();
-        // V and O are "often set" on power up
-        status.insert(PpuStatus::V);
-        status.insert(PpuStatus::O);
-        // S is always set to 0
-        status.remove(PpuStatus::S);
-        status
-    }
-}
 
 #[derive(Clone, Default)]
 pub struct RegisterPair<T: Copy> {

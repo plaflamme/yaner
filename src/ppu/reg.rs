@@ -72,6 +72,29 @@ impl PpuMask {
     }
 }
 
+bitflags! {
+    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
+    pub struct PpuStatus: u8 {
+        const O = 1 << 5; // Sprite overflow
+        const S = 1 << 6; // Sprite 0 Hit
+        const V = 1 << 7; // vblank
+    }
+}
+
+// http://wiki.nesdev.com/w/index.php/PPU_power_up_state
+impl Default for PpuStatus {
+    fn default() -> Self {
+        let mut status = Self::empty();
+        // V and O are "often set" on power up
+        status.insert(PpuStatus::V);
+        status.insert(PpuStatus::O);
+        // S is always set to 0
+        status.remove(PpuStatus::S);
+        status
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -104,6 +127,13 @@ mod test {
         assert_eq!(mask.is_rendering(), true);
         mask.toggle(PpuMask::b);
         assert_eq!(mask.is_rendering(), false);
+    }
+
+    #[test]
+    fn test_status_default() {
+        let status = PpuStatus::default();
+        assert_eq!(status.contains(PpuStatus::V | PpuStatus::O), true);
+        assert_eq!(status.contains(PpuStatus::S), false);
     }
 
 }
