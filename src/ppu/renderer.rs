@@ -5,7 +5,7 @@ use bitregions::bitregions;
 use super::rgb;
 use crate::memory::AddressSpace;
 use crate::ppu::reg::{PpuStatus, PpuMask, PpuCtrl};
-use crate::ppu::{PpuCycle, Ppu};
+use crate::ppu::{PpuCycle, Registers};
 
 #[derive(Clone, Default)]
 pub struct RegisterPair<T: Copy> {
@@ -114,13 +114,13 @@ impl Renderer {
         }
     }
 
-    fn evaluate_sprites(&self, ppu: &Ppu, pre_render: bool) {
+    fn evaluate_sprites(&self, registers: &Registers, pre_render: bool) {
         match self.dot.get() {
             1 => {
                 // TODO: clear secondary OAM
                 if pre_render {
                     // Clear sprite overflow and 0hit
-                    ppu.status.update(|s| s - PpuStatus::S - PpuStatus::O);
+                    registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
             256 => (),// TODO: sprite evaluation is done (for next scanline) at this point
@@ -129,14 +129,14 @@ impl Renderer {
         }
     }
 
-    fn render_pixel(&self, ppu: &Ppu) {
+    fn render_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
         match self.dot.get() {
             2..=257 | 321..=337 => {
                 // NOTE: on the second tick, we draw pixel 0
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
-                let bg_color = self.render_background_pixel(ppu, pixel);
-                let (sprite_color, sprite_behind) = self.render_sprite_pixel(ppu, pixel);
+                let bg_color = self.render_background_pixel(registers, pixel);
+                let (sprite_color, sprite_behind) = self.render_sprite_pixel(registers, pixel);
 
                 let colors = if sprite_behind {
                     [bg_color, sprite_color]
@@ -150,7 +150,7 @@ impl Renderer {
 
                     let s: &Cell<[Pixel]> = &self.frame_pixels;
                     let pixels = s.as_slice_of_cells();
-                    let pixel_value = Pixel(ppu.bus.read_u8(pixel_color.address()));
+                    let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
                     pixels[pixel_index as usize].set(pixel_value);
                 }
 
@@ -161,8 +161,8 @@ impl Renderer {
         }
     }
 
-    fn render_sprite_pixel(&self, ppu: &Ppu, _dot: u16) -> (PaletteColor, bool) {
-        if !ppu.mask.get().contains(PpuMask::s) {
+    fn render_sprite_pixel(&self, registers: &Registers, _dot: u16) -> (PaletteColor, bool) {
+        if !registers.mask.get().contains(PpuMask::s) {
             (PaletteColor::default(), false)
         } else {
             // TODO
@@ -170,8 +170,8 @@ impl Renderer {
         }
     }
 
-    fn render_background_pixel(&self, ppu: &Ppu, _dot: u16) -> PaletteColor {
-        if !ppu.mask.get().contains(PpuMask::b) {
+    fn render_background_pixel(&self, registers: &Registers, _dot: u16) -> PaletteColor {
+        if !registers.mask.get().contains(PpuMask::b) {
             PaletteColor::default()
         } else {
 
@@ -187,8 +187,8 @@ impl Renderer {
 
             let color = (high | low) as u8;
 
-            let high = (self.attribute_data.value.high.get() >> (6 - ppu.fine_x.get())) & 0b10 ;
-            let low = (self.attribute_data.value.low.get() >> (7 - ppu.fine_x.get())) & 0x01;
+            let high = (self.attribute_data.value.high.get() >> (6 - registers.fine_x.get())) & 0b10 ;
+            let low = (self.attribute_data.value.low.get() >> (7 - registers.fine_x.get())) & 0x01;
 
             let palette = (high | low) as u8;
 
@@ -196,12 +196,12 @@ impl Renderer {
         }
     }
 
-    fn fetch_tile(&self, ppu: &Ppu, pre_render: bool) {
+    fn fetch_tile(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1..=256 | 321..=337 => {
                 match self.dot.get() % 8 {
                     1 => {
-                        self.fetch_addr.set(ppu.v_addr.get().nametable_addr());
+                        self.fetch_addr.set(registers.v_addr.get().nametable_addr());
 
                         if self.dot.get() > 1 && self.dot.get() < 321 {
                             self.pattern_data.latch();
@@ -209,18 +209,18 @@ impl Renderer {
                         }
                     },
                     2 => {
-                        let entry = ppu.bus.vram.read_u8(self.fetch_addr.get());
+                        let entry = bus.read_u8(self.fetch_addr.get());
                         self.nametable_entry.set(entry);
                     },
                     3 => {
-                        self.fetch_addr.set(ppu.v_addr.get().attribute_addr());
+                        self.fetch_addr.set(registers.v_addr.get().attribute_addr());
                     },
                     4 => {
-                        let mut entry = ppu.bus.vram.read_u8(self.fetch_addr.get());
-                        if ppu.v_addr.get().coarse_y() & 2 != 0 {
+                        let mut entry = bus.read_u8(self.fetch_addr.get());
+                        if registers.v_addr.get().coarse_y() & 2 != 0 {
                             entry >>= 4;
                         }
-                        if ppu.v_addr.get().coarse_x() & 2 != 0 {
+                        if registers.v_addr.get().coarse_x() & 2 != 0 {
                             entry >>= 2;
                         }
                         self.attribute_data.latch.low.set(entry & 1);
@@ -228,21 +228,21 @@ impl Renderer {
                     },
                     5 => {
                         // TODO: Scrolling affects this.
-                        let index = self.nametable_entry.get() as u16 * 16 | (ppu.v_addr.get().fine_y() as u16);
-                        self.fetch_addr.set(index + ppu.ctrl.get().bg_pattern_table_address());
+                        let index = self.nametable_entry.get() as u16 * 16 | (registers.v_addr.get().fine_y() as u16);
+                        self.fetch_addr.set(index + registers.ctrl.get().bg_pattern_table_address());
                     },
                     6 => {
-                        let pattern = ppu.bus.read_u8(self.fetch_addr.get());
+                        let pattern = bus.read_u8(self.fetch_addr.get());
                         self.pattern_data.latch.low.set(pattern);
                     },
                     7 =>  {
                         self.fetch_addr.update(|v| v + 8);
                     }
                     0 => {
-                        let pattern = ppu.bus.read_u8(self.fetch_addr.get());
+                        let pattern = bus.read_u8(self.fetch_addr.get());
                         self.pattern_data.latch.high.set(pattern);
-                        if ppu.mask.get().is_rendering() {
-                            ppu.v_addr.update(|mut v| {
+                        if registers.mask.get().is_rendering() {
+                            registers.v_addr.update(|mut v| {
                                 if self.dot.get() == 256 {
                                     v.incr_y();
                                 } else {
@@ -259,31 +259,31 @@ impl Renderer {
                 self.pattern_data.latch();
                 self.attribute_data.latch();
                 // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
-                if ppu.mask.get().is_rendering() {
-                    ppu.v_addr.update(|mut v| {
-                        v.copy_horizontal_bits(&ppu.t_addr.get());
+                if registers.mask.get().is_rendering() {
+                    registers.v_addr.update(|mut v| {
+                        v.copy_horizontal_bits(&registers.t_addr.get());
                         v
                     });
                 }
             }
             280..=304 => if pre_render {
                 // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
-                if ppu.mask.get().is_rendering() {
-                    ppu.v_addr.update(|mut v| {
-                        v.copy_vertical_bits(&ppu.t_addr.get());
+                if registers.mask.get().is_rendering() {
+                    registers.v_addr.update(|mut v| {
+                        v.copy_vertical_bits(&registers.t_addr.get());
                         v
                     });
                 }
             },
             338 => {
-                let entry = ppu.bus.vram.read_u8(self.fetch_addr.get());
+                let entry = bus.read_u8(self.fetch_addr.get());
                 self.nametable_entry.set(entry);
             }
             339 => {
-                self.fetch_addr.set(ppu.v_addr.get().nametable_addr());
+                self.fetch_addr.set(registers.v_addr.get().nametable_addr());
             }
             340 => {
-                let entry = ppu.bus.vram.read_u8(self.fetch_addr.get());
+                let entry = bus.read_u8(self.fetch_addr.get());
                 self.nametable_entry.set(entry);
             }
 
@@ -291,35 +291,35 @@ impl Renderer {
         }
     }
 
-    pub fn run<'a>(&'a self, ppu: &'a Ppu) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+    pub(super) fn run<'a>(&'a self, registers: &'a Registers, bus: &'a dyn AddressSpace) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         let mut odd_frame = false;
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
-                    self.evaluate_sprites(ppu, false);
-                    self.render_pixel(ppu);
-                    self.fetch_tile(ppu, false);
+                    self.evaluate_sprites(registers, false);
+                    self.render_pixel(registers, bus);
+                    self.fetch_tile(registers, bus, false);
                 }
                 (241, 1) => {
-                    if !ppu.suppress_vbl.get() {
+                    if !registers.suppress_vbl.get() {
                         // enable vblank
-                        ppu.status.update(|s| s | PpuStatus::V);
+                        registers.status.update(|s| s | PpuStatus::V);
 
-                        if !ppu.suppress_nmi.get() && ppu.ctrl.get().contains(PpuCtrl::V) {
+                        if !registers.suppress_nmi.get() && registers.ctrl.get().contains(PpuCtrl::V) {
                             generate_nmi = true;
                         }
                     }
                 }
                 (261, _) => {
                     if self.dot.get() == 1 {
-                        ppu.status.update(|s| s - PpuStatus::V);
+                        registers.status.update(|s| s - PpuStatus::V);
                     }
-                    self.evaluate_sprites(ppu, true);
-                    self.render_pixel(ppu);
-                    self.fetch_tile(ppu, true);
+                    self.evaluate_sprites(registers, true);
+                    self.render_pixel(registers, bus);
+                    self.fetch_tile(registers, bus, true);
 
-                    if odd_frame && ppu.mask.get().is_rendering() && self.dot.get() == 339 {
+                    if odd_frame && registers.mask.get().is_rendering() && self.dot.get() == 339 {
                         self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
                     }
                 }
@@ -332,28 +332,28 @@ impl Renderer {
                 self.scanline.update(|sc| (sc + 1) % 262);
             }
 
-            let previous_ctrl = ppu.ctrl.get();
+            let previous_ctrl = registers.ctrl.get();
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
-                ppu.suppress_vbl.set(false);
-                ppu.suppress_nmi.set(false);
+                registers.suppress_vbl.set(false);
+                registers.suppress_nmi.set(false);
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
             } else {
-                if !ppu.suppress_nmi.get()
+                if !registers.suppress_nmi.get()
                     && generate_nmi
-                    && ppu.status.get().contains(PpuStatus::V)
+                    && registers.status.get().contains(PpuStatus::V)
                 {
                     yield PpuCycle::Nmi
                 } else {
                     yield PpuCycle::Tick
                 }
             }
-            if ppu.status.get().contains(PpuStatus::V) {
+            if registers.status.get().contains(PpuStatus::V) {
                 // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-                generate_nmi = !ppu.suppress_nmi.get()
-                    && ppu.ctrl.get().contains(PpuCtrl::V)
+                generate_nmi = !registers.suppress_nmi.get()
+                    && registers.ctrl.get().contains(PpuCtrl::V)
                     && !previous_ctrl.contains(PpuCtrl::V);
             }
         }

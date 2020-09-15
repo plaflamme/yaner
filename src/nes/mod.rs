@@ -140,7 +140,8 @@ impl Nes {
 
                 if self.clocks.ppu_cycles.get() % 10_000 == 0 {
                     // TODO: this should be ~100ms
-                    self.ppu.decay_open_bus()
+                    // TODO: this should just happen as a side effect of ticking the ppu
+                    self.cpu.bus.ppu_registers.decay_open_bus()
                 }
             }
         }

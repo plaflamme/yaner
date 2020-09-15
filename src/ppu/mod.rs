@@ -35,40 +35,30 @@ use renderer::Renderer;
 //       * bot-left:  --xx----
 //       * bot-right: xx------
 
-pub struct Ppu {
-    pub bus: PpuBus,
-
-    ctrl: Cell<PpuCtrl>,
-    mask: Cell<PpuMask>,
-    status: Cell<PpuStatus>,
+struct Registers {
+    pub ctrl: Cell<PpuCtrl>,
+    pub mask: Cell<PpuMask>,
+    pub status: Cell<PpuStatus>,
 
     oam_addr: Cell<u8>, // OAMADDR
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#PPU_internal_registers
     // Accessed through PPUSCROLL and PPUADDR
-    t_addr: Cell<VramAddress>,
-    v_addr: Cell<VramAddress>,
+    pub t_addr: Cell<VramAddress>,
+    pub v_addr: Cell<VramAddress>,
     addr_latch: Cell<bool>, // this is referred to as w in the wiki
-    fine_x: Cell<u8>,
 
-    // internal OAM memory, enough for 64 sprites of 4 bytes each
-    oam_data: Ram256,
+    pub fine_x: Cell<u8>,
 
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
-    open_bus: Cell<u8>,
-
-    renderer: Renderer,
-
+    // These probably need to go in the renderer
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 }
 
-impl Ppu {
-    pub fn new(mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
-        Ppu {
-            bus: PpuBus::new(mapper),
-
+impl Registers {
+    fn new() -> Self {
+        Registers {
             ctrl: Cell::new(PpuCtrl::default()),
             mask: Cell::new(PpuMask::default()),
             status: Cell::new(PpuStatus::default()),
@@ -79,18 +69,13 @@ impl Ppu {
             addr_latch: Cell::new(false),
             fine_x: Cell::new(0),
 
-            oam_data: Ram256::new(),
-
-            open_bus: Cell::new(0),
-
-            renderer: Renderer::new(),
-
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
         }
     }
 
-    fn status(&self) -> u8 {
+    // read PPUSTATUS, with side effects
+    fn read_status(&self, scanline: u16, dot: u16) -> u8 {
         let mut status = self.status.get();
         self.status.update(|s| s - PpuStatus::V);
 
@@ -102,7 +87,7 @@ impl Ppu {
         //     or generates NMI for that frame
         //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
         //     and suppresses the NMI for that frame
-        match (self.renderer.scanline.get(), self.renderer.dot.get()) {
+        match (scanline, dot) {
             (241, 0) => {
                 self.suppress_vbl.set(true);
                 self.suppress_nmi.set(true);
@@ -155,38 +140,60 @@ impl Ppu {
         self.addr_latch.set(!latch);
     }
 
+}
+
+pub struct Ppu {
+    pub bus: PpuBus,
+    registers: Registers,
+
+    // internal OAM memory, enough for 64 sprites of 4 bytes each
+    oam_data: Ram256,
+
+    renderer: Renderer,
+}
+
+impl Ppu {
+    pub fn new(mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
+        Ppu {
+            bus: PpuBus::new(mapper),
+            registers: Registers::new(),
+
+            oam_data: Ram256::new(),
+
+            renderer: Renderer::new(),
+        }
+    }
+
+    // read PPUSTATUS with side effects
+    fn read_status(&self) -> u8 {
+        self.registers.read_status(self.renderer.scanline.get(), self.renderer.dot.get())
+    }
+
+    // read from VRAM with side effects
     fn vram_read_u8(&self) -> u8 {
-        let addr: u16 = self.v_addr.get().into();
+        let addr: u16 = self.registers.v_addr.get().into();
         let data = self.bus.read_u8(addr);
-        let step = self.ctrl.get().vram_inc_step();
-        self.v_addr.update(|mut v| {
+        let step = self.registers.ctrl.get().vram_inc_step();
+        self.registers.v_addr.update(|mut v| {
             v.increment(step);
             v
         });
         data
     }
 
+    // write to VRAM with side effects
     fn vram_write_u8(&self, value: u8) {
-        let addr: u16 = self.v_addr.get().into();
+        let addr: u16 = self.registers.v_addr.get().into();
         self.bus.write_u8(addr, value);
-        let step = self.ctrl.get().vram_inc_step();
-        self.v_addr.update(|mut v| {
+        let step = self.registers.ctrl.get().vram_inc_step();
+        self.registers.v_addr.update(|mut v| {
             v.increment(step);
             v
         });
     }
 
-    pub fn decay_open_bus(&self) {
-        let mut rng = thread_rng();
-        for i in 0..8 {
-            if rng.gen_bool(0.25) {
-                self.open_bus.set(self.open_bus.get() & !(1 << i));
-            }
-        }
-    }
-
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
-        self.renderer.run(&self)
+        self.renderer.run(&self.registers, &self.bus)
     }
 }
 
@@ -235,66 +242,76 @@ impl AddressSpace for PpuBus {
 
 pub struct MemoryMappedRegisters {
     ppu: Rc<Ppu>,
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
+    open_bus: Cell<u8>,
 }
 
 impl MemoryMappedRegisters {
     pub fn new(ppu: Rc<Ppu>) -> Self {
-        MemoryMappedRegisters { ppu }
+        MemoryMappedRegisters { ppu, open_bus: Cell::default() }
+    }
+
+    pub fn decay_open_bus(&self) {
+        let mut rng = thread_rng();
+        for i in 0..8 {
+            if rng.gen_bool(0.25) {
+                self.open_bus.set(self.open_bus.get() & !(1 << i));
+            }
+        }
     }
 }
 
 impl AddressSpace for MemoryMappedRegisters {
     fn read_u8(&self, addr: u16) -> u8 {
         let result = match addr {
-            0x2000 => self.ppu.open_bus.get(),
-            0x2001 => self.ppu.open_bus.get(),
-            0x2002 => self.ppu.status() | (self.ppu.open_bus.get() & 0b0001_1111),
-            0x2003 => self.ppu.open_bus.get(),
+            0x2000 => self.open_bus.get(),
+            0x2001 => self.open_bus.get(),
+            0x2002 => self.ppu.read_status() | (self.open_bus.get() & 0b0001_1111),
+            0x2003 => self.open_bus.get(),
             0x2004 => {
                 // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_2
                 // bits 2-4 of byte 2 are "unimplemented" and thus, should be cleared
-                let addr = self.ppu.oam_addr.get() as u16;
+                let addr = self.ppu.registers.oam_addr.get() as u16;
                 let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
                 self.ppu.oam_data.read_u8(addr) & mask
             }
-            0x2005 => self.ppu.open_bus.get(),
-            0x2006 => self.ppu.open_bus.get(),
+            0x2005 => self.open_bus.get(),
+            0x2006 => self.open_bus.get(),
             0x2007 => {
-                let bus_mask = match self.ppu.v_addr.get().into() {
-                    0x3F00..=0x3FFF => self.ppu.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
+                let bus_mask = match self.ppu.registers.v_addr.get().into() {
+                    0x3F00..=0x3FFF => self.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
                     _ => 0x00,
                 };
                 self.ppu.vram_read_u8() | bus_mask
             }
             _ => invalid_address!(addr),
         };
-        self.ppu.open_bus.set(result);
+        self.open_bus.set(result);
         result
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
-        self.ppu.open_bus.set(value);
+        self.open_bus.set(value);
         match addr {
             0x2000 => {
-                self.ppu.ctrl.set(PpuCtrl::from_bits_truncate(value));
+                self.ppu.registers.ctrl.set(PpuCtrl::from_bits_truncate(value));
                 // writing to the control register also sets the resulting nametable bits in t_addr
-                self.ppu.t_addr.update(|mut t| {
+                self.ppu.registers.t_addr.update(|mut t| {
                     t.set_nametable(value & 0b0000_0011);
                     t
                 });
             },
-            0x2001 => self.ppu.mask.set(PpuMask::from_bits_truncate(value)),
+            0x2001 => self.ppu.registers.mask.set(PpuMask::from_bits_truncate(value)),
             0x2002 => (),
-            0x2003 => self.ppu.oam_addr.set(value),
+            0x2003 => self.ppu.registers.oam_addr.set(value),
             0x2004 => {
                 self.ppu
                     .oam_data
-                    .write_u8(self.ppu.oam_addr.get() as u16, value);
-                let addr = self.ppu.oam_addr.get();
-                self.ppu.oam_addr.set(addr.wrapping_add(1));
+                    .write_u8(self.ppu.registers.oam_addr.get() as u16, value);
+                self.ppu.registers.oam_addr.update(|addr| addr.wrapping_add(1));
             }
-            0x2005 => self.ppu.write_scroll(value),
-            0x2006 => self.ppu.write_addr(value),
+            0x2005 => self.ppu.registers.write_scroll(value),
+            0x2006 => self.ppu.registers.write_addr(value),
             0x2007 => self.ppu.vram_write_u8(value),
             _ => invalid_address!(addr),
         }

@@ -21,13 +21,13 @@ pub struct PpuState {
 impl PpuState {
     pub fn new(ppu: &Ppu) -> Self {
         PpuState {
-            ctrl: ppu.ctrl.get(),
-            mask: ppu.mask.get(),
-            status: ppu.status.get(),
-            t_addr: ppu.t_addr.get(),
-            v_addr: ppu.v_addr.get(),
-            fine_x: ppu.fine_x.get(),
-            oam_addr: ppu.oam_addr.get(),
+            ctrl: ppu.registers.ctrl.get(),
+            mask: ppu.registers.mask.get(),
+            status: ppu.registers.status.get(),
+            t_addr: ppu.registers.t_addr.get(),
+            v_addr: ppu.registers.v_addr.get(),
+            fine_x: ppu.registers.fine_x.get(),
+            oam_addr: ppu.registers.oam_addr.get(),
             ne: ppu.renderer.nametable_entry.get(),
             fa: ppu.renderer.fetch_addr.get(),
             pattern_data: ppu.renderer.pattern_data.clone(),
