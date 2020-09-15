@@ -161,7 +161,9 @@ impl Renderer {
 
     fn render_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
         match self.dot.get() {
-            2..=257 | 321..=337 => {
+            // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
+            //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
+            2..=257 | 322..=337 => {
                 // NOTE: on the second tick, we draw pixel 0
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
@@ -233,6 +235,7 @@ impl Renderer {
                     1 => {
                         self.fetch_addr.set(registers.v_addr.get().nametable_addr());
 
+                        // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
                         if self.dot.get() > 1 && self.dot.get() < 321 {
                             self.pattern_data.latch();
                             self.attribute_data.latch();
