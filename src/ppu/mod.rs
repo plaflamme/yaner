@@ -511,9 +511,8 @@ impl Ppu {
 
             let color = (high | low) as u8;
 
-            // TODO: fine_x
-            let high = (self.attribute_data.value.high.get() >> 6) & 0b10;
-            let low = (self.attribute_data.value.low.get() >> 7) & 0x01;
+            let high = (self.attribute_data.value.high.get() >> (6 - self.fine_x.get())) & 0b10 ;
+            let low = (self.attribute_data.value.low.get() >> (7 - self.fine_x.get())) & 0x01;
 
             let palette = (high | low) as u8;
 
@@ -663,6 +662,7 @@ impl Ppu {
                 self.suppress_vbl.set(false);
                 self.suppress_nmi.set(false);
                 yield PpuCycle::Frame;
+                self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
             } else {
                 if !self.suppress_nmi.get()

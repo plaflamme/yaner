@@ -181,9 +181,23 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             Span::styled(format!("CY:{} CX:{}", nes.ppu.v_addr.coarse_y(), nes.ppu.v_addr.coarse_x()), value_style),
         ]),
         Spans::from(vec![
+            Span::from(" FX: "),
+            Span::styled(
+                format!("{}", nes.ppu.fine_x),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
             Span::from(" P: "),
             Span::styled(
                 format!("{:02X} {:04X} {:02X} {:04X}", nes.ppu.pattern_data.latch.high.get(), nes.ppu.pattern_data.value.high.get(), nes.ppu.pattern_data.latch.low.get(), nes.ppu.pattern_data.value.low.get()),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" A: "),
+            Span::styled(
+                format!("{:02X} {:02X} {:02X} {:02X}", nes.ppu.attribute_data.latch.high.get(), nes.ppu.attribute_data.value.high.get(), nes.ppu.attribute_data.latch.low.get(), nes.ppu.attribute_data.value.low.get()),
                 value_style,
             ),
         ]),
@@ -252,7 +266,7 @@ fn rightbar<B: Backend>(
         .constraints(
             [
                 Constraint::Length(10),
-                Constraint::Length(12),
+                Constraint::Length(14),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -355,12 +369,12 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: 
     );
 }
 
-fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: Rect) {
+fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: Shift, size: Rect) {
     // read the value of the bg color
     let mut frame = Vec::new();
-    for sl in shift..240 {
+    for sl in shift.down..240 {
         let mut line = Vec::new();
-        for dot in 0..256 {
+        for dot in shift.right..256 {
             let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
             let (r,g,b) = pixel.rgb();
             let style = Style::default().fg(Color::Rgb(r,g,b));
@@ -376,20 +390,81 @@ fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size:
 fn draw<'a, B: Backend>(
     terminal: &mut Terminal<B>,
     state: &NesState<'a>,
-    shift: u16,
+    app_state: AppState,
 ) -> Result<(), io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(256), Constraint::Min(15)].as_ref())
+            .constraints([Constraint::Length(200), Constraint::Min(15)].as_ref())
             .split(size);
 
-        // rams(f, &state, shift, chunks[0]);
-        frame(f, &state, shift, chunks[0]);
+        match app_state.main_view {
+            View::Memory => rams(f, &state, app_state.shift.down, chunks[0]),
+            View::Frame => frame(f, &state, app_state.shift, chunks[0]),
+        };
         rightbar(f, &state, state.prg_rom, chunks[1]);
     })
 }
+
+#[derive(Clone, Copy, Default)]
+struct Shift {
+    down: u16,
+    right: u16,
+}
+
+impl Shift {
+    fn down(&mut self) {
+        self.down_by(1);
+    }
+    fn down_by(&mut self, size: u16) {
+        self.down = self.down.saturating_add(size);
+    }
+    fn up(&mut self) {
+        self.up_by(1);
+    }
+    fn up_by(&mut self, size: u16) {
+        self.down = self.down.saturating_sub(size);
+    }
+    fn right(&mut self) {
+        self.right_by(1);
+    }
+    fn right_by(&mut self, by: u16) {
+        self.right = self.right.saturating_add(by);
+    }
+    fn left(&mut self) {
+        self.left_by(1);
+    }
+    fn left_by(&mut self, by: u16) {
+        self.right = self.right.saturating_sub(by);
+    }
+}
+
+#[derive(Clone, Copy)]
+enum View {
+    Memory,
+    Frame,
+}
+
+#[derive(Clone, Copy)]
+struct AppState {
+    main_view: View,
+    shift: Shift,
+}
+
+impl AppState {
+    fn new() -> Self {
+        AppState { main_view: View::Memory, shift: Shift::default() }
+    }
+
+    fn cycle_view(&mut self) {
+        match self.main_view {
+            View::Memory => self.main_view = View::Frame,
+            View::Frame => self.main_view = View::Memory,
+        }
+    }
+}
+
 
 // TODO: implement debugger state here.
 pub struct Debugger {
@@ -412,15 +487,16 @@ impl Debugger {
         let mut stepper = Stepper::new(&self.nes, start_at);
         let mut input = io::stdin().keys();
 
-        let mut shift = 0u16;
+        let mut app_state = AppState::new();
 
         loop {
             if stepper.halted() {
                 break;
             }
-            draw(&mut terminal, &self.nes.debug(), shift)?;
+            draw(&mut terminal, &self.nes.debug(), app_state)?;
             if let Some(input_result) = input.next() {
                 match input_result? {
+                    Key::Char('[') | Key::Char(']') => app_state.cycle_view(),
                     Key::Ctrl('c') | Key::Char('q') => break,
                     Key::Char('f') => {
                         stepper.step_frame()?;
@@ -431,6 +507,10 @@ impl Debugger {
                     Key::Char(' ') | Key::Char('s') => {
                         stepper.tick()?;
                     }
+                    Key::Char('l') => {
+                        let current_sl = self.nes.debug().ppu.scanline;
+                        stepper.tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
+                    }
                     Key::Char('v') => {
                         stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
@@ -440,10 +520,12 @@ impl Debugger {
                             _ => false,
                         })?;
                     }
-                    Key::Down => shift = shift.saturating_add(1),
-                    Key::PageDown => shift = shift.saturating_add(16),
-                    Key::PageUp => shift = shift.saturating_sub(16),
-                    Key::Up => shift = shift.saturating_sub(1),
+                    Key::Down => app_state.shift.down(),
+                    Key::PageDown => app_state.shift.down_by(16),
+                    Key::Up => app_state.shift.up(),
+                    Key::PageUp => app_state.shift.up_by(16),
+                    Key::Right => app_state.shift.right(),
+                    Key::Left => app_state.shift.left(),
                     _ => (),
                 }
             }
