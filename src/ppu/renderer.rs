@@ -486,4 +486,20 @@ mod test {
         assert_eq!(ad.value.high.get(), 0b1010_1000);
     }
 
+    #[test]
+    fn test_render_bg_pixel() {
+        let registers = Registers::new();
+        registers.mask.set(PpuMask::b);
+        let renderer = Renderer::new();
+        renderer.pattern_data.value.high.set(0b1100_0000_0000_0000);
+        renderer.pattern_data.value.low.set(0b1000_0000_0000_0000);
+        renderer.attribute_data.value.high.set(0b1100_0000);
+        renderer.attribute_data.value.low.set(0b1000_0000);
+        let color = renderer.render_background_pixel(&registers, 0);
+        assert_eq!(color, PaletteColor::from(3, 3));
+        registers.mask.update(|m| m - PpuMask::b);
+        let color = renderer.render_background_pixel(&registers, 0);
+        assert_eq!(color, PaletteColor::default());
+    }
+
 }
