@@ -138,35 +138,45 @@ impl Registers {
         status
     }
 
+    // handles writes to PPUSCROLL
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUSCROLL
+    // See writes to $2005 here http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
     pub fn write_scroll(&self, value: u8) {
-        let latch = self.addr_latch.get();
-        if latch {
+        if self.addr_latch.get() {
+            // t: CBA..HG FED..... = d: HGFEDCBA
             self.t_addr.update(|mut t| {
                 t.set_fine_y(value & 0b0000_0111);
                 t.set_coarse_y(value >> 3);
                 t
             });
         } else {
+            // t: ....... ...HGFED = d: HGFED...
+            // x:              CBA = d: .....CBA
             self.fine_x.set(value & 0b0000_0111);
             self.t_addr.update(|mut t| {
                 t.set_coarse_x(value >> 3);
                 t
             });
         }
-        self.addr_latch.set(!latch);
+        self.addr_latch.update(|latch| !latch);
     }
 
+    // handles writes to PPUADDR
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUADDR
+    // See writes to $2006 here http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
     pub fn write_addr(&self, value: u8) {
         let u16_value = value as u16;
-        let latch = self.addr_latch.get();
-        if latch {
+        if self.addr_latch.get() {
+            // t: ....... HGFEDCBA = d: HGFEDCBA
+            // v                   = t
             self.t_addr.update(|v| (v & 0xFF00u16) | u16_value);
-            // transfers to the v register
             self.v_addr.set(self.t_addr.get());
         } else {
-            self.t_addr.update(|v| (v & 0x00FFu16) | (u16_value << 8));
+            // t: .FEDCBA ........ = d: ..FEDCBA
+            // t: X...... ........ = 0
+            self.t_addr.update(|v| (v & 0x80FFu16) | ((u16_value & 0x003F) << 8));
         }
-        self.addr_latch.set(!latch);
+        self.addr_latch.update(|latch| !latch);
     }
 }
 
@@ -211,4 +221,75 @@ mod test {
         assert_eq!(status.contains(PpuStatus::S), false);
     }
 
+    #[test]
+    fn test_registers_read_status_clears_vblank() {
+        let registers = Registers::new();
+        registers.status.set(PpuStatus::V | PpuStatus::O);
+        let read = registers.read_status();
+        assert!(read.contains(PpuStatus::V | PpuStatus::O));
+        assert_eq!(registers.status.get(), PpuStatus::O);
+    }
+
+    #[test]
+    fn test_registers_read_status_resets_latch() {
+        let registers = Registers::new();
+        registers.addr_latch.set(true);
+        registers.read_status();
+        assert!(!registers.addr_latch.get());
+    }
+
+    #[test]
+    fn test_registers_first_write_scroll() {
+        let registers = Registers::new();
+        registers.addr_latch.set(false);
+        registers.write_scroll(0b10101_101);
+        let t_addr: u16 = registers.t_addr.get().into();
+        assert_eq!(t_addr, 0b000_00_00000_10101);
+        assert_eq!(registers.fine_x.get(), 0b0000_0101);
+        assert!(registers.addr_latch.get());
+    }
+
+    #[test]
+    fn test_registers_second_write_scroll() {
+        let registers = Registers::new();
+        registers.addr_latch.set(true);
+        registers.write_scroll(0b10101_101);
+        let t_addr: u16 = registers.t_addr.get().into();
+        assert_eq!(t_addr, 0b101_00_10101_00000);
+        assert!(!registers.addr_latch.get());
+    }
+
+    #[test]
+    fn test_registers_first_write_addr() {
+        let registers = Registers::new();
+        registers.addr_latch.set(false);
+        registers.write_addr(0b11_101010);
+        let t_addr: u16 = registers.t_addr.get().into();
+        assert_eq!(t_addr, 0b0_0101010_0000_0000);
+        assert!(registers.addr_latch.get());
+
+        registers.addr_latch.set(false);
+        registers.t_addr.set(VramAddress::from(0b0_1000000_0000_0000));
+        registers.write_addr(0b11_010101);
+        let t_addr: u16 = registers.t_addr.get().into();
+        assert_eq!(t_addr, 0b0_0010101_0000_0000);
+        assert!(registers.addr_latch.get());
+    }
+
+    #[test]
+    fn test_registers_second_write_addr() {
+        let registers = Registers::new();
+        registers.t_addr.set(VramAddress::from(0b0_0010101_0000_0000));
+        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+        registers.addr_latch.set(true);
+        registers.write_addr(0b1111_1010);
+
+        let t_addr: u16 = registers.t_addr.get().into();
+        assert_eq!(t_addr, 0b0_0010101_1111_1010, "incorrect value for t_addr");
+
+        let v_addr: u16 = registers.v_addr.get().into();
+        assert_eq!(v_addr, 0b0_0010101_1111_1010, "incorrect value for v_addr");
+
+        assert!(!registers.addr_latch.get());
+    }
 }
