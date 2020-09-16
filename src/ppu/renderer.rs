@@ -4,8 +4,9 @@ use bitregions::bitregions;
 
 use super::rgb;
 use crate::memory::AddressSpace;
-use crate::ppu::reg::{PpuStatus, PpuMask, PpuCtrl};
 use crate::ppu::{PpuCycle, Registers};
+use crate::ppu::reg::{PpuStatus, PpuMask, PpuCtrl};
+use crate::ppu::sprite::Sprite;
 
 #[derive(Clone, Default)]
 pub struct RegisterPair<T: Copy> {
@@ -107,6 +108,8 @@ pub struct Renderer {
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
+
+    secondary_oam: Cell<[Option<Sprite>;8]>,
 }
 
 impl Renderer {
@@ -123,6 +126,7 @@ impl Renderer {
             attribute_entry: Cell::new(0),
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
+            secondary_oam: Cell::new([None;8]),
         }
     }
 
@@ -160,16 +164,46 @@ impl Renderer {
         self.attribute_data.shift();
     }
 
-    fn evaluate_sprites(&self, registers: &Registers, pre_render: bool) {
+    fn evaluate_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1 => {
-                // TODO: clear secondary OAM
+                self.secondary_oam.set([None; 8]);
                 if pre_render {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
-            256 => (),// TODO: sprite evaluation is done (for next scanline) at this point
+            257 => {
+                // sprite evaluation for next scanline
+                let mut count = 0;
+                let mut secondary_oam = [None; 8];
+                for s in 0..64 {
+                    let address = s * 4;
+                    let oam_data = [
+                        oam_ram.read_u8(address),
+                        oam_ram.read_u8(address+1),
+                        oam_ram.read_u8(address+2),
+                        oam_ram.read_u8(address+3),
+                    ];
+                    let sprite = Sprite::new(oam_data);
+                    let sprite_y = sprite.y as u16;
+                    let sprite_end_y = sprite_y + registers.ctrl.get().sprite_height() as u16;
+                    let scanline = self.scanline.get();
+
+                    // NOTE: secondary OAM is being filled in preparation for the next scanline, yet we compare against the current scanline.
+                    // This is because in order to display a sprite on line n, it's y coordinate must be set to n-1.
+                    // The wiki says:
+                    //   Sprite data is delayed by one scanline; you must subtract 1 from the sprite's Y coordinate before writing it here.
+                    if scanline >= sprite_y && scanline < sprite_end_y {
+                        if count == 8 {
+                            registers.status.update(|s| s | PpuStatus::O);
+                            break;
+                        }
+                        secondary_oam[count] = Some(sprite);
+                        count += 1;
+                    }
+                }
+            },
             320 => (),// TODO: sprite tile fetching is done (for next scanline) at this point
             _ => (),
         }
@@ -329,13 +363,13 @@ impl Renderer {
         }
     }
 
-    pub(super) fn run<'a>(&'a self, registers: &'a Registers, bus: &'a dyn AddressSpace) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+    pub(super) fn run<'a>(&'a self, registers: &'a Registers, bus: &'a dyn AddressSpace, oam_ram: &'a dyn AddressSpace) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         let mut odd_frame = false;
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
-                    self.evaluate_sprites(registers, false);
+                    self.evaluate_sprites(registers, oam_ram, false);
                     self.render_pixel(registers, bus);
                     self.fetch_tile(registers, bus, false);
                 }
@@ -353,7 +387,7 @@ impl Renderer {
                     if self.dot.get() == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
-                    self.evaluate_sprites(registers, true);
+                    self.evaluate_sprites(registers, oam_ram, true);
                     self.render_pixel(registers, bus);
                     self.fetch_tile(registers, bus, true);
 

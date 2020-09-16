@@ -16,7 +16,7 @@ bitflags! {
 
 
         const B = 1 << 4; // Background pattern table
-        const H = 1 << 5; // Sprite size
+        const H = 1 << 5; // Sprite size (0: 8x8 pixels; 1: 8x16 pixels)
         const P = 1 << 6; // PPU master/slave select
         const V = 1 << 7; // Generate an NMI at the start of the vertical blanking interval
     }
@@ -44,6 +44,14 @@ impl PpuCtrl {
             0x1000
         } else {
             0x0000
+        }
+    }
+
+    pub fn sprite_height(&self) -> u8 {
+        if self.contains(PpuCtrl::H) {
+            16
+        } else {
+            8
         }
     }
 }

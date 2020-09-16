@@ -12,6 +12,7 @@ pub mod reg;
 pub mod renderer;
 pub mod vram_address;
 pub mod debug;
+pub mod sprite;
 pub mod rgb;
 
 use reg::{PpuCtrl, PpuMask, Registers};
@@ -75,7 +76,7 @@ impl Ppu {
     }
 
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
-        self.renderer.run(&self.registers, &self.bus)
+        self.renderer.run(&self.registers, &self.bus, &self.oam_data)
     }
 }
 
