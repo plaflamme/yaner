@@ -247,23 +247,15 @@ impl Renderer {
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
     fn fetch_tile(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
-            1..=256 | 321..=337 => {
+            2..=256 | 322..=337 => {
                 match self.dot.get() % 8 {
                     1 => {
                         self.fetch_addr.set(registers.v_addr.get().nametable_addr());
-
                         // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
-                        if self.dot.get() > 1 && self.dot.get() < 321 {
-                            self.latch();
-                        }
+                        self.latch();
                     },
-                    2 => {
-                        let entry = bus.read_u8(self.fetch_addr.get());
-                        self.nametable_entry.set(entry);
-                    },
-                    3 => {
-                        self.fetch_addr.set(registers.v_addr.get().attribute_addr());
-                    },
+                    2 => self.nametable_entry.set(bus.read_u8(self.fetch_addr.get())),
+                    3 => self.fetch_addr.set(registers.v_addr.get().attribute_addr()),
                     4 => {
                         let mut entry = bus.read_u8(self.fetch_addr.get());
                         if registers.v_addr.get().coarse_y() & 2 != 0 {
@@ -279,16 +271,12 @@ impl Renderer {
                         let index = self.nametable_entry.get() as u16 * 16 | (registers.v_addr.get().fine_y() as u16);
                         self.fetch_addr.set(index + registers.ctrl.get().bg_pattern_table_address());
                     },
-                    6 => {
-                        let pattern = bus.read_u8(self.fetch_addr.get());
-                        self.pattern_data.latch.low.set(pattern);
-                    },
-                    7 =>  {
+                    6 => self.pattern_data.latch.low.set(bus.read_u8(self.fetch_addr.get())),
+                    7 => {
                         self.fetch_addr.update(|v| v + 8);
-                    }
+                    },
                     0 => {
-                        let pattern = bus.read_u8(self.fetch_addr.get());
-                        self.pattern_data.latch.high.set(pattern);
+                        self.pattern_data.latch.high.set(bus.read_u8(self.fetch_addr.get()));
                         if registers.mask.get().is_rendering() {
                             registers.v_addr.update(|mut v| {
                                 if self.dot.get() == 256 {
@@ -322,12 +310,11 @@ impl Renderer {
                     });
                 }
             },
+            // no latch
+            1 | 321 | 339 => self.fetch_addr.set(registers.v_addr.get().nametable_addr()),
             338 => {
                 let entry = bus.read_u8(self.fetch_addr.get());
                 self.nametable_entry.set(entry);
-            }
-            339 => {
-                self.fetch_addr.set(registers.v_addr.get().nametable_addr());
             }
             340 => {
                 let entry = bus.read_u8(self.fetch_addr.get());
