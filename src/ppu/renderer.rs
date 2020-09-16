@@ -217,8 +217,12 @@ impl Renderer {
         }
     }
 
-    fn render_background_pixel(&self, registers: &Registers, _dot: u16) -> PaletteColor {
-        if !registers.mask.get().contains(PpuMask::b) {
+    fn render_background_pixel(&self, registers: &Registers, dot: u16) -> PaletteColor {
+        let mut render_mask = PpuMask::b;
+        if dot < 8 {
+            render_mask |= PpuMask::m;
+        }
+        if !registers.mask.get().contains(render_mask) {
             PaletteColor::default()
         } else {
 
@@ -480,7 +484,7 @@ mod test {
     #[test]
     fn test_render_bg_pixel() {
         let registers = Registers::new();
-        registers.mask.set(PpuMask::b);
+        registers.mask.set(PpuMask::b | PpuMask::m);
         let renderer = Renderer::new();
         renderer.pattern_data.value.high.set(0b1100_0000_0000_0000);
         renderer.pattern_data.value.low.set(0b1000_0000_0000_0000);
@@ -488,8 +492,16 @@ mod test {
         renderer.attribute_data.value.low.set(0b1000_0000);
         let color = renderer.render_background_pixel(&registers, 0);
         assert_eq!(color, PaletteColor::from(3, 3));
-        registers.mask.update(|m| m - PpuMask::b);
+
+        registers.mask.update(|m| m - PpuMask::m);
         let color = renderer.render_background_pixel(&registers, 0);
+        assert_eq!(color, PaletteColor::default());
+
+        let color = renderer.render_background_pixel(&registers, 8);
+        assert_eq!(color, PaletteColor::from(3, 3));
+
+        registers.mask.update(|m| m - PpuMask::b);
+        let color = renderer.render_background_pixel(&registers, 8);
         assert_eq!(color, PaletteColor::default());
     }
 
