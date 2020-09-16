@@ -144,6 +144,16 @@ impl Renderer {
         };
     }
 
+    fn latch(&self) {
+        self.pattern_data.latch();
+        self.attribute_data.latch();
+    }
+
+    fn shift(&self) {
+        self.pattern_data.shift();
+        self.attribute_data.shift();
+    }
+
     fn evaluate_sprites(&self, registers: &Registers, pre_render: bool) {
         match self.dot.get() {
             1 => {
@@ -186,8 +196,7 @@ impl Renderer {
                     pixels[pixel_index as usize].set(pixel_value);
                 }
 
-                self.pattern_data.shift();
-                self.attribute_data.shift();
+                self.shift();
             }
             _ => (),
         }
@@ -237,8 +246,7 @@ impl Renderer {
 
                         // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
                         if self.dot.get() > 1 && self.dot.get() < 321 {
-                            self.pattern_data.latch();
-                            self.attribute_data.latch();
+                            self.latch();
                         }
                     },
                     2 => {
@@ -289,8 +297,7 @@ impl Renderer {
                 }
             }
             257 => {
-                self.pattern_data.latch();
-                self.attribute_data.latch();
+                self.latch();
                 // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
                 if registers.mask.get().is_rendering() {
                     registers.v_addr.update(|mut v| {
