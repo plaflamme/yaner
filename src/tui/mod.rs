@@ -255,7 +255,7 @@ fn prg_rom<B: Backend>(
     f.render_stateful_widget(list, chunk, &mut state);
 }
 
-fn rightbar<B: Backend>(
+fn statusbar<B: Backend>(
     f: &mut Frame<B>,
     nes: &NesState,
     addr_space: &dyn AddressSpace,
@@ -396,14 +396,14 @@ fn draw<'a, B: Backend>(
         let size = f.size();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(200), Constraint::Min(15)].as_ref())
+            .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
             .split(size);
 
+        statusbar(f, &state, state.prg_rom, chunks[0]);
         match app_state.main_view {
-            View::Memory => rams(f, &state, app_state.shift.down, chunks[0]),
-            View::Frame => frame(f, &state, app_state.shift, chunks[0]),
+            View::Memory => rams(f, &state, app_state.shift.down, chunks[1]),
+            View::Frame => frame(f, &state, app_state.shift, chunks[1]),
         };
-        rightbar(f, &state, state.prg_rom, chunks[1]);
     })
 }
 
