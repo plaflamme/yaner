@@ -1,5 +1,7 @@
-use crate::ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus, VramAddress};
+use crate::ppu::{Ppu, PpuCtrl, PpuMask};
 use crate::ppu::renderer::{Pixel, PatternData, AttributeData};
+use crate::ppu::reg::PpuStatus;
+use crate::ppu::vram_address::VramAddress;
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,

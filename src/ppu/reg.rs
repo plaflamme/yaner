@@ -1,4 +1,7 @@
+use std::cell::Cell;
 use bitflags::bitflags;
+
+use super::vram_address::VramAddress;
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
@@ -94,6 +97,78 @@ impl Default for PpuStatus {
     }
 }
 
+pub struct Registers {
+    pub ctrl: Cell<PpuCtrl>,
+    pub mask: Cell<PpuMask>,
+    pub status: Cell<PpuStatus>,
+
+    pub oam_addr: Cell<u8>, // OAMADDR
+
+    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#PPU_internal_registers
+    // Accessed through PPUSCROLL and PPUADDR
+    pub t_addr: Cell<VramAddress>,
+    pub v_addr: Cell<VramAddress>,
+    addr_latch: Cell<bool>, // this is referred to as w in the wiki
+
+    pub fine_x: Cell<u8>,
+}
+
+impl Registers {
+    pub fn new() -> Self {
+        Registers {
+            ctrl: Cell::new(PpuCtrl::default()),
+            mask: Cell::new(PpuMask::default()),
+            status: Cell::new(PpuStatus::default()),
+            oam_addr: Cell::new(0x00),
+
+            t_addr: Cell::new(VramAddress::default()),
+            v_addr: Cell::new(VramAddress::default()),
+            addr_latch: Cell::new(false),
+            fine_x: Cell::new(0),
+        }
+    }
+
+    // read PPUSTATUS, with side effects
+    pub fn read_status(&self) -> PpuStatus {
+        let status = self.status.get();
+        // reading PPUSTATUS always clears VBL
+        self.status.update(|s| s - PpuStatus::V);
+        // reading PPUSTATUS resets the address latch
+        self.addr_latch.set(false);
+        status
+    }
+
+    pub fn write_scroll(&self, value: u8) {
+        let latch = self.addr_latch.get();
+        if latch {
+            self.t_addr.update(|mut t| {
+                t.set_fine_y(value & 0b0000_0111);
+                t.set_coarse_y(value >> 3);
+                t
+            });
+        } else {
+            self.fine_x.set(value & 0b0000_0111);
+            self.t_addr.update(|mut t| {
+                t.set_coarse_x(value >> 3);
+                t
+            });
+        }
+        self.addr_latch.set(!latch);
+    }
+
+    pub fn write_addr(&self, value: u8) {
+        let u16_value = value as u16;
+        let latch = self.addr_latch.get();
+        if latch {
+            self.t_addr.update(|v| (v & 0xFF00u16) | u16_value);
+            // transfers to the v register
+            self.v_addr.set(self.t_addr.get());
+        } else {
+            self.t_addr.update(|v| (v & 0x00FFu16) | (u16_value << 8));
+        }
+        self.addr_latch.set(!latch);
+    }
+}
 
 #[cfg(test)]
 mod test {
