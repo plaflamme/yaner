@@ -178,6 +178,19 @@ impl Registers {
         }
         self.addr_latch.update(|latch| !latch);
     }
+
+    // handles side-effects of reading or writing to PPUDATA ($2007)
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUADDR
+    // NOTE: this does not actually read or write from the VRAM, it returns the address to read or write.
+    pub fn rw_vram_addr(&self) -> u16 {
+        let addr: u16 = self.v_addr.get().into();
+        let step = self.ctrl.get().vram_inc_step();
+        self.v_addr.update(|mut v| {
+            v.increment(step);
+            v
+        });
+        addr
+    }
 }
 
 #[cfg(test)]
@@ -291,5 +304,27 @@ mod test {
         assert_eq!(v_addr, 0b0_0010101_1111_1010, "incorrect value for v_addr");
 
         assert!(!registers.addr_latch.get());
+    }
+
+    #[test]
+    fn test_registers_rw_vram_addr() {
+        let registers = Registers::new();
+        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+
+        let addr = registers.rw_vram_addr();
+        assert_eq!(addr, 0b1_0101010_1010_1010);
+
+        let addr: u16 = registers.v_addr.get().into();
+        assert_eq!(addr, 0b1_0101010_1010_1011);
+
+        registers.ctrl.update(|ctrl| ctrl | PpuCtrl::I);
+
+        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+
+        let addr = registers.rw_vram_addr();
+        assert_eq!(addr, 0b1_0101010_1010_1010);
+
+        let addr: u16 = registers.v_addr.get().into();
+        assert_eq!(addr, 0b1_0101010_1010_1010 + 32);
     }
 }

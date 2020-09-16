@@ -66,25 +66,12 @@ impl Ppu {
 
     // read from VRAM with side effects
     fn vram_read_u8(&self) -> u8 {
-        let addr: u16 = self.registers.v_addr.get().into();
-        let data = self.bus.read_u8(addr);
-        let step = self.registers.ctrl.get().vram_inc_step();
-        self.registers.v_addr.update(|mut v| {
-            v.increment(step);
-            v
-        });
-        data
+        self.bus.read_u8(self.registers.rw_vram_addr())
     }
 
     // write to VRAM with side effects
     fn vram_write_u8(&self, value: u8) {
-        let addr: u16 = self.registers.v_addr.get().into();
-        self.bus.write_u8(addr, value);
-        let step = self.registers.ctrl.get().vram_inc_step();
-        self.registers.v_addr.update(|mut v| {
-            v.increment(step);
-            v
-        });
+        self.bus.write_u8(self.registers.rw_vram_addr(), value);
     }
 
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
