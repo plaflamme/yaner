@@ -19,6 +19,7 @@ pub struct PatternData {
     pub value: RegisterPair<u16>
 }
 
+// This latch register loads the value that's on the latch every 8 cycles.
 impl PatternData {
     pub fn latch(&self) {
         self.value.low.update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
@@ -37,11 +38,14 @@ pub struct AttributeData {
     pub value: RegisterPair<u8>
 }
 
+// This latch register loads a bit every 8 cycles and feeds that bit into the shifts
+// So latch() takes a value which contains those bits
+// And shift() feeds those bits in the value.
 impl AttributeData {
 
-    pub fn latch(&self) {
-        self.value.low.update(|v| (v & 0xFE) | self.latch.low.get() & 1);
-        self.value.high.update(|v| (v & 0xFE) | self.latch.high.get() & 1);
+    pub fn latch(&self, value: u8) {
+        self.latch.low.set(value & 1);
+        self.latch.high.set((value & 2) >> 1);
     }
 
     pub fn shift(&self) {
@@ -96,6 +100,7 @@ pub struct Renderer {
     // Temporary storage for tile fetching pipeline
     pub(super) fetch_addr: Cell<u16>,
     pub(super) nametable_entry: Cell<u8>,
+    pub(super) attribute_entry: Cell<u8>,
 
     pub(super) frame_pixels: Cell<[Pixel; 256 * 240]>,
 
@@ -115,6 +120,7 @@ impl Renderer {
             frame_pixels: Cell::new([Pixel::default(); 256 * 240]),
             fetch_addr: Cell::new(0),
             nametable_entry: Cell::new(0),
+            attribute_entry: Cell::new(0),
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
         }
@@ -146,7 +152,7 @@ impl Renderer {
 
     fn latch(&self) {
         self.pattern_data.latch();
-        self.attribute_data.latch();
+        self.attribute_data.latch(self.attribute_entry.get());
     }
 
     fn shift(&self) {
@@ -237,6 +243,8 @@ impl Renderer {
         }
     }
 
+    // implements the VRAM nametable, attribute and pattern fetches.
+    // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
     fn fetch_tile(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1..=256 | 321..=337 => {
@@ -264,8 +272,7 @@ impl Renderer {
                         if registers.v_addr.get().coarse_x() & 2 != 0 {
                             entry >>= 2;
                         }
-                        self.attribute_data.latch.low.set(entry & 1);
-                        self.attribute_data.latch.high.set((entry & 2) >> 1);
+                        self.attribute_entry.set(entry);
                     },
                     5 => {
                         // TODO: Scrolling affects this.
@@ -405,6 +412,7 @@ impl Renderer {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ppu::vram_address::VramAddress;
 
     #[test]
     fn test_pattern_data_latch() {
@@ -446,27 +454,23 @@ mod test {
     #[test]
     fn test_attribute_data_latch() {
         let ad = AttributeData::default();
-        ad.latch();
-        assert_eq!(ad.value.low.get(), 0);
-        assert_eq!(ad.value.high.get(), 0);
+        ad.latch(0b11);
+        assert_eq!(ad.latch.low.get(), 1);
+        assert_eq!(ad.latch.high.get(), 1);
 
-        ad.latch.low.set(0x01);
-        ad.latch.high.set(0x01);
-        ad.latch();
-        assert_eq!(ad.value.low.get(), 0x01);
-        assert_eq!(ad.value.high.get(), 0x01);
+        ad.latch(0b10);
+        assert_eq!(ad.latch.low.get(), 0);
+        assert_eq!(ad.latch.high.get(), 1);
 
-        ad.value.low.set(0b1111_1110);
-        ad.value.high.set(0b1111_1110);
-        ad.latch();
-        assert_eq!(ad.value.low.get(), 0b1111_1111);
-        assert_eq!(ad.value.high.get(), 0b1111_1111);
+        ad.latch(0b01);
+        assert_eq!(ad.latch.low.get(), 1);
+        assert_eq!(ad.latch.high.get(), 0);
 
-        ad.value.low.set(0b0000_0000);
-        ad.value.high.set(0b0000_0000);
-        ad.latch();
-        assert_eq!(ad.value.low.get(), 0b0000_0001);
-        assert_eq!(ad.value.high.get(), 0b0000_0001);
+        ad.latch.low.set(0xFF);
+        ad.latch.high.set(0xFF);
+        ad.latch(0);
+        assert_eq!(ad.latch.low.get(), 0);
+        assert_eq!(ad.latch.high.get(), 0);
     }
 
     #[test]
@@ -500,6 +504,84 @@ mod test {
         registers.mask.update(|m| m - PpuMask::b);
         let color = renderer.render_background_pixel(&registers, 0);
         assert_eq!(color, PaletteColor::default());
+    }
+
+    struct TestVram {
+        pattern: u8,
+        nametable: u8,
+        attribute: u8,
+        palette: u8,
+    }
+
+    impl AddressSpace for TestVram {
+        fn read_u8(&self, addr: u16) -> u8 {
+            match addr {
+                0x0000..=0x1FFF => self.pattern,
+                0x2000..=0x23BF => self.nametable,
+                0x23C0..=0x23F8 => self.attribute,
+                0x3F00..=0x3FFF => self.palette,
+                _ => invalid_address!(addr),
+            }
+        }
+
+        fn write_u8(&self, _addr: u16, _value: u8) {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn test_fetch_tile() {
+        let registers = Registers::new();
+        registers.mask.set(PpuMask::b);
+
+        let vram = TestVram { pattern: 0x12, nametable: 0xAB, attribute: 0b00_10_01_11, palette: 0xEF };
+
+        let renderer = Renderer::new();
+        // dot 0 is idle
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.fetch_addr.get(), 0);
+
+        // dot 1 prepares the nametable address
+        registers.v_addr.set(VramAddress::from(0u16));
+        renderer.dot.set(1);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.fetch_addr.get(), 0x2000);
+
+        // dot 2 fetches the pattern index
+        renderer.dot.set(2);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.nametable_entry.get(), 0xAB);
+
+        // dot 3 prepares the attribute address
+        renderer.dot.set(3);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.fetch_addr.get(), 0x23C0);
+
+        // dot 4 fetches the attribute value and initializes the attribute latch
+        renderer.dot.set(4);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.attribute_entry.get(), 0b00_10_01_11);
+
+        // dot 5 prepares the low pattern byte address
+        renderer.dot.set(5);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16);
+
+        // dot 6 loads the low byte
+        renderer.dot.set(6);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.pattern_data.latch.low.get(), 0x12);
+
+        // dot 7 prepares the high pattern byte address
+        renderer.dot.set(7);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16 + 8);
+
+        // dot 8 loads the high byte and increments H
+        renderer.dot.set(8);
+        renderer.fetch_tile(&registers, &vram, false);
+        assert_eq!(renderer.pattern_data.latch.high.get(), 0x12);
+        assert_eq!(registers.v_addr.get().coarse_x(), 0x01);
     }
 
 }
