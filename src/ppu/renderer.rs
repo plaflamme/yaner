@@ -353,8 +353,8 @@ impl Renderer {
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
     fn fetch_tile(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
-            2..=256 | 322..=337 => {
-                match self.dot.get() % 8 {
+            dot@2..=256 | dot@322..=337 => {
+                match dot % 8 {
                     1 => {
                         self.fetch_addr.set(registers.v_addr.get().nametable_addr());
                         // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
@@ -451,15 +451,15 @@ impl Renderer {
                         }
                     }
                 }
-                (261, _) => {
-                    if self.dot.get() == 1 {
+                (261, dot) => {
+                    if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
                     self.evaluate_sprites(registers, oam_ram, bus, true);
                     self.render_pixel(registers, bus);
                     self.fetch_tile(registers, bus, true);
 
-                    if odd_frame && registers.mask.get().is_rendering() && self.dot.get() == 339 {
+                    if odd_frame && registers.mask.get().is_rendering() && dot == 339 {
                         self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
                     }
                 }
