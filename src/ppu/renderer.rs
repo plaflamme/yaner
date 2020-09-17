@@ -169,107 +169,78 @@ impl Renderer {
         self.attribute_data.shift();
     }
 
-    fn evaluate_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, bus: &dyn AddressSpace, pre_render: bool) {
+    // sprite evaluation for next scanline, fills in secondary_oam with up to 8 sprites.
+    fn cycle_sprites_evaluate(&self, registers: &Registers, oam_ram: &dyn AddressSpace) {
+        let scanline = self.scanline.get();
+        let mut count = 0;
+        let mut secondary_oam = [None; 8];
+        for s in 0..64 {
+            let address = s * 4;
+            let oam_data = [
+                oam_ram.read_u8(address),
+                oam_ram.read_u8(address+1),
+                oam_ram.read_u8(address+2),
+                oam_ram.read_u8(address+3),
+            ];
+            let sprite = Sprite::new(s as u8, oam_data);
+            let sprite_y = sprite.y as u16;
+            let sprite_end_y = sprite_y + registers.ctrl.get().sprite_height() as u16;
+
+            // NOTE: secondary OAM is being filled in preparation for the next scanline, yet we compare against the current scanline.
+            // This is because in order to display a sprite on line n, it's y coordinate must be set to n-1.
+            // The wiki says:
+            //   Sprite data is delayed by one scanline; you must subtract 1 from the sprite's Y coordinate before writing it here.
+            if scanline >= sprite_y && scanline < sprite_end_y {
+                if count == 8 {
+                    registers.status.update(|s| s | PpuStatus::O);
+                    break;
+                }
+                secondary_oam[count] = Some(sprite);
+                count += 1;
+            }
+        }
+        self.secondary_oam.set(secondary_oam);
+    }
+
+    // loads primary_oam from secondary_oam while also fetching the corresponding tiles.
+    fn cycle_sprites_load(&self, registers: &Registers, bus: &dyn AddressSpace) {
+        let mut new_oam = [None;8];
+        // load sprites into primary OAM and fetch their tiles.
+        let sprites = self.secondary_oam.get();
+
+        for (idx, s) in sprites.iter().enumerate() {
+            match s {
+                None => break,
+                Some(sprite) => {
+                    // TODO: tile height affects this computation.
+                    let base_addr = sprite.tile_index as u16 * 16 + registers.ctrl.get().sprite_pattern_table_address();
+                    let mut y_sprite = self.scanline.get() - sprite.y as u16;
+                    if sprite.attr.flip_v() {
+                        y_sprite = registers.ctrl.get().sprite_height() as u16 - 1 - y_sprite;
+                    }
+                    let addr = base_addr + y_sprite;
+                    let low = bus.read_u8(addr);
+                    let high = bus.read_u8(addr + 8);
+                    new_oam[idx] = Some(SpriteData::new(*sprite, low, high));
+                }
+            }
+        }
+        self.primary_oam.set(new_oam);
+    }
+
+    // runs sprite evaluation, tile fetching and secondary oam management
+    fn cycle_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1 => {
+                // clear secondary oam
                 self.secondary_oam.set([None; 8]);
                 if pre_render {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
-            257 => {
-                // sprite evaluation for next scanline
-                let mut count = 0;
-                let mut secondary_oam = [None; 8];
-                for s in 0..64 {
-                    let address = s * 4;
-                    let oam_data = [
-                        oam_ram.read_u8(address),
-                        oam_ram.read_u8(address+1),
-                        oam_ram.read_u8(address+2),
-                        oam_ram.read_u8(address+3),
-                    ];
-                    let sprite = Sprite::new(s as u8, oam_data);
-                    let sprite_y = sprite.y as u16;
-                    let sprite_end_y = sprite_y + registers.ctrl.get().sprite_height() as u16;
-                    let scanline = self.scanline.get();
-
-                    // NOTE: secondary OAM is being filled in preparation for the next scanline, yet we compare against the current scanline.
-                    // This is because in order to display a sprite on line n, it's y coordinate must be set to n-1.
-                    // The wiki says:
-                    //   Sprite data is delayed by one scanline; you must subtract 1 from the sprite's Y coordinate before writing it here.
-                    if scanline >= sprite_y && scanline < sprite_end_y {
-                        if count == 8 {
-                            registers.status.update(|s| s | PpuStatus::O);
-                            break;
-                        }
-                        secondary_oam[count] = Some(sprite);
-                        count += 1;
-                    }
-                }
-                self.secondary_oam.set(secondary_oam);
-            },
-            321 => {
-                let mut new_oam = [None;8];
-                // load sprites into primary OAM and fetch their tiles.
-                let sprites = self.secondary_oam.get();
-
-                for (idx, s) in sprites.iter().enumerate() {
-                    match s {
-                        None => break,
-                        Some(sprite) => {
-                            // TODO: tile height affects this computation.
-                            let base_addr = sprite.tile_index as u16 * 16 + registers.ctrl.get().sprite_pattern_table_address();
-                            let mut y_sprite = self.scanline.get() - sprite.y as u16;
-                            if sprite.attr.flip_v() {
-                                y_sprite = registers.ctrl.get().sprite_height() as u16 - 1 - y_sprite;
-                            }
-                            let addr = base_addr + y_sprite;
-                            let low = bus.read_u8(addr);
-                            let high = bus.read_u8(addr + 8);
-                            new_oam[idx] = Some(SpriteData::new(*sprite, low, high));
-                        }
-                    }
-                }
-                self.primary_oam.set(new_oam);
-            }
-            _ => (),
-        }
-    }
-
-    fn render_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
-        match self.dot.get() {
-            // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
-            //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
-            dot@2..=257 | dot@322..=337 => {
-                // NOTE: on the second tick, we draw pixel 0
-                // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
-                let pixel = dot - 2;
-                let bg_color = self.render_background_pixel(registers, pixel);
-                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, pixel);
-
-                // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
-                // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
-                // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
-                let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
-                    sprite_color
-                } else {
-                    bg_color
-                };
-
-                let sl = self.scanline.get();
-                if sl < 241 && pixel < 257 {
-                    let pixel_index = pixel + sl * 256;
-
-                    let s: &Cell<[Pixel]> = &self.frame_pixels;
-                    let pixels = s.as_slice_of_cells();
-                    let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
-                    pixels[pixel_index as usize].set(pixel_value);
-                }
-
-                self.shift();
-            }
+            257 => self.cycle_sprites_evaluate(registers, oam_ram),
+            321 => self.cycle_sprites_load(registers, bus),
             _ => (),
         }
     }
@@ -349,9 +320,46 @@ impl Renderer {
         }
     }
 
+    // determines the color of the current pixel, shifts registers
+    fn cycle_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
+        match self.dot.get() {
+            // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
+            //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
+            dot@2..=257 | dot@322..=337 => {
+                // NOTE: on the second tick, we draw pixel 0
+                // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
+                let pixel = dot - 2;
+                let bg_color = self.render_background_pixel(registers, pixel);
+                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, pixel);
+
+                // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
+                // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
+                // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
+                let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
+                    sprite_color
+                } else {
+                    bg_color
+                };
+
+                let sl = self.scanline.get();
+                if sl < 241 && pixel < 257 {
+                    let pixel_index = pixel + sl * 256;
+
+                    let s: &Cell<[Pixel]> = &self.frame_pixels;
+                    let pixels = s.as_slice_of_cells();
+                    let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
+                    pixels[pixel_index as usize].set(pixel_value);
+                }
+
+                self.shift();
+            }
+            _ => (),
+        }
+    }
+
     // implements the VRAM nametable, attribute and pattern fetches.
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
-    fn fetch_tile(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
+    fn cycle_bg(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             dot@2..=256 | dot@322..=337 => {
                 match dot % 8 {
@@ -437,9 +445,9 @@ impl Renderer {
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
-                    self.evaluate_sprites(registers, oam_ram, bus, false);
-                    self.render_pixel(registers, bus);
-                    self.fetch_tile(registers, bus, false);
+                    self.cycle_sprites(registers, oam_ram, bus, false);
+                    self.cycle_pixel(registers, bus);
+                    self.cycle_bg(registers, bus, false);
                 }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
@@ -455,9 +463,9 @@ impl Renderer {
                     if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
-                    self.evaluate_sprites(registers, oam_ram, bus, true);
-                    self.render_pixel(registers, bus);
-                    self.fetch_tile(registers, bus, true);
+                    self.cycle_sprites(registers, oam_ram, bus, true);
+                    self.cycle_pixel(registers, bus);
+                    self.cycle_bg(registers, bus, true);
 
                     if odd_frame && registers.mask.get().is_rendering() && dot == 339 {
                         self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
@@ -631,7 +639,7 @@ mod test {
     }
 
     #[test]
-    fn test_fetch_tile() {
+    fn test_cycle_bg() {
         let registers = Registers::new();
         registers.mask.set(PpuMask::b);
 
@@ -639,48 +647,48 @@ mod test {
 
         let renderer = Renderer::new();
         // dot 0 is idle
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0);
 
         // dot 1 prepares the nametable address
         registers.v_addr.set(VramAddress::from(0u16));
         renderer.dot.set(1);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0x2000);
 
         // dot 2 fetches the pattern index
         renderer.dot.set(2);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.nametable_entry.get(), 0xAB);
 
         // dot 3 prepares the attribute address
         renderer.dot.set(3);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0x23C0);
 
         // dot 4 fetches the attribute value and initializes the attribute latch
         renderer.dot.set(4);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.attribute_entry.get(), 0b00_10_01_11);
 
         // dot 5 prepares the low pattern byte address
         renderer.dot.set(5);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16);
 
         // dot 6 loads the low byte
         renderer.dot.set(6);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.pattern_data.latch.low.get(), 0x12);
 
         // dot 7 prepares the high pattern byte address
         renderer.dot.set(7);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16 + 8);
 
         // dot 8 loads the high byte and increments H
         renderer.dot.set(8);
-        renderer.fetch_tile(&registers, &vram, false);
+        renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.pattern_data.latch.high.get(), 0x12);
         assert_eq!(registers.v_addr.get().coarse_x(), 0x01);
     }
