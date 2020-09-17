@@ -78,6 +78,9 @@ impl PaletteColor {
     fn is_transparent(&self) -> bool {
         self.color() == 0
     }
+    fn is_opaque(&self) -> bool {
+        self.color() != 0
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -244,15 +247,17 @@ impl Renderer {
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = self.dot.get() - 2;
                 let bg_color = self.render_background_pixel(registers, pixel);
-                let (sprite_color, sprite_behind) = self.render_sprite_pixel(registers, pixel);
+                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, pixel);
 
-                let colors = if sprite_behind {
-                    [bg_color, sprite_color]
+                // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
+                // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
+                // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
+                let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
+                    sprite_color
                 } else {
-                    [sprite_color, bg_color]
+                    bg_color
                 };
 
-                let pixel_color = if colors[0].is_transparent() { colors[1] } else { colors[0] };
                 if self.scanline.get() < 241 && self.dot.get() < 257 {
                     let pixel_index = pixel + self.scanline.get() * 256;
 
@@ -277,6 +282,7 @@ impl Renderer {
             (PaletteColor::default(), false)
         } else {
             let mut palette_color = PaletteColor::default();
+            let mut front_priority = false;
             let s: &Cell<[Option<SpriteData>]> = &self.primary_oam;
             for cell in s.as_slice_of_cells().iter().rev() {
                 match cell.get() {
@@ -299,16 +305,16 @@ impl Renderer {
                             }
 
                             let sprite_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color);
-                            if !sprite_color.is_transparent() {
+                            if sprite_color.is_opaque() {
                                 palette_color = sprite_color;
+                                front_priority = sprite_data.sprite.attr.fg_priority();
                             }
                         }
                     }
                 }
             }
 
-            // TODO
-            (palette_color, false)
+            (palette_color, front_priority)
         }
     }
 

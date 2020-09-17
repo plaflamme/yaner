@@ -3,9 +3,18 @@ use bitregions::bitregions;
 bitregions! {
     pub Attributes u8 {
         PALETTE: 0b0000_0011,
-        PRIORITY: 0b0010_0000,
+        PRIORITY: 0b0010_0000, // Priority (0: in front of background; 1: behind background)
         FLIP_H: 0b0100_0000,
         FLIP_V: 0b1000_0000,
+    }
+}
+
+impl Attributes {
+    pub fn bg_priority(&self) -> bool {
+        self.priority()
+    }
+    pub fn fg_priority(&self) -> bool {
+        !self.priority()
     }
 }
 
