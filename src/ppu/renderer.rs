@@ -207,18 +207,30 @@ impl Renderer {
         let mut new_oam = [None;8];
         // load sprites into primary OAM and fetch their tiles.
         let sprites = self.secondary_oam.get();
+        let ctrl = registers.ctrl.get();
 
         for (idx, s) in sprites.iter().enumerate() {
             match s {
                 None => break,
                 Some(sprite) => {
-                    // TODO: tile height affects this computation.
-                    let base_addr = sprite.tile_index as u16 * 16 + registers.ctrl.get().sprite_pattern_table_address();
+                    // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_1
+                    let base_addr = if ctrl.large_sprites() {
+                        let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
+                        let addr = (sprite.tile_index & 0b1111_1110) as u16;
+                        pattern_table | addr * 16
+                    } else {
+                        let pattern_table = ctrl.sprite_pattern_table_address();
+                        let addr = sprite.tile_index as u16;
+                        pattern_table | addr * 16
+                    };
+
                     let mut y_sprite = self.scanline.get() - sprite.y as u16;
                     if sprite.attr.flip_v() {
-                        y_sprite = registers.ctrl.get().sprite_height() as u16 - 1 - y_sprite;
+                        y_sprite = ctrl.sprite_height() as u16 - 1 - y_sprite;
                     }
-                    let addr = base_addr + y_sprite;
+                    // for large sprites, if y_sprite > 8, we must use the second tile
+                    let second_tile_offset = y_sprite & 8;
+                    let addr = base_addr + y_sprite + second_tile_offset;
                     let low = bus.read_u8(addr);
                     let high = bus.read_u8(addr + 8);
                     new_oam[idx] = Some(SpriteData::new(*sprite, low, high));

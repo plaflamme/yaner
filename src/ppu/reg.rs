@@ -57,11 +57,15 @@ impl PpuCtrl {
     }
 
     pub fn sprite_height(&self) -> u8 {
-        if self.contains(PpuCtrl::H) {
+        if self.large_sprites() {
             16
         } else {
             8
         }
+    }
+
+    pub fn large_sprites(&self) -> bool {
+        self.contains(PpuCtrl::H)
     }
 }
 
