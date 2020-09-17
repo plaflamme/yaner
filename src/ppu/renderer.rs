@@ -298,7 +298,10 @@ impl Renderer {
                                 registers.status.update(|s| s | PpuStatus::S);
                             }
 
-                            palette_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color)
+                            let sprite_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color);
+                            if !sprite_color.is_transparent() {
+                                palette_color = sprite_color;
+                            }
                         }
                     }
                 }
