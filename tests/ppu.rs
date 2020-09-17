@@ -3,7 +3,9 @@
 mod common;
 
 use common::blargg::run_blargg_test;
+use common::run_test;
 use test_case::test_case;
+use std::path::Path;
 
 #[test]
 fn ppu_open_bus() {
@@ -33,4 +35,15 @@ fn oam_stress() {
 // #[test_case("10-even_odd_timing")]
 fn ppu_vbl_nmi(case: &str) {
     run_blargg_test(format!("roms/nes-test-roms/ppu_vbl_nmi/rom_singles/{}.nes", case).as_str());
+}
+
+#[test_case("palette_ram")]
+fn ppu_blargg_ppu_tests(case: &str) {
+    let mut frames = 0;
+    let nes = run_test(&Path::new(format!("roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes", case).as_str()), None, |_| {
+        frames += 1;
+        frames >= 30
+    });
+
+    assert_eq!(nes.debug().ppu_bus.read_u8(0x20A4), 0x31);
 }

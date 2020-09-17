@@ -101,6 +101,14 @@ impl PpuBus {
             mapper,
         }
     }
+
+    // TODO: find the documentation for this
+    fn palette_mirroring(&self, addr: u16) -> u16 {
+        match addr % 0x20 {
+            0x10 | 0x14 | 0x18 | 0x1C => addr - 0x10,
+            _ => addr
+        }
+    }
 }
 
 impl AddressSpace for PpuBus {
@@ -108,7 +116,7 @@ impl AddressSpace for PpuBus {
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().read_u8(addr),
             0x2000..=0x3EFF => self.vram.read_u8(addr),
-            0x3F00..=0x3FFF => self.palette.read_u8(addr),
+            0x3F00..=0x3FFF => self.palette.read_u8(self.palette_mirroring(addr)),
             _ => invalid_address!(addr),
         }
     }
@@ -117,7 +125,7 @@ impl AddressSpace for PpuBus {
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().write_u8(addr, value),
             0x2000..=0x3EFF => self.vram.write_u8(addr, value),
-            0x3F00..=0x3FFF => self.palette.write_u8(addr, value),
+            0x3F00..=0x3FFF => self.palette.write_u8(self.palette_mirroring(addr), value),
             _ => invalid_address!(addr),
         }
     }
