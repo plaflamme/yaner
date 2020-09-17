@@ -51,3 +51,14 @@ fn ppu_blargg_ppu_tests(case: &str) {
 
     assert_eq!(nes.debug().ppu_bus.read_u8(0x20A4), 0x31);
 }
+
+#[test_case("01.basics")]
+fn ppu_sprite_hit_tests(case: &str) {
+    let mut frames = 0;
+    let nes = run_test(&Path::new(format!("roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes", case).as_str()), None, |_| {
+        frames += 1;
+        frames >= 30
+    });
+
+    assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
+}

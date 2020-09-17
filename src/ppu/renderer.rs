@@ -257,12 +257,13 @@ impl Renderer {
         }
     }
 
-    fn render_sprite_pixel(&self, registers: &Registers, dot: u16) -> (PaletteColor, bool) {
+    fn render_sprite_pixel(&self, registers: &Registers, bg_color: &PaletteColor, dot: u16) -> (PaletteColor, bool) {
+        let mask = registers.mask.get();
         let mut render_mask = PpuMask::s;
         if dot < 8 {
             render_mask |= PpuMask::M;
         }
-        if !registers.mask.get().contains(render_mask) {
+        if !mask.contains(render_mask) {
             (PaletteColor::default(), false)
         } else {
             let mut palette_color = PaletteColor::default();
@@ -283,8 +284,8 @@ impl Renderer {
                             let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
                             let color = (high << 1 | low) as u8;
 
-                            // sprite-0 hit
-                            if sprite_data.sprite.id == 0 && color != 0 && dot != 255 {
+                            // sprite-0 hit, only if background rendering is on and pixel is non-transparent
+                            if sprite_data.sprite.id == 0 && color != 0 && dot != 255 && mask.contains(PpuMask::b) && bg_color.is_opaque() {
                                 registers.status.update(|s| s | PpuStatus::S);
                             }
 
@@ -342,7 +343,7 @@ impl Renderer {
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
                 let pixel = dot - 2;
                 let bg_color = self.render_background_pixel(registers, pixel);
-                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, pixel);
+                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
 
                 // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
                 // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
