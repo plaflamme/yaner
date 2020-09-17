@@ -187,7 +187,7 @@ impl Renderer {
                         oam_ram.read_u8(address+2),
                         oam_ram.read_u8(address+3),
                     ];
-                    let sprite = Sprite::new(oam_data);
+                    let sprite = Sprite::new(s as u8, oam_data);
                     let sprite_y = sprite.y as u16;
                     let sprite_end_y = sprite_y + registers.ctrl.get().sprite_height() as u16;
                     let scanline = self.scanline.get();
@@ -292,6 +292,11 @@ impl Renderer {
                             let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
                             let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
                             let color = (high << 1 | low) as u8;
+
+                            // sprite-0 hit
+                            if sprite_data.sprite.id == 0 && color != 0 && dot != 255 {
+                                registers.status.update(|s| s | PpuStatus::S);
+                            }
 
                             palette_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color)
                         }

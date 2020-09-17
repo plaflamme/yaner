@@ -11,6 +11,7 @@ bitregions! {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sprite {
+    pub id: u8, // for sprite priority
     pub x: u8,
     pub y: u8,
     pub tile_index: u8,
@@ -18,8 +19,9 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn new(values: [u8;4]) -> Self {
+    pub fn new(id: u8, values: [u8;4]) -> Self {
        Sprite {
+           id,
            y: values[0],
            tile_index: values[1],
            attr: Attributes::new(values[2]),
