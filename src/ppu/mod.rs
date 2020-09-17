@@ -133,13 +133,15 @@ impl AddressSpace for PpuBus {
 
 pub struct MemoryMappedRegisters {
     ppu: Rc<Ppu>,
+    // http://wiki.nesdev.com/w/index.php/PPU_registers#The_PPUDATA_read_buffer_.28post-fetch.29
+    read_buffer: Cell<u8>,
     // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 }
 
 impl MemoryMappedRegisters {
     pub fn new(ppu: Rc<Ppu>) -> Self {
-        MemoryMappedRegisters { ppu, open_bus: Cell::default() }
+        MemoryMappedRegisters { ppu, read_buffer: Cell::default(), open_bus: Cell::default() }
     }
 
     pub fn decay_open_bus(&self) {
@@ -169,11 +171,12 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2005 => self.open_bus.get(),
             0x2006 => self.open_bus.get(),
             0x2007 => {
-                let bus_mask = match self.ppu.registers.v_addr.get().into() {
-                    0x3F00..=0x3FFF => self.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
+                let value = self.ppu.vram_read_u8();
+                match self.ppu.registers.v_addr.get().into() {
+                    0..=0x3EFF => self.read_buffer.replace(value),
+                    0x3F00..=0x3FFF => value | self.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
                     _ => 0x00,
-                };
-                self.ppu.vram_read_u8() | bus_mask
+                }
             }
             _ => invalid_address!(addr),
         };
