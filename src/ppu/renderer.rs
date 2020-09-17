@@ -269,7 +269,11 @@ impl Renderer {
     }
 
     fn render_sprite_pixel(&self, registers: &Registers, dot: u16) -> (PaletteColor, bool) {
-        if !registers.mask.get().contains(PpuMask::s) {
+        let mut render_mask = PpuMask::s;
+        if dot < 8 {
+            render_mask |= PpuMask::M;
+        }
+        if !registers.mask.get().contains(render_mask) {
             (PaletteColor::default(), false)
         } else {
             let mut palette_color = PaletteColor::default();
