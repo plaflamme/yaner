@@ -6,7 +6,7 @@ use super::rgb;
 use crate::memory::AddressSpace;
 use crate::ppu::{PpuCycle, Registers};
 use crate::ppu::reg::{PpuStatus, PpuMask, PpuCtrl};
-use crate::ppu::sprite::Sprite;
+use crate::ppu::sprite::{Sprite, SpriteData};
 
 #[derive(Clone, Default)]
 pub struct RegisterPair<T: Copy> {
@@ -58,7 +58,7 @@ impl AttributeData {
 bitregions! {
     pub PaletteColor u8 {
         COLOR: 0b0000_0011,
-        PALETTE: 0b0000_1100,
+        PALETTE: 0b0001_1100, // TODO: palette type matters here unfortunately
     }
 }
 
@@ -109,6 +109,7 @@ pub struct Renderer {
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 
+    primary_oam: Cell<[Option<SpriteData>;8]>,
     secondary_oam: Cell<[Option<Sprite>;8]>,
 }
 
@@ -126,6 +127,7 @@ impl Renderer {
             attribute_entry: Cell::new(0),
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
+            primary_oam: Cell::new([None;8]),
             secondary_oam: Cell::new([None;8]),
         }
     }
@@ -164,7 +166,7 @@ impl Renderer {
         self.attribute_data.shift();
     }
 
-    fn evaluate_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, pre_render: bool) {
+    fn evaluate_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1 => {
                 self.secondary_oam.set([None; 8]);
@@ -203,8 +205,32 @@ impl Renderer {
                         count += 1;
                     }
                 }
+                self.secondary_oam.set(secondary_oam);
             },
-            320 => (),// TODO: sprite tile fetching is done (for next scanline) at this point
+            321 => {
+                let mut new_oam = [None;8];
+                // load sprites into primary OAM and fetch their tiles.
+                let sprites = self.secondary_oam.get();
+
+                for (idx, s) in sprites.iter().enumerate() {
+                    match s {
+                        None => break,
+                        Some(sprite) => {
+                            // TODO: tile height affects this computation.
+                            let base_addr = sprite.tile_index as u16 * 16 + registers.ctrl.get().sprite_pattern_table_address();
+                            let mut y_sprite = self.scanline.get() - sprite.y as u16;
+                            if sprite.attr.flip_v() {
+                                y_sprite = registers.ctrl.get().sprite_height() as u16 - 1 - y_sprite;
+                            }
+                            let addr = base_addr + y_sprite;
+                            let low = bus.read_u8(addr);
+                            let high = bus.read_u8(addr + 8);
+                            new_oam[idx] = Some(SpriteData::new(*sprite, low, high));
+                        }
+                    }
+                }
+                self.primary_oam.set(new_oam);
+            }
             _ => (),
         }
     }
@@ -242,12 +268,35 @@ impl Renderer {
         }
     }
 
-    fn render_sprite_pixel(&self, registers: &Registers, _dot: u16) -> (PaletteColor, bool) {
+    fn render_sprite_pixel(&self, registers: &Registers, dot: u16) -> (PaletteColor, bool) {
         if !registers.mask.get().contains(PpuMask::s) {
             (PaletteColor::default(), false)
         } else {
+            let mut palette_color = PaletteColor::default();
+            let s: &Cell<[Option<SpriteData>]> = &self.primary_oam;
+            for cell in s.as_slice_of_cells().iter().rev() {
+                match cell.get() {
+                    None => (),
+                    Some(sprite_data) => {
+                        let sprite_x = sprite_data.sprite.x as u16;
+                        let sprite_end_x = sprite_x + 8;
+                        if dot >= sprite_x && dot < sprite_end_x {
+                            let mut x_sprite = dot - sprite_data.sprite.x as u16;
+                            if sprite_data.sprite.attr.flip_h() {
+                                x_sprite ^= 7;
+                            }
+                            let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
+                            let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
+                            let color = (high << 1 | low) as u8;
+
+                            palette_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color)
+                        }
+                    }
+                }
+            }
+
             // TODO
-            (PaletteColor::default(), false)
+            (palette_color, false)
         }
     }
 
@@ -369,7 +418,7 @@ impl Renderer {
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
-                    self.evaluate_sprites(registers, oam_ram, false);
+                    self.evaluate_sprites(registers, oam_ram, bus, false);
                     self.render_pixel(registers, bus);
                     self.fetch_tile(registers, bus, false);
                 }
@@ -387,7 +436,7 @@ impl Renderer {
                     if self.dot.get() == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
-                    self.evaluate_sprites(registers, oam_ram, true);
+                    self.evaluate_sprites(registers, oam_ram, bus, true);
                     self.render_pixel(registers, bus);
                     self.fetch_tile(registers, bus, true);
 

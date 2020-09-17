@@ -47,6 +47,15 @@ impl PpuCtrl {
         }
     }
 
+    pub fn sprite_pattern_table_address(&self) -> u16 {
+        // (0: $0000; 1: $1000)
+        if self.contains(PpuCtrl::S) {
+            0x1000
+        } else {
+            0x0000
+        }
+    }
+
     pub fn sprite_height(&self) -> u8 {
         if self.contains(PpuCtrl::H) {
             16
