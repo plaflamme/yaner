@@ -242,10 +242,10 @@ impl Renderer {
         match self.dot.get() {
             // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
             //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
-            2..=257 | 322..=337 => {
+            dot@2..=257 | dot@322..=337 => {
                 // NOTE: on the second tick, we draw pixel 0
                 // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
-                let pixel = self.dot.get() - 2;
+                let pixel = dot - 2;
                 let bg_color = self.render_background_pixel(registers, pixel);
                 let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, pixel);
 
@@ -258,8 +258,9 @@ impl Renderer {
                     bg_color
                 };
 
-                if self.scanline.get() < 241 && self.dot.get() < 257 {
-                    let pixel_index = pixel + self.scanline.get() * 256;
+                let sl = self.scanline.get();
+                if sl < 241 && pixel < 257 {
+                    let pixel_index = pixel + sl * 256;
 
                     let s: &Cell<[Pixel]> = &self.frame_pixels;
                     let pixels = s.as_slice_of_cells();
