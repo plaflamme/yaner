@@ -5,6 +5,7 @@ use crate::ppu::debug::PpuState;
 pub struct ClockState {
     pub cpu_cycles: u64,
     pub ppu_cycles: u64,
+    pub ppu_frames: u64,
 }
 // TODO: expose address spaces (read only?)
 pub struct NesState<'a> {
@@ -28,6 +29,7 @@ impl<'a> NesState<'a> {
             clocks: ClockState {
                 cpu_cycles: nes.clocks.cpu_cycles.get(),
                 ppu_cycles: nes.clocks.ppu_cycles.get(),
+                ppu_frames: nes.clocks.ppu_frames.get(),
             },
 
             cpu_bus: &nes.cpu.bus,

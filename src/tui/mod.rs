@@ -203,7 +203,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
-            Span::styled(format!("{},{}", nes.ppu.scanline, nes.ppu.dot), value_style),
+            Span::styled(format!("{}@{},{}", nes.clocks.ppu_frames, nes.ppu.scanline, nes.ppu.dot), value_style),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))

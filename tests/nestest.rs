@@ -27,7 +27,7 @@ struct LogLine {
     y: u8,
     flags: u8,
     sp: u8,
-    ppu_frame: u32,
+    ppu_scanline: u32,
     ppu_dot: u32,
     cpu_cyc: u32,
 }
@@ -75,7 +75,7 @@ named!(parse_logline<&str, LogLine>,
         tag!("Y:") >> y: hex_u8 >> tag!(" ") >>
         tag!("P:") >> flags: hex_u8 >> tag!(" ") >>
         tag!("SP:") >> sp: hex_u8 >> tag!(" ") >>
-        tag!("PPU:") >> ppu_frame: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
+        tag!("PPU:") >> ppu_scanline: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
         tag!("CYC:") >> cpu_cyc: ws!(d_u32) >>
         (
             LogLine {
@@ -86,7 +86,7 @@ named!(parse_logline<&str, LogLine>,
                 flags,
                 sp,
                 ppu_dot,
-                ppu_frame,
+                ppu_scanline,
                 cpu_cyc
             }
         )
@@ -127,13 +127,13 @@ fn assert_log(nes: &Nes, line: &LogLine) {
     );
     assert_eq!(state.cpu.sp, line.sp, "incorrect stack pointer at {}", line);
     assert_eq!(
-        nes.clocks.ppu_frame(),
-        line.ppu_frame as u64,
-        "incorrect ppu frame at {}",
+        nes.clocks.ppu_cycles.get() / 341,
+        line.ppu_scanline as u64,
+        "incorrect ppu scanline at {}",
         line
     );
     assert_eq!(
-        nes.clocks.ppu_dot(),
+        (nes.clocks.ppu_cycles.get() % 341) as u16,
         line.ppu_dot as u16,
         "incorrect ppu dot at {}",
         line

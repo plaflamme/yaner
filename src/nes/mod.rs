@@ -19,6 +19,7 @@ mod dma;
 pub struct Clocks {
     pub cpu_cycles: Cell<u64>,
     pub ppu_cycles: Cell<u64>,
+    pub ppu_frames: Cell<u64>,
 }
 
 impl Clocks {
@@ -31,6 +32,7 @@ impl Clocks {
         Clocks {
             cpu_cycles: Cell::new(cpu_cycles),
             ppu_cycles: Cell::new(ppu_cycles),
+            ppu_frames: Cell::default(),
         }
     }
 
@@ -41,12 +43,8 @@ impl Clocks {
         }
     }
 
-    pub fn ppu_frame(&self) -> u64 {
-        self.ppu_cycles.get() / 341
-    }
-
-    pub fn ppu_dot(&self) -> u16 {
-        (self.ppu_cycles.get() % 341) as u16
+    fn tick_frame(&self) {
+        self.ppu_frames.update(|c| c.wrapping_add(1));
     }
 }
 
@@ -102,6 +100,7 @@ impl Nes {
                     GeneratorState::Yielded(cycle) => {
                         match cycle {
                             PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
+                            PpuCycle::Frame => self.clocks.tick_frame(),
                             _ => (),
                         }
                         cycle
