@@ -202,13 +202,6 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             ),
         ]),
         Spans::from(vec![
-            Span::from(" NEFA: "),
-            Span::styled(
-                format!("{:02X} {:04X}", nes.ppu.ne, nes.ppu.fa),
-                value_style,
-            ),
-        ]),
-        Spans::from(vec![
             Span::from(" CYC: "),
             Span::styled(format!("{},{}", nes.ppu.scanline, nes.ppu.dot), value_style),
         ]),
@@ -255,6 +248,42 @@ fn prg_rom<B: Backend>(
     f.render_stateful_widget(list, chunk, &mut state);
 }
 
+fn oam_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
+    let value_style = Style::default().add_modifier(Modifier::BOLD);
+
+    let mut text = Vec::new();
+    text.push(Spans::from(" S: "));
+    for sprite in nes.ppu.secondary_oam.iter() {
+        let txt = match sprite {
+            None => "-".to_owned(),
+            Some(s) => format!("{}: {},{}", s.id, s.y, s.x),
+        };
+        text.push(
+            Spans::from(Span::styled(
+                format!("    {}", txt),
+                value_style,
+            ))
+        );
+    }
+
+
+    text.push(Spans::from(" P: "));
+    for sprite in nes.ppu.primary_oam.iter() {
+        let txt = match sprite {
+            None => "-".to_owned(),
+            Some(s) => format!("{}: {},{}", s.sprite.id, s.sprite.y, s.sprite.x),
+        };
+        text.push(
+            Spans::from(Span::styled(
+                format!("    {}", txt),
+                value_style,
+            ))
+        );
+    }
+
+    Paragraph::new(Text::from(text)).block(Block::default().title("OAM").borders(Borders::ALL))
+}
+
 fn statusbar<B: Backend>(
     f: &mut Frame<B>,
     nes: &NesState,
@@ -266,7 +295,8 @@ fn statusbar<B: Backend>(
         .constraints(
             [
                 Constraint::Length(10),
-                Constraint::Length(14),
+                Constraint::Length(13),
+                Constraint::Length(20),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -275,7 +305,8 @@ fn statusbar<B: Backend>(
 
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
-    prg_rom(f, &nes, addr_space, chunks[2]);
+    f.render_widget(oam_block(nes), chunks[2]);
+    prg_rom(f, &nes, addr_space, chunks[3]);
 }
 
 struct MemoryBlock<'a> {

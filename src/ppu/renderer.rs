@@ -112,8 +112,8 @@ pub struct Renderer {
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 
-    primary_oam: Cell<[Option<SpriteData>;8]>,
-    secondary_oam: Cell<[Option<Sprite>;8]>,
+    pub(super) primary_oam: Cell<[Option<SpriteData>;8]>,
+    pub(super) secondary_oam: Cell<[Option<Sprite>;8]>,
 }
 
 impl Renderer {

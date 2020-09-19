@@ -2,6 +2,7 @@ use crate::ppu::{Ppu, PpuCtrl, PpuMask};
 use crate::ppu::renderer::{Pixel, PatternData, AttributeData};
 use crate::ppu::reg::PpuStatus;
 use crate::ppu::vram_address::VramAddress;
+use crate::ppu::sprite::{Sprite, SpriteData};
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,
@@ -11,8 +12,8 @@ pub struct PpuState {
     pub v_addr: VramAddress,
     pub fine_x: u8,
     pub oam_addr: u8,
-    pub ne: u8,
-    pub fa: u16,
+    pub secondary_oam: [Option<Sprite>; 8],
+    pub primary_oam: [Option<SpriteData>; 8],
     pub pattern_data: PatternData,
     pub attribute_data: AttributeData,
     pub frame: [Pixel; 256 * 240],
@@ -30,8 +31,8 @@ impl PpuState {
             v_addr: ppu.registers.v_addr.get(),
             fine_x: ppu.registers.fine_x.get(),
             oam_addr: ppu.registers.oam_addr.get(),
-            ne: ppu.renderer.nametable_entry.get(),
-            fa: ppu.renderer.fetch_addr.get(),
+            secondary_oam: ppu.renderer.secondary_oam.get(),
+            primary_oam: ppu.renderer.primary_oam.get(),
             pattern_data: ppu.renderer.pattern_data.clone(),
             attribute_data: ppu.renderer.attribute_data.clone(),
             frame: ppu.renderer.frame_pixels.get(),
