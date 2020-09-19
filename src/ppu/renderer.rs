@@ -244,14 +244,17 @@ impl Renderer {
     fn cycle_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
             1 => {
-                // clear secondary oam
-                self.secondary_oam.set([None; 8]);
-                if pre_render {
+                if !pre_render {
+                    // clear secondary oam
+                    self.secondary_oam.set([None; 8]);
+                } else {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
-            257 => self.cycle_sprites_evaluate(registers, oam_ram),
+            257 => if !pre_render {
+                self.cycle_sprites_evaluate(registers, oam_ram)
+            },
             321 => self.cycle_sprites_load(registers, bus),
             _ => (),
         }
@@ -333,37 +336,43 @@ impl Renderer {
         }
     }
 
+    fn render_pixel(&self, registers: &Registers, bus: &dyn AddressSpace, dot: u16) {
+        // NOTE: on the second tick, we draw pixel 0
+        // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
+        let pixel = dot - 2;
+        let sl = self.scanline.get();
+        if sl < 240 && dot < 256 {
+            let bg_color = self.render_background_pixel(registers, pixel);
+            let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
+
+            // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
+            // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
+            // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
+            let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
+                sprite_color
+            } else {
+                bg_color
+            };
+
+            let sl = self.scanline.get();
+            if sl < 241 && pixel < 257 {
+                let pixel_index = pixel + sl * 256;
+
+                let s: &Cell<[Pixel]> = &self.frame_pixels;
+                let pixels = s.as_slice_of_cells();
+                let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
+                pixels[pixel_index as usize].set(pixel_value);
+            }
+        }
+    }
+
     // determines the color of the current pixel, shifts registers
     fn cycle_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
         match self.dot.get() {
             // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
             //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
             dot@2..=257 | dot@322..=337 => {
-                // NOTE: on the second tick, we draw pixel 0
-                // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
-                let pixel = dot - 2;
-                let bg_color = self.render_background_pixel(registers, pixel);
-                let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
-
-                // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
-                // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
-                // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
-                let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
-                    sprite_color
-                } else {
-                    bg_color
-                };
-
-                let sl = self.scanline.get();
-                if sl < 241 && pixel < 257 {
-                    let pixel_index = pixel + sl * 256;
-
-                    let s: &Cell<[Pixel]> = &self.frame_pixels;
-                    let pixels = s.as_slice_of_cells();
-                    let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
-                    pixels[pixel_index as usize].set(pixel_value);
-                }
-
+                self.render_pixel(registers, bus, dot);
                 self.shift();
             }
             _ => (),
