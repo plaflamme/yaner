@@ -41,7 +41,7 @@ fn ppu_vbl_nmi(case: &str) {
 // #[test_case("power_up_palette")] Reports whether initial values in palette at power-up match those that my NES has. These values are probably unique to my NES.
 #[test_case("sprite_ram")]
 #[test_case("vbl_clear_time")]
-// #[test_case("vram_access")] TODO: passing this requires implementing nametable mirroring.
+#[test_case("vram_access")]
 fn ppu_blargg_ppu_tests(case: &str) {
     let mut frames = 0;
     let nes = run_test(&Path::new(format!("roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes", case).as_str()), None, |_| {

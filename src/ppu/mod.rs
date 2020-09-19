@@ -105,12 +105,12 @@ impl PpuBus {
     fn nametable_mirroring(&self, addr: u16) -> u16 {
         match self.mapper.borrow().nametable_mirroring() {
             NametableMirroring::Horizontal => {
-                // 0x2000 is mirrored at 0x2400
-                ((addr - 0x2000) % 0x400) + 0x2000
-            },
-            NametableMirroring::Vertical => {
                 // 0x2000 is mirrored at 0x2800
                 ((addr - 0x2000) % 0x800) + 0x2000
+            },
+            NametableMirroring::Vertical => {
+                // 0x2000 is mirrored at 0x2400
+                ((addr - 0x2000) % 0x400) + 0x2000
             },
             NametableMirroring::FourScreen => unimplemented!(),
         }
@@ -185,10 +185,21 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2005 => self.open_bus.get(),
             0x2006 => self.open_bus.get(),
             0x2007 => {
+                // read the address before the value, since reading the value has side effects.
+                let vram_addr: u16 = self.ppu.registers.v_addr.get().into();
                 let value = self.ppu.vram_read_u8();
-                match self.ppu.registers.v_addr.get().into() {
+                match vram_addr {
                     0..=0x3EFF => self.read_buffer.replace(value),
-                    0x3F00..=0x3FFF => value | self.open_bus.get() & 0b1100_0000, // palette values are 6bits wide
+                    0x3F00..=0x3FFF => {
+                        // "The palette data is placed immediately on the data bus, and hence no dummy read is required.
+                        // Reading the palettes still updates the internal buffer though, but the data placed in it is the
+                        // mirrored nametable data that would appear "underneath" the palette."
+                        let nt_addr = self.ppu.bus.nametable_mirroring(vram_addr);
+                        self.read_buffer.set(self.ppu.bus.vram.read_u8(nt_addr));
+
+                        // palette values are 6bits wide
+                        value | self.open_bus.get() & 0b1100_0000
+                    },
                     _ => 0x00,
                 }
             }
