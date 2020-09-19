@@ -1,17 +1,19 @@
-use super::Mapper;
+use super::{Mapper, NametableMirroring};
 use crate::cartridge::rom::Rom;
 use crate::cartridge::rom::RomData;
 use crate::memory::AddressSpace;
 
 // http://wiki.nesdev.com/w/index.php/NROM
 pub struct NROM {
+    mirroring: NametableMirroring,
     data: RomData,
 }
 
 impl From<&Rom> for NROM {
     fn from(rom: &Rom) -> Self {
         NROM {
-            data: RomData::new(rom),
+            mirroring: rom.nametable_mirroring,
+            data: RomData::new(&rom),
         }
     }
 }
@@ -20,6 +22,8 @@ impl Mapper for NROM {
     fn name(&self) -> String {
         "NROM".to_string()
     }
+
+    fn nametable_mirroring(&self) -> NametableMirroring { self.mirroring }
 
     fn cpu_addr_space(&self) -> &dyn AddressSpace {
         self // TODO

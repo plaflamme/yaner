@@ -6,6 +6,8 @@ use nom::{
 };
 use std::convert::TryFrom;
 
+use super::NametableMirroring;
+
 #[derive(Debug)]
 pub struct Header {
     prg_rom_size: u8,
@@ -46,14 +48,6 @@ bitflags! {
     struct Flags9: u8 {
         const PAL = 0b0000_0001;
     }
-}
-
-// https://wiki.nesdev.com/w/index.php/Mirroring#Nametable_Mirroring
-#[derive(PartialEq, Eq, Debug)]
-pub enum NametableMirroring {
-    Horizontal, // vertical arrangement
-    Vertical,   // horizontal arrangement
-    FourScreen,
 }
 
 impl From<Flags6> for NametableMirroring {

@@ -1,3 +1,4 @@
+use super::NametableMirroring;
 use super::rom::Rom;
 use super::Mapper;
 use crate::memory::AddressSpace;
@@ -11,6 +12,8 @@ impl Mapper for Unknown {
     fn name(&self) -> String {
         "Unknown".to_string()
     }
+
+    fn nametable_mirroring(&self) -> NametableMirroring { unimplemented!() }
 
     fn cpu_addr_space(&self) -> &dyn AddressSpace {
         unimplemented!()

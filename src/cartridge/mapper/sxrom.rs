@@ -1,4 +1,4 @@
-use super::{Mapper, Switched};
+use super::{Mapper, NametableMirroring, Switched};
 use crate::cartridge::mapper::BankSelect;
 use crate::cartridge::rom::{Chr, Rom, RomData};
 use crate::memory::{AddressSpace, Ram};
@@ -90,6 +90,7 @@ enum BankAddr {
 
 // http://wiki.nesdev.com/w/index.php/MMC1
 pub struct SxROM {
+    mirroring: NametableMirroring,
     prg_rom: Switched<crate::memory::Rom>,
     chr: Switched<Chr>,
     prg_ram: Ram,
@@ -148,6 +149,7 @@ impl From<&Rom> for SxROM {
         let chr = Switched::new(data.chr, size, 4_096);
 
         SxROM {
+            mirroring: rom.nametable_mirroring,
             prg_rom,
             chr,
             prg_ram: data.prg_ram,
@@ -164,6 +166,8 @@ impl Mapper for SxROM {
     fn name(&self) -> String {
         "SxROM".to_string()
     }
+
+    fn nametable_mirroring(&self) -> NametableMirroring { self.mirroring }
 
     fn cpu_addr_space(&self) -> &dyn AddressSpace {
         self // TODO
