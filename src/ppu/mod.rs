@@ -65,9 +65,21 @@ impl Ppu {
         status.bits()
     }
 
+    // write to PPUSTATUS with side effects
+    fn write_status(&self, value: u8) {
+        self.registers.ctrl.set(PpuCtrl::from_bits_truncate(value));
+        // writing to the control register also sets the resulting nametable bits in t_addr
+        self.registers.t_addr.update(|mut t| {
+            t.set_nametable(value & 0b0000_0011);
+            t
+        });
+    }
+
     // read from VRAM with side effects
-    fn vram_read_u8(&self) -> u8 {
-        self.bus.read_u8(self.registers.rw_vram_addr())
+    // returns the value and the address where it was read from (since it is modified as a side effect)
+    fn vram_read_u8(&self) -> (u16, u8) {
+        let addr = self.registers.rw_vram_addr();
+        (addr, self.bus.read_u8(addr))
     }
 
     // write to VRAM with side effects
@@ -185,9 +197,7 @@ impl AddressSpace for MemoryMappedRegisters {
             0x2005 => self.open_bus.get(),
             0x2006 => self.open_bus.get(),
             0x2007 => {
-                // read the address before the value, since reading the value has side effects.
-                let vram_addr: u16 = self.ppu.registers.v_addr.get().into();
-                let value = self.ppu.vram_read_u8();
+                let (vram_addr, value) = self.ppu.vram_read_u8();
                 match vram_addr {
                     0..=0x3EFF => self.read_buffer.replace(value),
                     0x3F00..=0x3FFF => {
@@ -212,14 +222,7 @@ impl AddressSpace for MemoryMappedRegisters {
     fn write_u8(&self, addr: u16, value: u8) {
         self.open_bus.set(value);
         match addr {
-            0x2000 => {
-                self.ppu.registers.ctrl.set(PpuCtrl::from_bits_truncate(value));
-                // writing to the control register also sets the resulting nametable bits in t_addr
-                self.ppu.registers.t_addr.update(|mut t| {
-                    t.set_nametable(value & 0b0000_0011);
-                    t
-                });
-            },
+            0x2000 => self.ppu.write_status(value),
             0x2001 => self.ppu.registers.mask.set(PpuMask::from_bits_truncate(value)),
             0x2002 => (),
             0x2003 => self.ppu.registers.oam_addr.set(value),
