@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use crate::cartridge::Mapper;
+use crate::cartridge::{Mapper, NametableMirroring};
 use crate::memory::Ram256;
 use crate::memory::{AddressSpace, Mirrored, Ram2KB, Ram32};
 use rand::{thread_rng, Rng};
@@ -102,6 +102,20 @@ impl PpuBus {
         }
     }
 
+    fn nametable_mirroring(&self, addr: u16) -> u16 {
+        match self.mapper.borrow().nametable_mirroring() {
+            NametableMirroring::Horizontal => {
+                // 0x2000 is mirrored at 0x2400
+                ((addr - 0x2000) % 0x400) + 0x2000
+            },
+            NametableMirroring::Vertical => {
+                // 0x2000 is mirrored at 0x2800
+                ((addr - 0x2000) % 0x800) + 0x2000
+            },
+            NametableMirroring::FourScreen => unimplemented!(),
+        }
+    }
+
     // TODO: find the documentation for this
     fn palette_mirroring(&self, addr: u16) -> u16 {
         match addr % 0x20 {
@@ -115,7 +129,7 @@ impl AddressSpace for PpuBus {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().read_u8(addr),
-            0x2000..=0x3EFF => self.vram.read_u8(addr),
+            0x2000..=0x3EFF => self.vram.read_u8(self.nametable_mirroring(addr)),
             0x3F00..=0x3FFF => self.palette.read_u8(self.palette_mirroring(addr)),
             _ => invalid_address!(addr),
         }
@@ -124,7 +138,7 @@ impl AddressSpace for PpuBus {
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().ppu_addr_space().write_u8(addr, value),
-            0x2000..=0x3EFF => self.vram.write_u8(addr, value),
+            0x2000..=0x3EFF => self.vram.write_u8(self.nametable_mirroring(addr), value),
             0x3F00..=0x3FFF => self.palette.write_u8(self.palette_mirroring(addr), value),
             _ => invalid_address!(addr),
         }
