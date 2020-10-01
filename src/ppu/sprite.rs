@@ -28,14 +28,14 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn new(id: u8, values: [u8;4]) -> Self {
-       Sprite {
-           id,
-           y: values[0],
-           tile_index: values[1],
-           attr: Attributes::new(values[2]),
-           x: values[3],
-       }
+    pub fn new(id: u8, values: [u8; 4]) -> Self {
+        Sprite {
+            id,
+            y: values[0],
+            tile_index: values[1],
+            attr: Attributes::new(values[2]),
+            x: values[3],
+        }
     }
 }
 
@@ -48,6 +48,10 @@ pub struct SpriteData {
 
 impl SpriteData {
     pub fn new(sprite: Sprite, tile_low: u8, tile_high: u8) -> Self {
-        SpriteData { sprite, tile_low, tile_high }
+        SpriteData {
+            sprite,
+            tile_low,
+            tile_high,
+        }
     }
 }

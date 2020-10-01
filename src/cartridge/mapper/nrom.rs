@@ -23,7 +23,9 @@ impl Mapper for NROM {
         "NROM".to_string()
     }
 
-    fn nametable_mirroring(&self) -> NametableMirroring { self.mirroring }
+    fn nametable_mirroring(&self) -> NametableMirroring {
+        self.mirroring
+    }
 
     fn cpu_addr_space(&self) -> &dyn AddressSpace {
         self // TODO

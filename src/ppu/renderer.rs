@@ -1,12 +1,12 @@
+use bitregions::bitregions;
 use std::cell::Cell;
 use std::ops::Generator;
-use bitregions::bitregions;
 
 use super::rgb;
 use crate::memory::AddressSpace;
-use crate::ppu::{PpuCycle, Registers};
-use crate::ppu::reg::{PpuStatus, PpuMask, PpuCtrl};
+use crate::ppu::reg::{PpuCtrl, PpuMask, PpuStatus};
 use crate::ppu::sprite::{Sprite, SpriteData};
+use crate::ppu::{PpuCycle, Registers};
 
 #[derive(Clone, Default)]
 pub struct RegisterPair<T: Copy> {
@@ -17,14 +17,18 @@ pub struct RegisterPair<T: Copy> {
 #[derive(Clone, Default)]
 pub struct PatternData {
     pub latch: RegisterPair<u8>,
-    pub value: RegisterPair<u16>
+    pub value: RegisterPair<u16>,
 }
 
 // This latch register loads the value that's on the latch every 8 cycles.
 impl PatternData {
     pub fn latch(&self) {
-        self.value.low.update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
-        self.value.high.update(|v| (v & 0xFF00) | self.latch.high.get() as u16);
+        self.value
+            .low
+            .update(|v| (v & 0xFF00) | self.latch.low.get() as u16);
+        self.value
+            .high
+            .update(|v| (v & 0xFF00) | self.latch.high.get() as u16);
     }
 
     pub fn shift(&self) {
@@ -36,14 +40,13 @@ impl PatternData {
 #[derive(Clone, Default)]
 pub struct AttributeData {
     pub latch: RegisterPair<u8>, // this is actually a 1bit latch
-    pub value: RegisterPair<u8>
+    pub value: RegisterPair<u8>,
 }
 
 // This latch register loads a bit every 8 cycles and feeds that bit into the shifts
 // So latch() takes a value which contains those bits
 // And shift() feeds those bits in the value.
 impl AttributeData {
-
     pub fn latch(&self, value: u8) {
         self.latch.low.set(value & 1);
         self.latch.high.set((value & 2) >> 1);
@@ -63,7 +66,6 @@ bitregions! {
 }
 
 impl PaletteColor {
-
     fn from(palette: u8, color: u8) -> Self {
         let mut p = PaletteColor::default();
         p.set_color(color);
@@ -112,12 +114,11 @@ pub struct Renderer {
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 
-    pub(super) primary_oam: Cell<[Option<SpriteData>;8]>,
-    pub(super) secondary_oam: Cell<[Option<Sprite>;8]>,
+    pub(super) primary_oam: Cell<[Option<SpriteData>; 8]>,
+    pub(super) secondary_oam: Cell<[Option<Sprite>; 8]>,
 }
 
 impl Renderer {
-
     pub fn new() -> Self {
         Renderer {
             scanline: Cell::new(0),
@@ -130,8 +131,8 @@ impl Renderer {
             attribute_entry: Cell::new(0),
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
-            primary_oam: Cell::new([None;8]),
-            secondary_oam: Cell::new([None;8]),
+            primary_oam: Cell::new([None; 8]),
+            secondary_oam: Cell::new([None; 8]),
         }
     }
 
@@ -178,9 +179,9 @@ impl Renderer {
             let address = s * 4;
             let oam_data = [
                 oam_ram.read_u8(address),
-                oam_ram.read_u8(address+1),
-                oam_ram.read_u8(address+2),
-                oam_ram.read_u8(address+3),
+                oam_ram.read_u8(address + 1),
+                oam_ram.read_u8(address + 2),
+                oam_ram.read_u8(address + 3),
             ];
             let sprite = Sprite::new(s as u8, oam_data);
             let sprite_y = sprite.y as u16;
@@ -206,7 +207,7 @@ impl Renderer {
 
     // loads primary_oam from secondary_oam while also fetching the corresponding tiles.
     fn cycle_sprites_load(&self, registers: &Registers, bus: &dyn AddressSpace) {
-        let mut new_oam = [None;8];
+        let mut new_oam = [None; 8];
         // load sprites into primary OAM and fetch their tiles.
         let sprites = self.secondary_oam.get();
         let ctrl = registers.ctrl.get();
@@ -243,7 +244,13 @@ impl Renderer {
     }
 
     // runs sprite evaluation, tile fetching and secondary oam management
-    fn cycle_sprites(&self, registers: &Registers, oam_ram: &dyn AddressSpace, bus: &dyn AddressSpace, pre_render: bool) {
+    fn cycle_sprites(
+        &self,
+        registers: &Registers,
+        oam_ram: &dyn AddressSpace,
+        bus: &dyn AddressSpace,
+        pre_render: bool,
+    ) {
         match self.dot.get() {
             1 => {
                 if !pre_render {
@@ -254,15 +261,22 @@ impl Renderer {
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
-            257 => if !pre_render {
-                self.cycle_sprites_evaluate(registers, oam_ram)
-            },
+            257 => {
+                if !pre_render {
+                    self.cycle_sprites_evaluate(registers, oam_ram)
+                }
+            }
             321 => self.cycle_sprites_load(registers, bus),
             _ => (),
         }
     }
 
-    fn render_sprite_pixel(&self, registers: &Registers, bg_color: &PaletteColor, dot: u16) -> (PaletteColor, bool) {
+    fn render_sprite_pixel(
+        &self,
+        registers: &Registers,
+        bg_color: &PaletteColor,
+        dot: u16,
+    ) -> (PaletteColor, bool) {
         let mask = registers.mask.get();
         let mut render_mask = PpuMask::s;
         if dot < 8 {
@@ -290,11 +304,19 @@ impl Renderer {
                             let color = (high << 1 | low) as u8;
 
                             // sprite-0 hit, only if background rendering is on and pixel is non-transparent
-                            if sprite_data.sprite.id == 0 && color != 0 && dot != 255 && mask.contains(PpuMask::b) && bg_color.is_opaque() {
+                            if sprite_data.sprite.id == 0
+                                && color != 0
+                                && dot != 255
+                                && mask.contains(PpuMask::b)
+                                && bg_color.is_opaque()
+                            {
                                 registers.status.update(|s| s | PpuStatus::S);
                             }
 
-                            let sprite_color = PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color);
+                            let sprite_color = PaletteColor::from(
+                                sprite_data.sprite.attr.palette() + 0b100,
+                                color,
+                            );
                             if sprite_color.is_opaque() {
                                 palette_color = sprite_color;
                                 front_priority = sprite_data.sprite.attr.fg_priority();
@@ -316,7 +338,6 @@ impl Renderer {
         if !registers.mask.get().contains(render_mask) {
             PaletteColor::default()
         } else {
-
             // From http://wiki.nesdev.com/w/index.php/PPU_rendering
             //   Every cycle, a bit is fetched from the 4 background shift registers in order to create a pixel on screen.
             //   Exactly which bit is fetched depends on the fine X scroll, set by $2005 (this is how fine X scrolling is possible).
@@ -329,7 +350,8 @@ impl Renderer {
 
             let color = (high | low) as u8;
 
-            let high = (self.attribute_data.value.high.get() >> (6 - registers.fine_x.get())) & 0b10 ;
+            let high =
+                (self.attribute_data.value.high.get() >> (6 - registers.fine_x.get())) & 0b10;
             let low = (self.attribute_data.value.low.get() >> (7 - registers.fine_x.get())) & 0x01;
 
             let palette = (high | low) as u8;
@@ -350,11 +372,12 @@ impl Renderer {
             // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
             // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
             // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
-            let pixel_color = if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
-                sprite_color
-            } else {
-                bg_color
-            };
+            let pixel_color =
+                if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
+                    sprite_color
+                } else {
+                    bg_color
+                };
 
             if sl < 241 && pixel < 257 {
                 let pixel_index = pixel + sl * 256;
@@ -372,7 +395,7 @@ impl Renderer {
         match self.dot.get() {
             // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
             //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
-            dot@2..=257 | dot@322..=337 => {
+            dot @ 2..=257 | dot @ 322..=337 => {
                 self.render_pixel(registers, bus, dot);
                 self.shift();
             }
@@ -384,13 +407,13 @@ impl Renderer {
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
     fn cycle_bg(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
         match self.dot.get() {
-            dot@2..=256 | dot@322..=337 => {
+            dot @ 2..=256 | dot @ 322..=337 => {
                 match dot % 8 {
                     1 => {
                         self.fetch_addr.set(registers.v_addr.get().nametable_addr());
                         // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
                         self.latch();
-                    },
+                    }
                     2 => self.nametable_entry.set(bus.read_u8(self.fetch_addr.get())),
                     3 => self.fetch_addr.set(registers.v_addr.get().attribute_addr()),
                     4 => {
@@ -402,18 +425,27 @@ impl Renderer {
                             entry >>= 2;
                         }
                         self.attribute_entry.set(entry);
-                    },
+                    }
                     5 => {
                         // TODO: Scrolling affects this.
-                        let index = self.nametable_entry.get() as u16 * 16 | (registers.v_addr.get().fine_y() as u16);
-                        self.fetch_addr.set(index + registers.ctrl.get().bg_pattern_table_address());
-                    },
-                    6 => self.pattern_data.latch.low.set(bus.read_u8(self.fetch_addr.get())),
+                        let index = self.nametable_entry.get() as u16 * 16
+                            | (registers.v_addr.get().fine_y() as u16);
+                        self.fetch_addr
+                            .set(index + registers.ctrl.get().bg_pattern_table_address());
+                    }
+                    6 => self
+                        .pattern_data
+                        .latch
+                        .low
+                        .set(bus.read_u8(self.fetch_addr.get())),
                     7 => {
                         self.fetch_addr.update(|v| v + 8);
-                    },
+                    }
                     0 => {
-                        self.pattern_data.latch.high.set(bus.read_u8(self.fetch_addr.get()));
+                        self.pattern_data
+                            .latch
+                            .high
+                            .set(bus.read_u8(self.fetch_addr.get()));
                         if registers.mask.get().is_rendering() {
                             registers.v_addr.update(|mut v| {
                                 if self.dot.get() == 256 {
@@ -424,8 +456,8 @@ impl Renderer {
                                 v
                             });
                         }
-                    },
-                    _ => unreachable!("match on % 8 is exhaustive")
+                    }
+                    _ => unreachable!("match on % 8 is exhaustive"),
                 }
             }
             257 => {
@@ -438,15 +470,17 @@ impl Renderer {
                     });
                 }
             }
-            280..=304 => if pre_render {
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
-                if registers.mask.get().is_rendering() {
-                    registers.v_addr.update(|mut v| {
-                        v.copy_vertical_bits(&registers.t_addr.get());
-                        v
-                    });
+            280..=304 => {
+                if pre_render {
+                    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
+                    if registers.mask.get().is_rendering() {
+                        registers.v_addr.update(|mut v| {
+                            v.copy_vertical_bits(&registers.t_addr.get());
+                            v
+                        });
+                    }
                 }
-            },
+            }
             // no latch
             1 | 321 | 339 => self.fetch_addr.set(registers.v_addr.get().nametable_addr()),
             338 => {
@@ -462,7 +496,12 @@ impl Renderer {
         }
     }
 
-    pub(super) fn run<'a>(&'a self, registers: &'a Registers, bus: &'a dyn AddressSpace, oam_ram: &'a dyn AddressSpace) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+    pub(super) fn run<'a>(
+        &'a self,
+        registers: &'a Registers,
+        bus: &'a dyn AddressSpace,
+        oam_ram: &'a dyn AddressSpace,
+    ) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         let mut odd_frame = false;
         move || loop {
@@ -529,9 +568,7 @@ impl Renderer {
             }
         }
     }
-
 }
-
 
 #[cfg(test)]
 mod test {
@@ -666,7 +703,12 @@ mod test {
         let registers = Registers::new();
         registers.mask.set(PpuMask::b);
 
-        let vram = TestVram { pattern: 0x12, nametable: 0xAB, attribute: 0b00_10_01_11, palette: 0xEF };
+        let vram = TestVram {
+            pattern: 0x12,
+            nametable: 0xAB,
+            attribute: 0b00_10_01_11,
+            palette: 0xEF,
+        };
 
         let renderer = Renderer::new();
         // dot 0 is idle
@@ -715,5 +757,4 @@ mod test {
         assert_eq!(renderer.pattern_data.latch.high.get(), 0x12);
         assert_eq!(registers.v_addr.get().coarse_x(), 0x01);
     }
-
 }

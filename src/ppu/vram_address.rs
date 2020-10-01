@@ -113,7 +113,10 @@ mod test {
         let attr_offs = 0b1111_000_000 as u16;
         let nt = (addr.nametable() as u16) << 10;
 
-        assert_eq!(addr.attribute_addr(), 0x23C0 | nt | attr_offs | high_y | high_x);
+        assert_eq!(
+            addr.attribute_addr(),
+            0x23C0 | nt | attr_offs | high_y | high_x
+        );
     }
 
     #[test]

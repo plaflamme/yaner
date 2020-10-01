@@ -1,6 +1,6 @@
-use super::NametableMirroring;
 use super::rom::Rom;
 use super::Mapper;
+use super::NametableMirroring;
 use crate::memory::AddressSpace;
 
 pub mod nrom;
@@ -13,7 +13,9 @@ impl Mapper for Unknown {
         "Unknown".to_string()
     }
 
-    fn nametable_mirroring(&self) -> NametableMirroring { unimplemented!() }
+    fn nametable_mirroring(&self) -> NametableMirroring {
+        unimplemented!()
+    }
 
     fn cpu_addr_space(&self) -> &dyn AddressSpace {
         unimplemented!()

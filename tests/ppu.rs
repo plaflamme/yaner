@@ -4,8 +4,8 @@ mod common;
 
 use common::blargg::run_blargg_test;
 use common::run_test;
-use test_case::test_case;
 use std::path::Path;
+use test_case::test_case;
 
 #[test]
 fn ppu_open_bus() {
@@ -44,10 +44,20 @@ fn ppu_vbl_nmi(case: &str) {
 #[test_case("vram_access")]
 fn ppu_blargg_ppu_tests(case: &str) {
     let mut frames = 0;
-    let nes = run_test(&Path::new(format!("roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes", case).as_str()), None, |_| {
-        frames += 1;
-        frames >= 30
-    });
+    let nes = run_test(
+        &Path::new(
+            format!(
+                "roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes",
+                case
+            )
+            .as_str(),
+        ),
+        None,
+        |_| {
+            frames += 1;
+            frames >= 30
+        },
+    );
 
     assert_eq!(nes.debug().ppu_bus.read_u8(0x20A4), 0x31);
 }
@@ -65,10 +75,20 @@ fn ppu_blargg_ppu_tests(case: &str) {
 #[test_case("11.edge_timing")]
 fn ppu_sprite_hit_tests(case: &str) {
     let mut frames = 0;
-    let nes = run_test(&Path::new(format!("roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes", case).as_str()), None, |_| {
-        frames += 1;
-        frames >= 80
-    });
+    let nes = run_test(
+        &Path::new(
+            format!(
+                "roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes",
+                case
+            )
+            .as_str(),
+        ),
+        None,
+        |_| {
+            frames += 1;
+            frames >= 80
+        },
+    );
 
     assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
 }
@@ -80,10 +100,14 @@ fn ppu_sprite_hit_tests(case: &str) {
 #[test_case("5.Emulator")]
 fn ppu_sprite_overflow_tests(case: &str) {
     let mut frames = 0;
-    let nes = run_test(&Path::new(format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case).as_str()), None, |_| {
-        frames += 1;
-        frames >= 80
-    });
+    let nes = run_test(
+        &Path::new(format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case).as_str()),
+        None,
+        |_| {
+            frames += 1;
+            frames >= 80
+        },
+    );
 
     assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
 }

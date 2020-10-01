@@ -6,7 +6,7 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Modifier, Style, Color};
+use tui::style::{Color, Modifier, Style};
 use tui::text::{Span, Spans, Text};
 use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
 use tui::{Frame, Terminal};
@@ -67,7 +67,17 @@ impl Display for PpuCtrl {
 
 impl Display for PpuMask {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![PpuMask::M, PpuMask::m, PpuMask::b, PpuMask::s, PpuMask::R, PpuMask::G, PpuMask::B].into_iter() {
+        for flag in vec![
+            PpuMask::M,
+            PpuMask::m,
+            PpuMask::b,
+            PpuMask::s,
+            PpuMask::R,
+            PpuMask::G,
+            PpuMask::B,
+        ]
+        .into_iter()
+        {
             if *self & flag == flag {
                 write!(f, "{:?}", flag)?;
             } else {
@@ -166,44 +176,87 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
         ]),
         Spans::from(vec![
             Span::from(" T: "),
-            Span::styled(format!("FY:{} NT:{}", nes.ppu.t_addr.fine_y(), nes.ppu.t_addr.nametable()), value_style),
-        ]),
-        Spans::from(vec![
-            Span::from("    "),
-            Span::styled(format!("CY:{} CX:{}", nes.ppu.t_addr.coarse_y(), nes.ppu.t_addr.coarse_x()), value_style),
-        ]),
-        Spans::from(vec![
-            Span::from(" V: "),
-            Span::styled(format!("FY:{} NT:{}", nes.ppu.v_addr.fine_y(), nes.ppu.v_addr.nametable()), value_style),
-        ]),
-        Spans::from(vec![
-            Span::from("    "),
-            Span::styled(format!("CY:{} CX:{}", nes.ppu.v_addr.coarse_y(), nes.ppu.v_addr.coarse_x()), value_style),
-        ]),
-        Spans::from(vec![
-            Span::from(" FX: "),
             Span::styled(
-                format!("{}", nes.ppu.fine_x),
+                format!(
+                    "FY:{} NT:{}",
+                    nes.ppu.t_addr.fine_y(),
+                    nes.ppu.t_addr.nametable()
+                ),
                 value_style,
             ),
         ]),
         Spans::from(vec![
+            Span::from("    "),
+            Span::styled(
+                format!(
+                    "CY:{} CX:{}",
+                    nes.ppu.t_addr.coarse_y(),
+                    nes.ppu.t_addr.coarse_x()
+                ),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" V: "),
+            Span::styled(
+                format!(
+                    "FY:{} NT:{}",
+                    nes.ppu.v_addr.fine_y(),
+                    nes.ppu.v_addr.nametable()
+                ),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from("    "),
+            Span::styled(
+                format!(
+                    "CY:{} CX:{}",
+                    nes.ppu.v_addr.coarse_y(),
+                    nes.ppu.v_addr.coarse_x()
+                ),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
+            Span::from(" FX: "),
+            Span::styled(format!("{}", nes.ppu.fine_x), value_style),
+        ]),
+        Spans::from(vec![
             Span::from(" P: "),
             Span::styled(
-                format!("{:02X} {:04X} {:02X} {:04X}", nes.ppu.pattern_data.latch.high.get(), nes.ppu.pattern_data.value.high.get(), nes.ppu.pattern_data.latch.low.get(), nes.ppu.pattern_data.value.low.get()),
+                format!(
+                    "{:02X} {:04X} {:02X} {:04X}",
+                    nes.ppu.pattern_data.latch.high.get(),
+                    nes.ppu.pattern_data.value.high.get(),
+                    nes.ppu.pattern_data.latch.low.get(),
+                    nes.ppu.pattern_data.value.low.get()
+                ),
                 value_style,
             ),
         ]),
         Spans::from(vec![
             Span::from(" A: "),
             Span::styled(
-                format!("{:02X} {:02X} {:02X} {:02X}", nes.ppu.attribute_data.latch.high.get(), nes.ppu.attribute_data.value.high.get(), nes.ppu.attribute_data.latch.low.get(), nes.ppu.attribute_data.value.low.get()),
+                format!(
+                    "{:02X} {:02X} {:02X} {:02X}",
+                    nes.ppu.attribute_data.latch.high.get(),
+                    nes.ppu.attribute_data.value.high.get(),
+                    nes.ppu.attribute_data.latch.low.get(),
+                    nes.ppu.attribute_data.value.low.get()
+                ),
                 value_style,
             ),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
-            Span::styled(format!("{}@{},{}", nes.clocks.ppu_frames, nes.ppu.scanline, nes.ppu.dot), value_style),
+            Span::styled(
+                format!(
+                    "{}@{},{}",
+                    nes.clocks.ppu_frames, nes.ppu.scanline, nes.ppu.dot
+                ),
+                value_style,
+            ),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
@@ -258,14 +311,11 @@ fn oam_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             None => "-".to_owned(),
             Some(s) => format!("{}: {},{}", s.id, s.y, s.x),
         };
-        text.push(
-            Spans::from(Span::styled(
-                format!("    {}", txt),
-                value_style,
-            ))
-        );
+        text.push(Spans::from(Span::styled(
+            format!("    {}", txt),
+            value_style,
+        )));
     }
-
 
     text.push(Spans::from(" P: "));
     for sprite in nes.ppu.primary_oam.iter() {
@@ -273,12 +323,10 @@ fn oam_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             None => "-".to_owned(),
             Some(s) => format!("{}: {},{}", s.sprite.id, s.sprite.y, s.sprite.x),
         };
-        text.push(
-            Spans::from(Span::styled(
-                format!("    {}", txt),
-                value_style,
-            ))
-        );
+        text.push(Spans::from(Span::styled(
+            format!("    {}", txt),
+            value_style,
+        )));
     }
 
     Paragraph::new(Text::from(text)).block(Block::default().title("OAM").borders(Borders::ALL))
@@ -407,13 +455,14 @@ fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: Shift, siz
         let mut line = Vec::new();
         for dot in shift.right..256 {
             let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
-            let (r,g,b) = pixel.rgb();
-            let style = Style::default().fg(Color::Rgb(r,g,b));
+            let (r, g, b) = pixel.rgb();
+            let style = Style::default().fg(Color::Rgb(r, g, b));
             line.push(Span::styled(String::from(tui::symbols::block::FULL), style));
         }
         frame.push(Spans::from(line));
     }
-    let widget = Paragraph::new(Text::from(frame)).block(Block::default().title("Frame").borders(Borders::ALL));
+    let widget = Paragraph::new(Text::from(frame))
+        .block(Block::default().title("Frame").borders(Borders::ALL));
 
     f.render_widget(widget, size);
 }
@@ -485,7 +534,10 @@ struct AppState {
 
 impl AppState {
     fn new() -> Self {
-        AppState { main_view: View::Memory, shift: Shift::default() }
+        AppState {
+            main_view: View::Memory,
+            shift: Shift::default(),
+        }
     }
 
     fn cycle_view(&mut self) {
@@ -496,7 +548,6 @@ impl AppState {
     }
 }
 
-
 // TODO: implement debugger state here.
 pub struct Debugger {
     nes: Nes,
@@ -504,9 +555,7 @@ pub struct Debugger {
 
 impl Debugger {
     pub fn new(nes: Nes) -> Self {
-        Debugger {
-            nes,
-        }
+        Debugger { nes }
     }
 
     pub fn start(&self, start_at: Option<u16>) -> Result<(), anyhow::Error> {

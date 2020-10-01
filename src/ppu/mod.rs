@@ -8,12 +8,12 @@ use std::cell::{Cell, RefCell};
 use std::ops::Generator;
 use std::rc::Rc;
 
+pub mod debug;
 pub mod reg;
 pub mod renderer;
-pub mod vram_address;
-pub mod debug;
-pub mod sprite;
 pub mod rgb;
+pub mod sprite;
+pub mod vram_address;
 
 use reg::{PpuCtrl, PpuMask, Registers};
 use renderer::Renderer;
@@ -88,7 +88,8 @@ impl Ppu {
     }
 
     pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
-        self.renderer.run(&self.registers, &self.bus, &self.oam_data)
+        self.renderer
+            .run(&self.registers, &self.bus, &self.oam_data)
     }
 }
 
@@ -119,11 +120,11 @@ impl PpuBus {
             NametableMirroring::Horizontal => {
                 // 0x2000 is mirrored at 0x2800
                 ((addr - 0x2000) % 0x800) + 0x2000
-            },
+            }
             NametableMirroring::Vertical => {
                 // 0x2000 is mirrored at 0x2400
                 ((addr - 0x2000) % 0x400) + 0x2000
-            },
+            }
             NametableMirroring::FourScreen => unimplemented!(),
         }
     }
@@ -132,7 +133,7 @@ impl PpuBus {
     fn palette_mirroring(&self, addr: u16) -> u16 {
         match addr % 0x20 {
             0x10 | 0x14 | 0x18 | 0x1C => addr - 0x10,
-            _ => addr
+            _ => addr,
         }
     }
 }
@@ -167,7 +168,11 @@ pub struct MemoryMappedRegisters {
 
 impl MemoryMappedRegisters {
     pub fn new(ppu: Rc<Ppu>) -> Self {
-        MemoryMappedRegisters { ppu, read_buffer: Cell::default(), open_bus: Cell::default() }
+        MemoryMappedRegisters {
+            ppu,
+            read_buffer: Cell::default(),
+            open_bus: Cell::default(),
+        }
     }
 
     pub fn decay_open_bus(&self) {
@@ -209,7 +214,7 @@ impl AddressSpace for MemoryMappedRegisters {
 
                         // palette values are 6bits wide
                         value | self.open_bus.get() & 0b1100_0000
-                    },
+                    }
                     _ => 0x00,
                 }
             }
@@ -223,14 +228,21 @@ impl AddressSpace for MemoryMappedRegisters {
         self.open_bus.set(value);
         match addr {
             0x2000 => self.ppu.write_status(value),
-            0x2001 => self.ppu.registers.mask.set(PpuMask::from_bits_truncate(value)),
+            0x2001 => self
+                .ppu
+                .registers
+                .mask
+                .set(PpuMask::from_bits_truncate(value)),
             0x2002 => (),
             0x2003 => self.ppu.registers.oam_addr.set(value),
             0x2004 => {
                 self.ppu
                     .oam_data
                     .write_u8(self.ppu.registers.oam_addr.get() as u16, value);
-                self.ppu.registers.oam_addr.update(|addr| addr.wrapping_add(1));
+                self.ppu
+                    .registers
+                    .oam_addr
+                    .update(|addr| addr.wrapping_add(1));
             }
             0x2005 => self.ppu.registers.write_scroll(value),
             0x2006 => self.ppu.registers.write_addr(value),

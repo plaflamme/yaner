@@ -2,10 +2,10 @@
 
 mod common;
 
-use common::run_test;
 use common::blargg::run_blargg_test;
-use test_case::test_case;
+use common::run_test;
 use std::path::Path;
+use test_case::test_case;
 
 #[test_case("01-basics")]
 #[test_case("02-implied")]
@@ -38,26 +38,33 @@ fn instr_misc(case: &str) {
 #[test]
 fn cpu_timing_test() {
     let mut frames = 0;
-    let nes = run_test(&Path::new("roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes"), None, |_| {
-        frames += 1;
-        frames >= 640
-    });
+    let nes = run_test(
+        &Path::new("roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes"),
+        None,
+        |_| {
+            frames += 1;
+            frames >= 640
+        },
+    );
 
     // NOTE: these were shown to be different when the test fails. It's not documented anywhere though...
     assert_eq!(nes.debug().cpu_bus.read_u8(0x0000), 0x60);
     assert_eq!(nes.debug().cpu_bus.read_u8(0x0001), 0xE6);
 }
 
-
 #[test_case("1.Branch_Basics")]
 #[test_case("2.Backward_Branch")]
 #[test_case("3.Forward_Branch")]
 fn cpu_branch_timing_test(case: &str) {
     let mut frames = 0;
-    let nes = run_test(&Path::new(format!("roms/nes-test-roms/branch_timing_tests/{}.nes", case).as_str()), None, |_| {
-        frames += 1;
-        frames >= 30
-    });
+    let nes = run_test(
+        &Path::new(format!("roms/nes-test-roms/branch_timing_tests/{}.nes", case).as_str()),
+        None,
+        |_| {
+            frames += 1;
+            frames >= 30
+        },
+    );
 
     // NOTE: these were shown to be different when the test fails. It's not documented anywhere though...
     assert_eq!(nes.debug().cpu_bus.read_u8(0x0000), 0x80);

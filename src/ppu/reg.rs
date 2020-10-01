@@ -1,5 +1,5 @@
-use std::cell::Cell;
 use bitflags::bitflags;
+use std::cell::Cell;
 
 use super::vram_address::VramAddress;
 
@@ -195,7 +195,8 @@ impl Registers {
         } else {
             // t: .FEDCBA ........ = d: ..FEDCBA
             // t: X...... ........ = 0
-            self.t_addr.update(|v| (v & 0x80FFu16) | ((u16_value & 0x003F) << 8));
+            self.t_addr
+                .update(|v| (v & 0x80FFu16) | ((u16_value & 0x003F) << 8));
         }
         self.addr_latch.update(|latch| !latch);
     }
@@ -303,7 +304,9 @@ mod test {
         assert!(registers.addr_latch.get());
 
         registers.addr_latch.set(false);
-        registers.t_addr.set(VramAddress::from(0b0_1000000_0000_0000));
+        registers
+            .t_addr
+            .set(VramAddress::from(0b0_1000000_0000_0000));
         registers.write_addr(0b11_010101);
         let t_addr: u16 = registers.t_addr.get().into();
         assert_eq!(t_addr, 0b0_0010101_0000_0000);
@@ -313,8 +316,12 @@ mod test {
     #[test]
     fn test_registers_second_write_addr() {
         let registers = Registers::new();
-        registers.t_addr.set(VramAddress::from(0b0_0010101_0000_0000));
-        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+        registers
+            .t_addr
+            .set(VramAddress::from(0b0_0010101_0000_0000));
+        registers
+            .v_addr
+            .set(VramAddress::from(0b1_0101010_1010_1010));
         registers.addr_latch.set(true);
         registers.write_addr(0b1111_1010);
 
@@ -330,7 +337,9 @@ mod test {
     #[test]
     fn test_registers_rw_vram_addr() {
         let registers = Registers::new();
-        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+        registers
+            .v_addr
+            .set(VramAddress::from(0b1_0101010_1010_1010));
 
         let addr = registers.rw_vram_addr();
         assert_eq!(addr, 0b1_0101010_1010_1010);
@@ -340,7 +349,9 @@ mod test {
 
         registers.ctrl.update(|ctrl| ctrl | PpuCtrl::I);
 
-        registers.v_addr.set(VramAddress::from(0b1_0101010_1010_1010));
+        registers
+            .v_addr
+            .set(VramAddress::from(0b1_0101010_1010_1010));
 
         let addr = registers.rw_vram_addr();
         assert_eq!(addr, 0b1_0101010_1010_1010);
