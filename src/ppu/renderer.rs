@@ -255,20 +255,27 @@ impl Renderer {
     ) {
         match self.dot.get() {
             1 => {
+                // NOTE: this is wrong. OAM doesn't go from OAM -> Secondary -> Primary, but
+                //   Primary -> Secondary (there's no such third memory space).
+                //   The current implementation works most of the time, but introduces edge cases.
+                //   It needs to be re-implemented on a per-cycle basis described here:
+                //   https://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation#Details
+                //   In the meantime, we clear OAM here, because it allows passing more tests...
                 self.secondary_oam.set([None; 8]);
-                if !pre_render {
-                    // clear secondary oam
-                } else {
+
+                if pre_render {
+                    // this is also "wrong" as per above.
+                    self.primary_oam.set([None; 8]);
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                 }
             }
-            257 => {
-                if !pre_render {
-                    self.cycle_sprites_evaluate(registers, oam_ram)
-                }
+            257 => if !pre_render {
+                self.cycle_sprites_evaluate(registers, oam_ram)
             }
-            321 => self.cycle_sprites_load(registers, bus),
+            321 => if !pre_render {
+                self.cycle_sprites_load(registers, bus)
+            }
             _ => (),
         }
     }
