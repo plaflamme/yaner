@@ -60,14 +60,14 @@ fn ppu_blargg_ppu_tests(case: &str) {
 #[test_case("06.right_edge")]
 #[test_case("07.screen_bottom")]
 #[test_case("08.double_height")]
-// #[test_case("09.timing_basics")]
-// #[test_case("10.timing_order")]
+#[test_case("09.timing_basics")]
+#[test_case("10.timing_order")]
 #[test_case("11.edge_timing")]
 fn ppu_sprite_hit_tests(case: &str) {
     let mut frames = 0;
     let nes = run_test(&Path::new(format!("roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes", case).as_str()), None, |_| {
         frames += 1;
-        frames >= 60
+        frames >= 80
     });
 
     assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
