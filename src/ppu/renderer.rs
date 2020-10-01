@@ -341,7 +341,7 @@ impl Renderer {
         // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
         let pixel = dot - 2;
         let sl = self.scanline.get();
-        if sl < 240 && dot < 256 {
+        if sl < 240 && dot < 257 {
             let bg_color = self.render_background_pixel(registers, pixel);
             let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
 
@@ -354,7 +354,6 @@ impl Renderer {
                 bg_color
             };
 
-            let sl = self.scanline.get();
             if sl < 241 && pixel < 257 {
                 let pixel_index = pixel + sl * 256;
 
