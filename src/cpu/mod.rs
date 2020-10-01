@@ -678,19 +678,11 @@ impl CpuBus {
 
     // This will return last write to OAM DMA and then None until the next write
     pub fn dma_latch(&self) -> Option<u8> {
-        let v = self.oam_dma.get();
-        if v.is_some() {
-            self.oam_dma.set(None)
-        };
-        v
+        self.oam_dma.take()
     }
 
     pub fn intr_latch(&self) -> Option<Interrupt> {
-        let v = self.intr.get();
-        if v.is_some() {
-            self.intr.set(None);
-        }
-        v
+        self.intr.take()
     }
 }
 
