@@ -231,7 +231,7 @@ impl Renderer {
                     // NOTE: % sprite_heigth for the pre-render line, we can probably make this less opaque.
                     let mut y_sprite = (self.scanline.get() - sprite.y as u16) % sprite_height;
                     if sprite.attr.flip_v() {
-                        y_sprite = sprite_height - 1 - y_sprite;
+                        y_sprite ^= sprite_height - 1;
                     }
                     // for large sprites, if y_sprite > 8, we must use the second tile
                     let second_tile_offset = y_sprite & 8;
@@ -255,9 +255,9 @@ impl Renderer {
     ) {
         match self.dot.get() {
             1 => {
+                self.secondary_oam.set([None; 8]);
                 if !pre_render {
                     // clear secondary oam
-                    self.secondary_oam.set([None; 8]);
                 } else {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
