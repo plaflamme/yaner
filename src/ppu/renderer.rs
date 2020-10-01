@@ -192,7 +192,9 @@ impl Renderer {
             //   Sprite data is delayed by one scanline; you must subtract 1 from the sprite's Y coordinate before writing it here.
             if scanline >= sprite_y && scanline < sprite_end_y {
                 if count == 8 {
-                    registers.status.update(|s| s | PpuStatus::O);
+                    if registers.mask.get().is_rendering() {
+                        registers.status.update(|s| s | PpuStatus::O);
+                    }
                     break;
                 }
                 secondary_oam[count] = Some(sprite);

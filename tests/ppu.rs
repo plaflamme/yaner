@@ -72,3 +72,18 @@ fn ppu_sprite_hit_tests(case: &str) {
 
     assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
 }
+
+#[test_case("1.Basics")]
+#[test_case("2.Details")]
+// #[test_case("3.Timing")] // pretty sure this is because of DMA timing that isn't quite right yet.
+// #[test_case("4.Obscure")]
+#[test_case("5.Emulator")]
+fn ppu_sprite_overflow_tests(case: &str) {
+    let mut frames = 0;
+    let nes = run_test(&Path::new(format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case).as_str()), None, |_| {
+        frames += 1;
+        frames >= 80
+    });
+
+    assert_eq!(nes.debug().cpu_bus.read_u8(0x00F8), 0x01);
+}
