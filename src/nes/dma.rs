@@ -48,6 +48,15 @@ impl Dma {
                 match self.state.get() {
                     None => yield DmaCycle::NoDma,
                     Some(state) => {
+                        // http://wiki.nesdev.com/w/index.php/PPU_OAM#DMA
+
+                        // dummy read cycle
+                        yield DmaCycle::Tick;
+                        if state.odd_cycle {
+                            // extra cycle on odd cpu cycles
+                            yield DmaCycle::Tick;
+                        }
+
                         for addr_lo in 0u16..=0xFF {
                             let cpu_addr = state.addr_hi | addr_lo;
                             let value = cpu.read_u8(cpu_addr);
@@ -55,17 +64,12 @@ impl Dma {
 
                             // 0x2004 is OAMDATA
                             cpu.write_u8(0x2004, value);
-                            yield DmaCycle::Tick;
+                            if addr_lo == 0xFF {
+                                yield DmaCycle::Done;
+                            } else {
+                                yield DmaCycle::Tick;
+                            }
                         }
-                        // dummy read cycle
-                        yield DmaCycle::Tick;
-
-                        if state.odd_cycle {
-                            // extra cycle on odd cpu cycles
-                            yield DmaCycle::Tick;
-                        }
-
-                        yield DmaCycle::Done;
                     }
                 }
             }

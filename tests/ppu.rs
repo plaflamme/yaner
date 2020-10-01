@@ -58,7 +58,7 @@ fn ppu_blargg_ppu_tests(case: &str) {
 #[test_case("04.flip")]
 #[test_case("05.left_clip")]
 #[test_case("06.right_edge")]
-// #[test_case("07.screen_bottom")]
+#[test_case("07.screen_bottom")]
 #[test_case("08.double_height")]
 // #[test_case("09.timing_basics")]
 // #[test_case("10.timing_order")]

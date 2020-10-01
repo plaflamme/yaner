@@ -109,10 +109,10 @@ impl Nes {
                 };
 
                 let mut dma_step = || match Pin::new(&mut dma).resume(()) {
-                    GeneratorState::Yielded(DmaCycle::NoDma) => true,
+                    GeneratorState::Yielded(DmaCycle::NoDma) => false,
                     GeneratorState::Yielded(DmaCycle::Tick) => true,
                     GeneratorState::Yielded(DmaCycle::Done) => false,
-                    GeneratorState::Complete(_) => true,
+                    GeneratorState::Complete(_) => panic!("dma stopped"),
                 };
 
                 if let Some(addr) = self.cpu.bus.dma_latch() {
@@ -120,19 +120,22 @@ impl Nes {
                     cpu_suspended = true;
                 }
 
-                if !cpu_suspended && self.clocks.ppu_cycles.get() % 3 == 0 {
-                    match Pin::new(&mut cpu).resume(()) {
-                        GeneratorState::Yielded(CpuCycle::Halt) => break,
-                        GeneratorState::Yielded(cpu_cycle) => {
-                            self.clocks.tick(true);
-                            yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
+                if self.clocks.ppu_cycles.get() % 3 == 0 {
+                    if !cpu_suspended {
+                        match Pin::new(&mut cpu).resume(()) {
+                            GeneratorState::Yielded(CpuCycle::Halt) => break,
+                            GeneratorState::Yielded(cpu_cycle) => {
+                                self.clocks.tick(true);
+                                yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
+                            }
+                            GeneratorState::Complete(_) => panic!("cpu stopped"),
                         }
-                        GeneratorState::Complete(_) => panic!("cpu stopped"),
+                    } else {
+                        cpu_suspended = dma_step();
+                        self.clocks.tick(false);
+                        yield NesCycle::PpuCycle(ppu_step())
                     }
                 } else {
-                    if cpu_suspended {
-                        cpu_suspended = dma_step();
-                    }
                     self.clocks.tick(false);
                     yield NesCycle::PpuCycle(ppu_step());
                 }
