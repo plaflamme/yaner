@@ -187,22 +187,19 @@ impl SpritePipeline {
                             }
                         }
                     }
-
                     let addr = if self.sprite_in_range.get() {
-                        registers.oam_addr.update(|addr| addr.saturating_add(1))
+                        registers.oam_addr.update(|addr| addr.wrapping_add(1))
                     } else {
-                        registers.oam_addr.update(|addr| addr.saturating_add(4))
+                        registers.oam_addr.update(|addr| addr.wrapping_add(4))
                     };
 
-                    self.oam_done.set(addr == 0xFF);
+                    // wrapping around means we're done.
+                    if addr == 0 {
+                        self.oam_done.set(true);
+                    }
                 }
             }
             257..=320 => {
-                if dot == 257 {
-                    // TODO: figure out when this is supposed to be cleared.
-                    // I was counting on keeping track of the number of sprites
-                    self.sprite_output_units.set([None;8]);
-                }
                 //"OAMADDR is set to 0 during each of ticks 257-320 (the sprite tile loading interval) of the pre-render and visible scanlines." (When rendering)
                 registers.oam_addr.set(0);
 
@@ -448,8 +445,9 @@ impl Renderer {
         bus: &dyn AddressSpace,
         pre_render: bool,
     ) {
+        let dot = self.dot.get();
         if pre_render {
-            match self.dot.get() {
+            match dot {
                 1 => {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
@@ -462,8 +460,16 @@ impl Renderer {
                 }
                 _ => ()
             }
-        } else if registers.mask.get().is_rendering() {
-            self.sprite_pipeline.cycle(self.scanline.get(), self.dot.get(), registers, oam_ram, bus)
+        } else {
+            // We clear the output sprites for the next scanline to make sure we're not keeping
+            // garbage around due to enabling / disabling rendering (which prevents evaluating this
+            // for the next scanline)
+            if dot == 257 {
+                self.sprite_pipeline.sprite_output_units.set([None;8]);
+            }
+            if registers.mask.get().is_rendering() {
+                self.sprite_pipeline.cycle(self.scanline.get(), dot, registers, oam_ram, bus)
+            }
         }
     }
 

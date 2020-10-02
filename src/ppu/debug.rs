@@ -1,6 +1,6 @@
 use crate::ppu::reg::PpuStatus;
 use crate::ppu::renderer::{AttributeData, PatternData, Pixel, SpritePipeline};
-use crate::ppu::sprite::{Sprite, SpriteData};
+use crate::ppu::sprite::SpriteData;
 use crate::ppu::vram_address::VramAddress;
 use crate::ppu::{Ppu, PpuCtrl, PpuMask};
 
