@@ -94,6 +94,168 @@ impl Pixel {
     }
 }
 
+#[derive(Default)]
+pub(super) struct SpritePipeline {
+    pub(super) secondary_oam: Cell<[u8; 32]>,
+    pub(super) sprite_output_units: Cell<[Option<SpriteData>;8]>,
+
+    pub(super) secondary_oam_index: Cell<u8>,
+    pub(super) oam_entry: Cell<u8>,
+    pub(super) oam_done: Cell<bool>,
+    // whether the current sprite was in range when we looked at its y coordinate
+    pub(super) sprite_in_range: Cell<bool>,
+}
+
+impl SpritePipeline {
+
+    fn write_u8(&self, value: u8) {
+        self.secondary_oam.update(|mut oam| {
+            oam[self.secondary_oam_index.get() as usize] = value;
+            oam
+        });
+    }
+
+    fn clear(&self, index: usize) {
+        self.secondary_oam.update(|mut oam| {
+            oam[index] = 0xFF;
+            oam
+        });
+    }
+
+    fn is_full(&self) -> bool {
+        self.secondary_oam_index.get() >= 32
+    }
+
+    fn sprite_count(&self) -> u8 {
+        // the index points to the 0th byte of the next sprite, so we divide by 4 to get the number of sprites.
+        self.secondary_oam_index.get() >> 2
+    }
+
+    fn cycle(
+        &self,
+        scanline: u16,
+        dot: u16,
+        registers: &Registers,
+        oam_ram: &dyn AddressSpace,
+        bus: &dyn AddressSpace,
+    ) {
+        match dot {
+            1..=64 => {
+                // "Cycles 1-64: Secondary OAM (32-byte buffer for current sprites on scanline) is initialized to $FF - attempting to read $2004 will return $FF.
+                // Internally, the clear operation is implemented by reading from the OAM and writing into the secondary OAM as usual, only a signal is active that makes the read always return $FF."
+                self.clear((dot - 1) as usize >> 1);
+            }
+            65..=256 => {
+                if dot == 65 {
+                    self.secondary_oam_index.set(0);
+                    self.sprite_in_range.set(false);
+                    self.oam_done.set(false);
+                }
+
+                if dot & 0x01 != 0 {
+                    // "On odd cycles, data is read from (primary) OAM"
+                    self.oam_entry.set(oam_ram.read_u8(registers.oam_addr.get() as u16));
+                } else if !self.oam_done.get() {
+                    // "On even cycles, data is written to secondary OAM (unless secondary OAM is full, in which case it will read the value in secondary OAM instead)"
+
+                    let entry = self.oam_entry.get();
+                    let sprite_cycle = self.secondary_oam_index.get() % 4;
+                    match sprite_cycle {
+                        0 => {
+                            let sprite_y = entry as u16;
+                            let sprite_y_end = sprite_y + registers.ctrl.get().sprite_height() as u16;
+                            let in_range = scanline >= sprite_y && scanline < sprite_y_end;
+                            self.sprite_in_range.set(in_range);
+
+                            if !self.is_full() {
+                                self.write_u8(entry);
+                                if in_range {
+                                    self.secondary_oam_index.update(|s| s + 1);
+                                }
+                            } else {
+                                if in_range {
+                                    registers.status.update(|s| s | PpuStatus::O);
+                                }
+                            }
+                        }
+                        _ => {
+                            if !self.is_full() {
+                                self.write_u8(entry);
+                                if self.sprite_in_range.get() {
+                                    self.secondary_oam_index.update(|s| s + 1);
+                                }
+                            }
+                        }
+                    }
+
+                    let addr = if self.sprite_in_range.get() {
+                        registers.oam_addr.update(|addr| addr.saturating_add(1))
+                    } else {
+                        registers.oam_addr.update(|addr| addr.saturating_add(4))
+                    };
+
+                    self.oam_done.set(addr == 0xFF);
+                }
+            }
+            257..=320 => {
+                if dot == 257 {
+                    // TODO: figure out when this is supposed to be cleared.
+                    // I was counting on keeping track of the number of sprites
+                    self.sprite_output_units.set([None;8]);
+                }
+                //"OAMADDR is set to 0 during each of ticks 257-320 (the sprite tile loading interval) of the pre-render and visible scanlines." (When rendering)
+                registers.oam_addr.set(0);
+
+                let cycle = (dot - 257) % 8;
+                let sprite_index = ((dot - 257) / 8) as usize;
+                match cycle {
+                    0 => if sprite_index < self.sprite_count() as usize {
+                        let ctrl = registers.ctrl.get();
+                        let oam = self.secondary_oam.get();
+                        let base = sprite_index * 4;
+                        let sprite_oam: [u8;4] = [
+                            oam[base],
+                            oam[base+1],
+                            oam[base+2],
+                            oam[base+3],
+                        ];
+                        let sprite = Sprite::new(0, sprite_oam);
+
+                        let base_addr = if ctrl.large_sprites() {
+                            let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
+                            let addr = (sprite.tile_index & 0b1111_1110) as u16;
+                            pattern_table | addr * 16
+                        } else {
+                            let pattern_table = ctrl.sprite_pattern_table_address();
+                            let addr = sprite.tile_index as u16;
+                            pattern_table | addr * 16
+                        };
+
+                        let sprite_height = ctrl.sprite_height() as u16;
+                        let mut y_sprite = scanline - sprite.y as u16;
+                        if sprite.attr.flip_v() {
+                            y_sprite ^= sprite_height - 1;
+                        }
+                        // for large sprites, if y_sprite > 8, we must use the second tile
+                        let second_tile_offset = y_sprite & 8;
+                        let addr = base_addr + y_sprite + second_tile_offset;
+                        let tile_low = bus.read_u8(addr);
+                        let tile_high = bus.read_u8(addr + 8);
+                        let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
+
+                        self.sprite_output_units.update(|mut o| {
+                            o[sprite_index] = Some(sprite_data);
+                            o
+                        });
+                    }
+                    _ => ()
+                }
+            }
+            _ => ()
+        }
+    }
+}
+
 pub struct Renderer {
     // the scanline and dot we're about to draw
     pub scanline: Cell<u16>,
@@ -114,8 +276,7 @@ pub struct Renderer {
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 
-    pub(super) primary_oam: Cell<[Option<SpriteData>; 8]>,
-    pub(super) secondary_oam: Cell<[Option<Sprite>; 8]>,
+    pub(super) sprite_pipeline: SpritePipeline,
 }
 
 impl Renderer {
@@ -131,8 +292,7 @@ impl Renderer {
             attribute_entry: Cell::new(0),
             suppress_vbl: Cell::new(false),
             suppress_nmi: Cell::new(false),
-            primary_oam: Cell::new([None; 8]),
-            secondary_oam: Cell::new([None; 8]),
+            sprite_pipeline: SpritePipeline::default(),
         }
     }
 
@@ -169,7 +329,7 @@ impl Renderer {
         self.pattern_data.shift();
         self.attribute_data.shift();
     }
-
+/*
     // sprite evaluation for next scanline, fills in secondary_oam with up to 8 sprites.
     fn cycle_sprites_evaluate(&self, registers: &Registers, oam_ram: &dyn AddressSpace) {
         let scanline = self.scanline.get();
@@ -279,6 +439,33 @@ impl Renderer {
             _ => (),
         }
     }
+*/
+
+    fn cycle_sprites(
+        &self,
+        registers: &Registers,
+        oam_ram: &dyn AddressSpace,
+        bus: &dyn AddressSpace,
+        pre_render: bool,
+    ) {
+        if pre_render {
+            match self.dot.get() {
+                1 => {
+                    // Clear sprite overflow and 0hit
+                    registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
+                }
+                257..=320 => {
+                    //"OAMADDR is set to 0 during each of ticks 257-320 (the sprite tile loading interval) of the pre-render and visible scanlines." (When rendering)
+                    if registers.mask.get().is_rendering() {
+                        registers.oam_addr.set(0);
+                    }
+                }
+                _ => ()
+            }
+        } else if registers.mask.get().is_rendering() {
+            self.sprite_pipeline.cycle(self.scanline.get(), self.dot.get(), registers, oam_ram, bus)
+        }
+    }
 
     fn render_sprite_pixel(
         &self,
@@ -296,7 +483,7 @@ impl Renderer {
         } else {
             let mut palette_color = PaletteColor::default();
             let mut front_priority = false;
-            let s: &Cell<[Option<SpriteData>]> = &self.primary_oam;
+            let s: &Cell<[Option<SpriteData>]> = &self.sprite_pipeline.sprite_output_units;
             for cell in s.as_slice_of_cells().iter().rev() {
                 match cell.get() {
                     None => (),

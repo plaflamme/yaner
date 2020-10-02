@@ -249,6 +249,13 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             ),
         ]),
         Spans::from(vec![
+            Span::from(" O: "),
+            Span::styled(
+                format!("{:02X}",nes.ppu.oam_addr,),
+                value_style,
+            ),
+        ]),
+        Spans::from(vec![
             Span::from(" CYC: "),
             Span::styled(
                 format!(
@@ -301,35 +308,44 @@ fn prg_rom<B: Backend>(
     f.render_stateful_widget(list, chunk, &mut state);
 }
 
-fn oam_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
+fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
-    let mut text = Vec::new();
-    text.push(Spans::from(" S: "));
-    for sprite in nes.ppu.secondary_oam.iter() {
-        let txt = match sprite {
-            None => "-".to_owned(),
-            Some(s) => format!("{}: {},{}", s.id, s.y, s.x),
-        };
-        text.push(Spans::from(Span::styled(
-            format!("    {}", txt),
+    let mut s_spans = Vec::new();
+
+    s_spans.push(
+        Spans::from(vec![
+            Span::from(" OE: "),
+            Span::styled(
+                format!("{:02X}",nes.ppu.sprite_pipeline.oam_entry),
+                value_style,
+            ),
+        ])
+    );
+    let s_oam = nes.ppu.sprite_pipeline.secondary_oam;
+
+    s_spans.push(Spans::from(Span::from(" SOAM: ")));
+    for i in 0..8 as usize {
+        let base = i * 4;
+        let span = Span::styled(
+            format!("    {:02X} {:02X} {:02X} {:02X}", s_oam[base], s_oam[base+1], s_oam[base+2], s_oam[base+3]),
             value_style,
-        )));
+        );
+        s_spans.push(Spans::from(span));
     }
 
-    text.push(Spans::from(" P: "));
-    for sprite in nes.ppu.primary_oam.iter() {
-        let txt = match sprite {
-            None => "-".to_owned(),
-            Some(s) => format!("{}: {},{}", s.sprite.id, s.sprite.y, s.sprite.x),
-        };
-        text.push(Spans::from(Span::styled(
-            format!("    {}", txt),
-            value_style,
-        )));
+    s_spans.push(Spans::from(Span::from(" OUT: ")));
+    for output in nes.ppu.sprite_pipeline.output_units.iter() {
+        if let Some(sprite) = output {
+            let span = Span::styled(
+                format!("    {},{} {:?}", sprite.sprite.y, sprite.sprite.x, sprite.sprite.attr),
+                value_style,
+            );
+            s_spans.push(Spans::from(span));
+        }
     }
 
-    Paragraph::new(Text::from(text)).block(Block::default().title("OAM").borders(Borders::ALL))
+    Paragraph::new(Text::from(s_spans)).block(Block::default().title("OAM").borders(Borders::ALL))
 }
 
 fn statusbar<B: Backend>(
@@ -343,7 +359,7 @@ fn statusbar<B: Backend>(
         .constraints(
             [
                 Constraint::Length(10),
-                Constraint::Length(13),
+                Constraint::Length(14),
                 Constraint::Length(20),
                 Constraint::Percentage(100),
             ]
@@ -353,7 +369,7 @@ fn statusbar<B: Backend>(
 
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
-    f.render_widget(oam_block(nes), chunks[2]);
+    f.render_widget(sprite_block(nes), chunks[2]);
     prg_rom(f, &nes, addr_space, chunks[3]);
 }
 
