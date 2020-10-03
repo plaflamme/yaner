@@ -305,4 +305,67 @@ mod test {
         assert!(addr.incr_high());
         assert_eq!(0, addr.high())
     }
+
+    #[test]
+    fn test_sprite_pipeline_clear() {
+        let pipeline = SpritePipeline::default();
+
+        let mut oam = [0u8; 32];
+        assert_eq!(oam, pipeline.secondary_oam.get());
+
+        pipeline.clear(0);
+
+        oam[0] = 0xFF;
+        assert_eq!(oam, pipeline.secondary_oam.get());
+
+        pipeline.clear(2);
+        oam[2] = 0xFF;
+        assert_eq!(oam, pipeline.secondary_oam.get());
+    }
+
+    #[test]
+    fn test_sprite_pipeline_write() {
+        let pipeline = SpritePipeline::default();
+
+        let mut oam = [0u8; 32];
+        assert_eq!(oam, pipeline.secondary_oam.get());
+
+        pipeline.write_u8(0xEE);
+        oam[0] = 0xEE;
+        assert_eq!(oam, pipeline.secondary_oam.get());
+
+        pipeline.secondary_oam_index.set(24);
+        pipeline.write_u8(0xAB);
+        oam[24] = 0xAB;
+        assert_eq!(oam, pipeline.secondary_oam.get());
+    }
+
+    #[test]
+    fn test_sprite_pipeline_is_full() {
+        let pipeline = SpritePipeline::default();
+        assert!(!pipeline.is_full());
+        pipeline.secondary_oam_index.set(31);
+        assert!(!pipeline.is_full());
+        pipeline.secondary_oam_index.set(32);
+        assert!(pipeline.is_full());
+        pipeline.secondary_oam_index.set(64);
+        assert!(pipeline.is_full());
+    }
+
+    #[test]
+    fn test_sprite_pipeline_sprite_count() {
+        let pipeline = SpritePipeline::default();
+        assert_eq!(0, pipeline.sprite_count());
+        pipeline.secondary_oam_index.set(1);
+        assert_eq!(0, pipeline.sprite_count());
+        pipeline.secondary_oam_index.set(2);
+        assert_eq!(0, pipeline.sprite_count());
+        pipeline.secondary_oam_index.set(3);
+        assert_eq!(0, pipeline.sprite_count());
+
+        pipeline.secondary_oam_index.set(4);
+        assert_eq!(1, pipeline.sprite_count());
+        pipeline.secondary_oam_index.set(32);
+        assert_eq!(8, pipeline.sprite_count());
+    }
 }
