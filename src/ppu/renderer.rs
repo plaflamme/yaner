@@ -187,6 +187,7 @@ impl SpritePipeline {
 
                     let entry = self.oam_entry.get();
                     let mut oam_addr = self.oam_addr.get();
+                    let prev_oam_high = oam_addr.high();
 
                     let in_range = if self.sprite_in_range.get() { true } else {
                         let sprite_y = entry as u16;
@@ -203,15 +204,11 @@ impl SpritePipeline {
                             if oam_addr.incr_low() {
                                 // finished copying this sprite's data, move to the next one.
                                 self.sprite_in_range.set(false);
-                                if oam_addr.incr_high() {
-                                    self.oam_done.set(true);
-                                }
+                                oam_addr.incr_high();
                             }
                         } else {
                             // nothing to do for this sprite, skip to the next one
-                            if oam_addr.incr_high() {
-                                self.oam_done.set(true);
-                            }
+                            oam_addr.incr_high();
                         }
                     } else {
                         // OAM is full
@@ -219,17 +216,17 @@ impl SpritePipeline {
                             registers.status.update(|s| s | PpuStatus::O);
 
                             if oam_addr.incr_low() {
-                                if oam_addr.incr_high() {
-                                    self.oam_done.set(true);
-                                }
+                                oam_addr.incr_high();
                             }
                         } else {
                             // This is the overflow bug where we increment both high and low (without carry)
                             oam_addr.incr_low();
-                            if oam_addr.incr_high() {
-                                self.oam_done.set(true);
-                            }
+                            oam_addr.incr_high();
                         }
+                    }
+                    // if we've wrapped around, we're done.
+                    if prev_oam_high != 0 && oam_addr.high() == 0 {
+                        self.oam_done.set(true);
                     }
                     self.oam_addr.set(oam_addr);
                     registers.oam_addr.set(oam_addr.raw());
