@@ -18,7 +18,6 @@ fn oam_read() {
 }
 
 #[test]
-#[ignore] // slow, run with cargo test -- --ignored
 fn oam_stress() {
     run_blargg_test("roms/nes-test-roms/oam_stress/oam_stress.nes");
 }
