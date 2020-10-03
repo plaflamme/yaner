@@ -195,7 +195,7 @@ impl Renderer {
             // garbage around due to enabling / disabling rendering (which prevents evaluating this
             // for the next scanline)
             if dot == 257 {
-                self.sprite_pipeline.sprite_output_units.set([None;8]);
+                self.sprite_pipeline.reset_output_units();
             }
             if registers.mask.get().is_rendering() {
                 self.sprite_pipeline.cycle(self.scanline.get(), dot, registers, oam_ram, bus)
@@ -219,42 +219,32 @@ impl Renderer {
         } else {
             let mut palette_color = PaletteColor::default();
             let mut front_priority = false;
-            let s: &Cell<[Option<SpriteData>]> = &self.sprite_pipeline.sprite_output_units;
-            for cell in s.as_slice_of_cells().iter().rev() {
-                match cell.get() {
-                    None => (),
-                    Some(sprite_data) => {
-                        let sprite_x = sprite_data.sprite.x as u16;
-                        let sprite_end_x = sprite_x + 8;
-                        if dot >= sprite_x && dot < sprite_end_x {
-                            let mut x_sprite = dot - sprite_data.sprite.x as u16;
-                            if sprite_data.sprite.attr.flip_h() {
-                                x_sprite ^= 7;
-                            }
-                            let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
-                            let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
-                            let color = (high << 1 | low) as u8;
+            for sprite_data in self.sprite_pipeline.sprite_output_at(dot) {
+                let mut x_sprite = dot - sprite_data.sprite.x as u16;
+                if sprite_data.sprite.attr.flip_h() {
+                    x_sprite ^= 7;
+                }
+                let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
+                let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
+                let color = (high << 1 | low) as u8;
 
-                            // sprite-0 hit, only if background rendering is on and pixel is non-transparent
-                            if sprite_data.sprite.id == 0
-                                && color != 0
-                                && dot != 255
-                                && mask.contains(PpuMask::b)
-                                && bg_color.is_opaque()
-                            {
-                                registers.status.update(|s| s | PpuStatus::S);
-                            }
+                // sprite-0 hit, only if background rendering is on and pixel is non-transparent
+                if sprite_data.sprite.id == 0
+                    && color != 0
+                    && dot != 255
+                    && mask.contains(PpuMask::b)
+                    && bg_color.is_opaque()
+                {
+                    registers.status.update(|s| s | PpuStatus::S);
+                }
 
-                            let sprite_color = PaletteColor::from(
-                                sprite_data.sprite.attr.palette() + 0b100,
-                                color,
-                            );
-                            if sprite_color.is_opaque() {
-                                palette_color = sprite_color;
-                                front_priority = sprite_data.sprite.attr.fg_priority();
-                            }
-                        }
-                    }
+                let sprite_color = PaletteColor::from(
+                    sprite_data.sprite.attr.palette() + 0b100,
+                    color,
+                );
+                if sprite_color.is_opaque() {
+                    palette_color = sprite_color;
+                    front_priority = sprite_data.sprite.attr.fg_priority();
                 }
             }
 

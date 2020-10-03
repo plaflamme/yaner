@@ -83,8 +83,8 @@ impl OamAddr {
 
 #[derive(Default)]
 pub(super) struct SpritePipeline {
-    // The sprite date to render on the current scanline
-    pub(super) sprite_output_units: Cell<[Option<SpriteData>;8]>,
+    // The sprite data to render on the current scanline
+    sprite_output_units: Cell<[Option<SpriteData>;8]>,
 
     secondary_oam: Cell<[u8; 32]>,
     secondary_oam_index: Cell<u8>,
@@ -122,6 +122,27 @@ impl SpritePipeline {
     fn sprite_count(&self) -> u8 {
         // the index points to the 0th byte of the next sprite, so we divide by 4 to get the number of sprites.
         self.secondary_oam_index.get() >> 2
+    }
+
+    pub fn reset_output_units(&self) {
+        self.sprite_output_units.update(|mut s| {
+            s.fill(None);
+            s
+        });
+    }
+
+    // returns the sprites that overlap with the provided dot (x coordinate)
+    pub fn sprite_output_at(&self, dot: u16) -> Vec<SpriteData> {
+        self.sprite_output_units.get()
+            .iter()
+            .filter_map(|s| {
+                s.filter(|sprite_data| {
+                    let sprite_x = sprite_data.sprite.x as u16;
+                    let sprite_end_x = sprite_x + 8;
+                    dot >= sprite_x && dot < sprite_end_x
+                })
+            })
+            .collect()
     }
 
     pub fn cycle(
