@@ -313,7 +313,13 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 
     let mut s_spans = Vec::new();
 
-    s_spans.push(
+    s_spans.append(vec![
+        Spans::from(vec![
+            Span::from(" OE: "),
+            Span::styled(
+                format!("h:{:02X} l:{:02X}", nes.ppu.sprite_pipeline.oam_addr.high(), nes.ppu.sprite_pipeline.oam_addr.low()),
+                value_style,
+            )]),
         Spans::from(vec![
             Span::from(" OE: "),
             Span::styled(
@@ -321,6 +327,7 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ])
+    ].as_mut()
     );
     let s_oam = nes.ppu.sprite_pipeline.secondary_oam;
 
@@ -435,7 +442,7 @@ fn h_rams<'a, B: Backend>(
 ) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(vec![Constraint::Length(55), Constraint::Length(55)])
+        .constraints(vec![Constraint::Length(57), Constraint::Length(57)])
         .split(size);
     f.render_widget(left.to_block(shift), chunks[0]);
     f.render_widget(right.to_block(shift), chunks[1]);

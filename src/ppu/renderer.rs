@@ -94,15 +94,41 @@ impl Pixel {
     }
 }
 
+bitregions! {
+    pub OamAddr u8 {
+        LOW: 0b0000_0011,
+        HIGH: 0b1111_1100,
+    }
+}
+
+impl OamAddr {
+    // increments the low part of the address, returns true if we wrapped around
+    fn incr_low(&mut self) -> bool {
+        let low = (self.low() + 1) & OamAddr::LOW;
+        self.set_low(low);
+        low == 0
+    }
+    // increments the high part of the address, returns true if we wrapped around
+    fn incr_high(&mut self) -> bool {
+        let high = (self.high() + 1) & 0b0011_1111;
+        self.set_high(high);
+        high == 0
+    }
+}
+
 #[derive(Default)]
 pub(super) struct SpritePipeline {
     pub(super) secondary_oam: Cell<[u8; 32]>,
     pub(super) sprite_output_units: Cell<[Option<SpriteData>;8]>,
-
     pub(super) secondary_oam_index: Cell<u8>,
+
+    // This is a different representation of PpuCtrl::OamAddr so we can increment different parts of it independently.
+    pub(super) oam_addr: Cell<OamAddr>,
+    // Value read from main OAM on odd cycles
     pub(super) oam_entry: Cell<u8>,
+    // Whether we've completed the evaluation
     pub(super) oam_done: Cell<bool>,
-    // whether the current sprite was in range when we looked at its y coordinate
+    // Whether the current sprite was in range when we looked at its y coordinate
     pub(super) sprite_in_range: Cell<bool>,
 }
 
@@ -147,6 +173,7 @@ impl SpritePipeline {
             }
             65..=256 => {
                 if dot == 65 {
+                    self.oam_addr.set(OamAddr::new(registers.oam_addr.get()));
                     self.secondary_oam_index.set(0);
                     self.sprite_in_range.set(false);
                     self.oam_done.set(false);
@@ -159,44 +186,53 @@ impl SpritePipeline {
                     // "On even cycles, data is written to secondary OAM (unless secondary OAM is full, in which case it will read the value in secondary OAM instead)"
 
                     let entry = self.oam_entry.get();
-                    let sprite_cycle = self.secondary_oam_index.get() % 4;
-                    match sprite_cycle {
-                        0 => {
-                            let sprite_y = entry as u16;
-                            let sprite_y_end = sprite_y + registers.ctrl.get().sprite_height() as u16;
-                            let in_range = scanline >= sprite_y && scanline < sprite_y_end;
-                            self.sprite_in_range.set(in_range);
+                    let mut oam_addr = self.oam_addr.get();
 
-                            if !self.is_full() {
-                                self.write_u8(entry);
-                                if in_range {
-                                    self.secondary_oam_index.update(|s| s + 1);
-                                }
-                            } else {
-                                if in_range {
-                                    registers.status.update(|s| s | PpuStatus::O);
-                                }
-                            }
-                        }
-                        _ => {
-                            if !self.is_full() {
-                                self.write_u8(entry);
-                                if self.sprite_in_range.get() {
-                                    self.secondary_oam_index.update(|s| s + 1);
-                                }
-                            }
-                        }
-                    }
-                    let addr = if self.sprite_in_range.get() {
-                        registers.oam_addr.update(|addr| addr.wrapping_add(1))
-                    } else {
-                        registers.oam_addr.update(|addr| addr.wrapping_add(4))
+                    let in_range = if self.sprite_in_range.get() { true } else {
+                        let sprite_y = entry as u16;
+                        let sprite_y_end = sprite_y + registers.ctrl.get().sprite_height() as u16;
+                        self.sprite_in_range.update(|_| scanline >= sprite_y && scanline < sprite_y_end)
                     };
 
-                    // wrapping around means we're done.
-                    if addr == 0 {
-                        self.oam_done.set(true);
+                    if !self.is_full() {
+                        self.write_u8(entry);
+
+                        if in_range {
+                            self.secondary_oam_index.update(|s| s + 1);
+                            // NOTE: Mesen tests against the index in secondary oam apparently to replicate some obscure corner case.
+                            if oam_addr.incr_low() {
+                                // finished copying this sprite's data, move to the next one.
+                                self.sprite_in_range.set(false);
+                                if oam_addr.incr_high() {
+                                    self.oam_done.set(true);
+                                }
+                            }
+                        } else {
+                            // nothing to do for this sprite, skip to the next one
+                            if oam_addr.incr_high() {
+                                self.oam_done.set(true);
+                            }
+                        }
+                    } else {
+                        // OAM is full
+                        if in_range {
+                            registers.status.update(|s| s | PpuStatus::O);
+
+                            if oam_addr.incr_low() {
+                                if oam_addr.incr_high() {
+                                    self.oam_done.set(true);
+                                }
+                            }
+                        } else {
+                            // This is the overflow bug where we increment both high and low (without carry)
+                            oam_addr.incr_low();
+                            if oam_addr.incr_high() {
+                                self.oam_done.set(true);
+                            }
+                        }
                     }
+                    self.oam_addr.set(oam_addr);
+                    registers.oam_addr.set(oam_addr.raw());
                 }
             }
             257..=320 => {

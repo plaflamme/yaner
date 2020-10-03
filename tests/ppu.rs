@@ -95,8 +95,8 @@ fn ppu_sprite_hit_tests(case: &str) {
 
 #[test_case("1.Basics")]
 #[test_case("2.Details")]
-// #[test_case("3.Timing")] // pretty sure this is because of DMA timing that isn't quite right yet.
-// #[test_case("4.Obscure")]
+#[test_case("3.Timing")] // http://forums.nesdev.com/viewtopic.php?t=2295
+#[test_case("4.Obscure")]
 #[test_case("5.Emulator")]
 fn ppu_sprite_overflow_tests(case: &str) {
     let mut frames = 0;
@@ -105,7 +105,7 @@ fn ppu_sprite_overflow_tests(case: &str) {
         None,
         |_| {
             frames += 1;
-            frames >= 80
+            frames >= 160
         },
     );
 
