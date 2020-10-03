@@ -5,7 +5,7 @@ use std::ops::Generator;
 use super::rgb;
 use crate::memory::AddressSpace;
 use crate::ppu::reg::{PpuCtrl, PpuMask, PpuStatus};
-use crate::ppu::sprite::{SpriteData, SpritePipeline};
+use crate::ppu::sprite::SpritePipeline;
 use crate::ppu::{PpuCycle, Registers};
 
 #[derive(Clone, Default)]
