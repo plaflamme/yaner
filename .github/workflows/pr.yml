@@ -15,3 +15,5 @@ jobs:
           override: true
       - uses: actions-rs/cargo@v1
       - uses: boa-dev/criterion-compare-action@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
