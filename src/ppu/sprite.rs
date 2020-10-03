@@ -1,7 +1,7 @@
 use bitregions::bitregions;
 use crate::ppu::reg::{PpuStatus, Registers};
 use crate::memory::AddressSpace;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 bitregions! {
     pub Attributes u8 {
@@ -84,7 +84,7 @@ impl OamAddr {
 #[derive(Default)]
 pub(super) struct SpritePipeline {
     // The sprite data to render on the current scanline
-    sprite_output_units: Cell<[Option<SpriteData>;8]>,
+    sprite_output_units: RefCell<Vec<SpriteData>>,
 
     secondary_oam: Cell<[u8; 32]>,
     secondary_oam_index: Cell<u8>,
@@ -125,23 +125,19 @@ impl SpritePipeline {
     }
 
     pub fn reset_output_units(&self) {
-        self.sprite_output_units.update(|mut s| {
-            s.fill(None);
-            s
-        });
+        self.sprite_output_units.borrow_mut().clear();
     }
 
     // returns the sprites that overlap with the provided dot (x coordinate)
     pub fn sprite_output_at(&self, dot: u16) -> Vec<SpriteData> {
-        self.sprite_output_units.get()
+        self.sprite_output_units.borrow()
             .iter()
-            .filter_map(|s| {
-                s.filter(|sprite_data| {
-                    let sprite_x = sprite_data.sprite.x as u16;
-                    let sprite_end_x = sprite_x + 8;
-                    dot >= sprite_x && dot < sprite_end_x
-                })
+            .filter(|sprite_data| {
+                let sprite_x = sprite_data.sprite.x as u16;
+                let sprite_end_x = sprite_x + 8;
+                dot >= sprite_x && dot < sprite_end_x
             })
+            .cloned()
             .collect()
     }
 
@@ -261,10 +257,7 @@ impl SpritePipeline {
                         let tile_high = bus.read_u8(addr + 8);
                         let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
 
-                        self.sprite_output_units.update(|mut o| {
-                            o[sprite_index] = Some(sprite_data);
-                            o
-                        });
+                        self.sprite_output_units.borrow_mut().push(sprite_data);
                     }
                     _ => ()
                 }
@@ -287,12 +280,17 @@ pub mod debug {
 
     impl SpritePipelineState {
         pub(in crate::ppu) fn new(p: &SpritePipeline) -> Self {
+            let mut output = [None;8];
+            p.sprite_output_units.borrow()
+                .iter()
+                .enumerate()
+                .for_each(|(idx, sprite_data)| output[idx] = Some(sprite_data.clone()));
             SpritePipelineState {
                 oam_addr: p.oam_addr.get(),
                 oam_entry: p.oam_entry.get(),
                 secondary_oam_index: p.secondary_oam_index.get(),
                 secondary_oam: p.secondary_oam.get(),
-                output_units: p.sprite_output_units.get(),
+                output_units: output,
             }
         }
     }
