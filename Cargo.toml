@@ -22,6 +22,15 @@ anyhow = "1.0.32"
 criterion = "0.3"
 test-case = "1.0.0"
 
+# Disable benchmarks in the lib and binary modules
+# https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
+[lib]
+bench = false
+
+[[bin]]
+name = "yaner"
+bench = false
+
 [[bench]]
 name = "cpu"
 harness = false
