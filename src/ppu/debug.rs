@@ -1,28 +1,8 @@
 use crate::ppu::reg::PpuStatus;
-use crate::ppu::renderer::{AttributeData, OamAddr, PatternData, Pixel, SpritePipeline};
-use crate::ppu::sprite::SpriteData;
+use crate::ppu::renderer::{AttributeData, PatternData, Pixel};
+use crate::ppu::sprite::debug::SpritePipelineState;
 use crate::ppu::vram_address::VramAddress;
 use crate::ppu::{Ppu, PpuCtrl, PpuMask};
-
-pub struct SpritePipelineState {
-    pub oam_addr: OamAddr,
-    pub oam_entry: u8,
-    pub secondary_oam_index: u8,
-    pub secondary_oam: [u8;32],
-    pub output_units: [Option<SpriteData>;8],
-}
-
-impl SpritePipelineState {
-    fn new(p: &SpritePipeline) -> Self {
-        SpritePipelineState {
-            oam_addr: p.oam_addr.get(),
-            oam_entry: p.oam_entry.get(),
-            secondary_oam_index: p.secondary_oam_index.get(),
-            secondary_oam: p.secondary_oam.get(),
-            output_units: p.sprite_output_units.get(),
-        }
-    }
-}
 
 pub struct PpuState {
     pub ctrl: PpuCtrl,
