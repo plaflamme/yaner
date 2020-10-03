@@ -336,13 +336,12 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 
     s_spans.push(Spans::from(Span::from(" OUT: ")));
     for output in nes.ppu.sprite_pipeline.output_units.iter() {
-        if let Some(sprite) = output {
-            let span = Span::styled(
-                format!("    {},{} {:?}", sprite.sprite.y, sprite.sprite.x, sprite.sprite.attr),
-                value_style,
-            );
-            s_spans.push(Spans::from(span));
-        }
+        let span = match output {
+            None => "    -".to_owned(),
+            Some(sprite) =>
+                format!("    {},{} {:02X}", sprite.sprite.y, sprite.sprite.x, sprite.sprite.attr.raw())
+        };
+        s_spans.push(Spans::from(Span::styled(span, value_style)));
     }
 
     Paragraph::new(Text::from(s_spans)).block(Block::default().title("OAM").borders(Borders::ALL))
@@ -360,7 +359,7 @@ fn statusbar<B: Backend>(
             [
                 Constraint::Length(10),
                 Constraint::Length(14),
-                Constraint::Length(20),
+                Constraint::Length(21),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
