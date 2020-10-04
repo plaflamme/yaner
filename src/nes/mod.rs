@@ -7,9 +7,9 @@ use std::rc::Rc;
 use dma::DmaCycle;
 
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt};
+use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt, IoRegisters};
 use crate::nes::dma::Dma;
-use crate::ppu::{MemoryMappedRegisters, Ppu, PpuCycle};
+use crate::ppu::{Ppu, PpuRegisters, PpuCycle};
 use std::borrow::BorrowMut;
 use std::error::Error;
 
@@ -68,8 +68,8 @@ impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
-        let ppu_mem_registers = MemoryMappedRegisters::new(ppu.clone());
-        let cpu_bus = CpuBus::new(ppu_mem_registers, mapper.clone());
+        let ppu_mem_registers = PpuRegisters::new(ppu.clone());
+        let cpu_bus = CpuBus::new(IoRegisters::new(), ppu_mem_registers, mapper.clone());
 
         Nes {
             cpu: Cpu::new(cpu_bus),
@@ -115,7 +115,7 @@ impl Nes {
                     GeneratorState::Complete(_) => panic!("dma stopped"),
                 };
 
-                if let Some(addr) = self.cpu.bus.dma_latch() {
+                if let Some(addr) = self.cpu.bus.io_regsiters.dma_latch() {
                     self.dma.start(addr, self.clocks.cpu_cycles.get());
                     cpu_suspended = true;
                 }

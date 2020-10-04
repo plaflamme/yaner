@@ -15,7 +15,7 @@ pub mod opcode;
 pub mod generator;
 
 use crate::cartridge::Mapper;
-use crate::ppu::MemoryMappedRegisters;
+use crate::ppu::PpuRegisters;
 use instr::*;
 use opcode::OpCode;
 use opcode::OPCODES;
@@ -659,26 +659,21 @@ trait WriteOperation {
 
 pub struct CpuBus {
     pub ram: Ram2KB,
-    pub ppu_registers: MemoryMappedRegisters,
+    pub io_regsiters: IoRegisters,
+    pub ppu_registers: PpuRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
     pub intr: Cell<Option<Interrupt>>,
-    oam_dma: Cell<Option<u8>>,
 }
 
 impl CpuBus {
-    pub fn new(ppu_registers: MemoryMappedRegisters, mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
+    pub fn new(io_regsiters: IoRegisters, ppu_registers: PpuRegisters, mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
         CpuBus {
             ram: Ram2KB::new(),
+            io_regsiters,
             ppu_registers,
             mapper,
             intr: Cell::new(None),
-            oam_dma: Cell::new(None),
         }
-    }
-
-    // This will return last write to OAM DMA and then None until the next write
-    pub fn dma_latch(&self) -> Option<u8> {
-        self.oam_dma.take()
     }
 
     pub fn intr_latch(&self) -> Option<Interrupt> {
@@ -695,8 +690,7 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2000..=0x2007 => self.ppu_registers.read_u8(addr), // PPU
             0x2008..=0x3FFF => self.ppu_registers.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
-            0x4000..=0x4017 => 0x00,             // APU
-            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+            0x4000..=0x401F => self.io_regsiters.read_u8(addr),
 
             0x4020..=0xFFFF => self.mapper.borrow().cpu_addr_space().read_u8(addr), // PRG ROM/RAM and mapper
         }
@@ -710,12 +704,49 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2000..=0x2007 => self.ppu_registers.write_u8(addr, value), // PPU
             0x2008..=0x3FFF => self.ppu_registers.write_u8(0x2000 + (addr % 8), value), // PPU mirror
 
-            0x4014 => self.oam_dma.set(Some(value)),
-
-            0x4000..=0x4017 => (),               // APU
-            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+            0x4000..=0x401F => self.io_regsiters.write_u8(addr, value),
 
             0x4020..=0xFFFF => self.mapper.borrow().cpu_addr_space().write_u8(addr, value), // PRG ROM/RAM and mapper
+        }
+    }
+}
+
+// http://wiki.nesdev.com/w/index.php/2A03
+pub struct IoRegisters {
+    oam_dma: Cell<Option<u8>>,
+}
+
+impl IoRegisters {
+    pub fn new() -> Self {
+
+        IoRegisters {
+            oam_dma: Cell::new(None)
+        }
+    }
+
+    // This will return last write to OAM DMA and then None until the next write
+    pub fn dma_latch(&self) -> Option<u8> {
+        self.oam_dma.take()
+    }
+}
+
+impl AddressSpace for IoRegisters {
+    fn read_u8(&self, addr: u16) -> u8 {
+        match addr {
+            0x4016 => 0, // joy1
+            0x4017 => 0, // joy2
+            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+            _ => 0x0,
+        }
+    }
+
+    fn write_u8(&self, addr: u16, value: u8) {
+        match addr {
+            0x4014 => self.oam_dma.set(Some(value)),
+            0x4016 => (), // joy1
+            0x4017 => (), // joy2
+            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+            _ => (),
         }
     }
 }

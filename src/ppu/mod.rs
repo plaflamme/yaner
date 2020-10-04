@@ -158,7 +158,8 @@ impl AddressSpace for PpuBus {
     }
 }
 
-pub struct MemoryMappedRegisters {
+// PpuRegisters exposed to the CPU on its bus.
+pub struct PpuRegisters {
     ppu: Rc<Ppu>,
     // http://wiki.nesdev.com/w/index.php/PPU_registers#The_PPUDATA_read_buffer_.28post-fetch.29
     read_buffer: Cell<u8>,
@@ -166,9 +167,9 @@ pub struct MemoryMappedRegisters {
     open_bus: Cell<u8>,
 }
 
-impl MemoryMappedRegisters {
+impl PpuRegisters {
     pub fn new(ppu: Rc<Ppu>) -> Self {
-        MemoryMappedRegisters {
+        PpuRegisters {
             ppu,
             read_buffer: Cell::default(),
             open_bus: Cell::default(),
@@ -185,7 +186,7 @@ impl MemoryMappedRegisters {
     }
 }
 
-impl AddressSpace for MemoryMappedRegisters {
+impl AddressSpace for PpuRegisters {
     fn read_u8(&self, addr: u16) -> u8 {
         let result = match addr {
             0x2000 => self.open_bus.get(),
