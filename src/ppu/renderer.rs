@@ -219,7 +219,7 @@ impl Renderer {
         } else {
             let mut palette_color = PaletteColor::default();
             let mut front_priority = false;
-            for sprite_data in self.sprite_pipeline.sprite_output_at(dot) {
+            for (idx, sprite_data) in self.sprite_pipeline.sprite_output_at(dot).iter().enumerate() {
                 let mut x_sprite = dot - sprite_data.sprite.x as u16;
                 if sprite_data.sprite.attr.flip_h() {
                     x_sprite ^= 7;
@@ -227,10 +227,21 @@ impl Renderer {
                 let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
                 let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
                 let color = (high << 1 | low) as u8;
+                let sprite_color = PaletteColor::from(
+                    sprite_data.sprite.attr.palette() + 0b100,
+                    color,
+                );
 
-                // sprite-0 hit, only if background rendering is on and pixel is non-transparent
-                if sprite_data.sprite.id == 0
-                    && color != 0
+                // sprite-0 hit occurs when:
+                //   * sprite-0 is part of the output units
+                //   * the first output unit is outputing an opaque pixel
+                //   * x != 255
+                //   * background rendering is enabled
+                //   * background is outputing an opaque pixel
+                if idx == 0
+                    && !registers.status.get().contains(PpuStatus::S)
+                    && self.sprite_pipeline.sprite0_in_output()
+                    && sprite_color.is_opaque()
                     && dot != 255
                     && mask.contains(PpuMask::b)
                     && bg_color.is_opaque()
@@ -238,10 +249,6 @@ impl Renderer {
                     registers.status.update(|s| s | PpuStatus::S);
                 }
 
-                let sprite_color = PaletteColor::from(
-                    sprite_data.sprite.attr.palette() + 0b100,
-                    color,
-                );
                 if sprite_color.is_opaque() {
                     palette_color = sprite_color;
                     front_priority = sprite_data.sprite.attr.fg_priority();

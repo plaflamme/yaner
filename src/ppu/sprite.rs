@@ -23,7 +23,6 @@ impl Attributes {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sprite {
-    pub id: u8, // for sprite priority
     pub x: u8,
     pub y: u8,
     pub tile_index: u8,
@@ -31,9 +30,8 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn new(id: u8, values: [u8; 4]) -> Self {
+    pub fn new(values: [u8; 4]) -> Self {
         Sprite {
-            id,
             y: values[0],
             tile_index: values[1],
             attr: Attributes::new(values[2]),
@@ -86,12 +84,15 @@ struct OutputUnits {
     // an index of where sprites are on the line, true when at least one sprite is present at that coordinate
     // sort-a like a bloom filter so we don't have to iterate over all sprites for each pixel.
     filter: RefCell<[bool;256]>,
+    // sprite0 hit is based on whether sprite0 is in any of the output units
+    has_sprite0: Cell<bool>,
 }
 impl Default for OutputUnits {
     fn default() -> Self {
         OutputUnits {
             units: RefCell::default(),
             filter: RefCell::new([false; 256]),
+            has_sprite0: Cell::default(),
         }
     }
 }
@@ -101,9 +102,10 @@ impl OutputUnits {
         self.index_sprite(&sprite_data.sprite);
         self.units.borrow_mut().push(sprite_data);
     }
-    fn reset(&self) {
+    fn reset(&self, sprite0_in_range: bool) {
         self.units.borrow_mut().clear();
         self.filter.borrow_mut().fill(false);
+        self.has_sprite0.set(sprite0_in_range);
     }
     // returns the sprites that overlap with the provided dot (x coordinate)
     pub fn sprites_at(&self, dot: u16) -> Vec<SpriteData> {
@@ -147,6 +149,8 @@ pub(super) struct SpritePipeline {
     oam_done: Cell<bool>,
     // Whether the current sprite was in range when we looked at its y coordinate
     sprite_in_range: Cell<bool>,
+    // Whether sprite0 was copied to secondary OAM during evaluation
+    sprite0_in_range: Cell<bool>,
 }
 
 impl SpritePipeline {
@@ -175,7 +179,13 @@ impl SpritePipeline {
     }
 
     pub fn reset_output_units(&self) {
-        self.output_units.reset();
+        // NOTE: we assume this is invoked after evaluation.
+        // TODO: We should probably control this more explicitely, e.g.: by doing this within cycle()
+        self.output_units.reset(self.sprite0_in_range.get());
+    }
+
+    pub fn sprite0_in_output(&self) -> bool {
+        self.output_units.has_sprite0.get()
     }
 
     // returns the sprites that overlap with the provided dot (x coordinate)
@@ -202,6 +212,7 @@ impl SpritePipeline {
                     self.oam_addr.set(OamAddr::new(registers.oam_addr.get()));
                     self.secondary_oam_index.set(0);
                     self.sprite_in_range.set(false);
+                    self.sprite0_in_range.set(false);
                     self.oam_done.set(false);
                 }
 
@@ -226,6 +237,11 @@ impl SpritePipeline {
 
                         if in_range {
                             self.secondary_oam_index.update(|s| s + 1);
+
+                            if oam_addr.high() == 0 {
+                                self.sprite0_in_range.set(true);
+                            }
+
                             // NOTE: Mesen tests against the index in secondary oam apparently to replicate some obscure corner case.
                             if oam_addr.incr_low() {
                                 // finished copying this sprite's data, move to the next one.
@@ -275,7 +291,7 @@ impl SpritePipeline {
                             oam[base+2],
                             oam[base+3],
                         ];
-                        let sprite = Sprite::new(0, sprite_oam);
+                        let sprite = Sprite::new(sprite_oam);
 
                         let base_addr = if ctrl.large_sprites() {
                             let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
