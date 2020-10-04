@@ -30,7 +30,7 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    pub fn new(values: [u8; 4]) -> Self {
+    pub fn new(values: &[u8]) -> Self {
         Sprite {
             y: values[0],
             tile_index: values[1],
@@ -285,13 +285,7 @@ impl SpritePipeline {
                         let ctrl = registers.ctrl.get();
                         let oam = self.secondary_oam.get();
                         let base = sprite_index * 4;
-                        let sprite_oam: [u8;4] = [
-                            oam[base],
-                            oam[base+1],
-                            oam[base+2],
-                            oam[base+3],
-                        ];
-                        let sprite = Sprite::new(sprite_oam);
+                        let sprite = Sprite::new(&oam[base..base+4]);
 
                         let base_addr = if ctrl.large_sprites() {
                             let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
