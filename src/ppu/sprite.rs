@@ -81,10 +81,60 @@ impl OamAddr {
     }
 }
 
+struct OutputUnits {
+    units: RefCell<Vec<SpriteData>>,
+    // an index of where sprites are on the line, true when at least one sprite is present at that coordinate
+    // sort-a like a bloom filter so we don't have to iterate over all sprites for each pixel.
+    filter: RefCell<[bool;256]>,
+}
+impl Default for OutputUnits {
+    fn default() -> Self {
+        OutputUnits {
+            units: RefCell::default(),
+            filter: RefCell::new([false; 256]),
+        }
+    }
+}
+
+impl OutputUnits {
+    fn push(&self, sprite_data: SpriteData) {
+        self.index_sprite(&sprite_data.sprite);
+        self.units.borrow_mut().push(sprite_data);
+    }
+    fn reset(&self) {
+        self.units.borrow_mut().clear();
+        self.filter.borrow_mut().fill(false);
+    }
+    // returns the sprites that overlap with the provided dot (x coordinate)
+    pub fn sprites_at(&self, dot: u16) -> Vec<SpriteData> {
+        if !self.filter.borrow()[dot as usize] {
+            Vec::new()
+        } else {
+            self.units.borrow()
+                .iter()
+                .filter(|sprite_data| {
+                    let sprite_x = sprite_data.sprite.x as u16;
+                    let sprite_end_x = sprite_x + 8;
+                    dot >= sprite_x && dot < sprite_end_x
+                })
+                .cloned()
+                .collect()
+        }
+    }
+    fn index_sprite(&self, sprite: &Sprite) {
+        let mut filter = self.filter.borrow_mut();
+        let x_start = sprite.x as usize;
+        let x_end = (x_start + 8).min(256);
+        for x in x_start..x_end  {
+            filter[x] = true;
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct SpritePipeline {
     // The sprite data to render on the current scanline
-    sprite_output_units: RefCell<Vec<SpriteData>>,
+    output_units: OutputUnits,
 
     secondary_oam: Cell<[u8; 32]>,
     secondary_oam_index: Cell<u8>,
@@ -125,20 +175,12 @@ impl SpritePipeline {
     }
 
     pub fn reset_output_units(&self) {
-        self.sprite_output_units.borrow_mut().clear();
+        self.output_units.reset();
     }
 
     // returns the sprites that overlap with the provided dot (x coordinate)
     pub fn sprite_output_at(&self, dot: u16) -> Vec<SpriteData> {
-        self.sprite_output_units.borrow()
-            .iter()
-            .filter(|sprite_data| {
-                let sprite_x = sprite_data.sprite.x as u16;
-                let sprite_end_x = sprite_x + 8;
-                dot >= sprite_x && dot < sprite_end_x
-            })
-            .cloned()
-            .collect()
+        self.output_units.sprites_at(dot)
     }
 
     pub fn cycle(
@@ -257,7 +299,7 @@ impl SpritePipeline {
                         let tile_high = bus.read_u8(addr + 8);
                         let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
 
-                        self.sprite_output_units.borrow_mut().push(sprite_data);
+                        self.output_units.push(sprite_data);
                     }
                     _ => ()
                 }
@@ -281,7 +323,7 @@ pub mod debug {
     impl SpritePipelineState {
         pub(in crate::ppu) fn new(p: &SpritePipeline) -> Self {
             let mut output = [None;8];
-            p.sprite_output_units.borrow()
+            p.output_units.units.borrow()
                 .iter()
                 .enumerate()
                 .for_each(|(idx, sprite_data)| output[idx] = Some(sprite_data.clone()));
