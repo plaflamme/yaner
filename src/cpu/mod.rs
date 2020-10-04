@@ -15,6 +15,7 @@ pub mod opcode;
 pub mod generator;
 
 use crate::cartridge::Mapper;
+use crate::input::Input;
 use crate::ppu::PpuRegisters;
 use instr::*;
 use opcode::OpCode;
@@ -713,28 +714,41 @@ impl crate::memory::AddressSpace for CpuBus {
 
 // http://wiki.nesdev.com/w/index.php/2A03
 pub struct IoRegisters {
-    oam_dma: Cell<Option<u8>>,
+    input1: Rc<dyn Input>,
+    input2: Rc<dyn Input>,
+
+    // OUT0-OUT2 latch
+    out_latch: Cell<u8>,
+
+    dma_latch: Cell<Option<u8>>,
 }
 
 impl IoRegisters {
-    pub fn new() -> Self {
-
+    pub fn new(input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
         IoRegisters {
-            oam_dma: Cell::new(None)
+            input1,
+            input2,
+            out_latch: Cell::default(),
+            dma_latch: Cell::new(None)
         }
     }
 
     // This will return last write to OAM DMA and then None until the next write
     pub fn dma_latch(&self) -> Option<u8> {
-        self.oam_dma.take()
+        self.dma_latch.take()
     }
 }
 
 impl AddressSpace for IoRegisters {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            0x4016 => 0, // joy1
-            0x4017 => 0, // joy2
+
+            // In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
+            // Usually this is the most significant byte of the address of the controller port—0x40.
+            // Certain games (such as Paperboy) rely on this behavior and require that reads from the controller ports return exactly $40 or $41 as appropriate.
+            0x4016 => self.input1.read() | 0x40, // joy1
+            0x4017 => self.input2.read() | 0x40, // joy2
+
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => 0x0,
         }
@@ -742,8 +756,14 @@ impl AddressSpace for IoRegisters {
 
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
-            0x4014 => self.oam_dma.set(Some(value)),
-            0x4016 => (), // joy1
+            0x4014 => self.dma_latch.set(Some(value)),
+            0x4016 => {
+                self.out_latch.set(value & 0x7); // lower 3 bits
+
+                let out0 = value & 0x01;
+                self.input1.strobe(out0);
+                self.input2.strobe(out0);
+            }
             0x4017 => (), // joy2
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => (),

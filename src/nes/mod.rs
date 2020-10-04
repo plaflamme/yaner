@@ -12,6 +12,7 @@ use crate::nes::dma::Dma;
 use crate::ppu::{Ppu, PpuRegisters, PpuCycle};
 use std::borrow::BorrowMut;
 use std::error::Error;
+use crate::input::Joypad;
 
 pub mod debug;
 mod dma;
@@ -60,22 +61,29 @@ pub struct Nes {
     pub ppu: Rc<Ppu>,
     dma: Dma,
     pub clocks: Clocks,
+    pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
+    pub input2: Rc<Joypad>,
     // TODO: apu
     // TODO: input
 }
 
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
+        let input1 = Rc::new(crate::input::Joypad::default());
+        let input2 = Rc::new(crate::input::Joypad::default());
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
         let ppu_mem_registers = PpuRegisters::new(ppu.clone());
-        let cpu_bus = CpuBus::new(IoRegisters::new(), ppu_mem_registers, mapper.clone());
+        let io_registers = IoRegisters::new(input1.clone(), input2.clone());
+        let cpu_bus = CpuBus::new(io_registers, ppu_mem_registers, mapper.clone());
 
         Nes {
             cpu: Cpu::new(cpu_bus),
             ppu,
             dma: Dma::new(),
             clocks: Clocks::new(),
+            input1,
+            input2,
         }
     }
 
