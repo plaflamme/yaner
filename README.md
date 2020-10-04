@@ -13,3 +13,4 @@ Inspired from:
 * [lochnes](https://github.com/kylewlacy/lochnes): for its use of Rust's generators, nice!
 * [nes-rust](https://github.com/starrhorne/nes-rust): for the PPU implementation
 * [laines](https://github.com/AndreaOrru/LaiNES): for more PPU stuff
+* [Mesen](https://github.com/SourMesen/Mesen): for its amazing accuracy
