@@ -18,6 +18,9 @@ tui = "0.10"
 termion = "1.5"
 anyhow = "1.0.32"
 
+# libretro
+libretro-backend = "0.2"
+
 [dev-dependencies]
 criterion = "0.3"
 test-case = "1.0.0"
@@ -26,6 +29,7 @@ test-case = "1.0.0"
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
 [lib]
 bench = false
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "yaner"

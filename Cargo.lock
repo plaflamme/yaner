@@ -353,6 +353,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a31a0627fdf1f6a39ec0dd577e101440b7db22672c0901fe00a9a6fbb5c24e8"
 
 [[package]]
+name = "libretro-backend"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "667a71a6fdeec429bd88023eb7cc7b51264881b0cf9835431482a7c2f6e85d6e"
+dependencies = [
+ "libc",
+ "libretro-sys",
+]
+
+[[package]]
+name = "libretro-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "207b060b02cecbcee6df3d0f5ed38691d5c4df1379dd1acd5c49c9b25d20b439"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "log"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -989,6 +1008,7 @@ dependencies = [
  "bitflags",
  "bitregions",
  "criterion",
+ "libretro-backend",
  "log",
  "nom",
  "rand",

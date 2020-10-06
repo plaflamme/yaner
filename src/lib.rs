@@ -4,8 +4,10 @@
 pub mod helper;
 pub mod cartridge;
 pub mod cpu;
+#[allow(non_upper_case_globals)] // https://github.com/bitflags/bitflags/issues/198
 pub mod input;
 pub mod memory;
 pub mod nes;
 pub mod ppu;
 pub mod tui;
+pub mod retro;
