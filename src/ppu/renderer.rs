@@ -74,7 +74,7 @@ impl PaletteColor {
     }
 
     fn address(&self) -> u16 {
-        0x3F00 | (self.palette() as u16) << 2 | self.color() as u16
+        0x3F00 | (self.0 as u16)
     }
 
     fn is_transparent(&self) -> bool {
@@ -294,7 +294,7 @@ impl Renderer {
         // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
         let pixel = dot - 2;
         let sl = self.scanline.get();
-        if sl < 240 && dot <= 257 {
+        if sl < 240 && pixel < 256 {
             let bg_color = self.render_background_pixel(registers, pixel);
             let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
 
@@ -308,14 +308,11 @@ impl Renderer {
                     bg_color
                 };
 
-            if sl < 241 && pixel <= 257 {
-                let pixel_index = pixel + sl * 256;
-
-                let s: &Cell<[Pixel]> = &self.frame_pixels;
-                let pixels = s.as_slice_of_cells();
-                let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
-                pixels[pixel_index as usize].set(pixel_value);
-            }
+            let pixel_index = pixel + sl * 256;
+            let s: &Cell<[Pixel]> = &self.frame_pixels;
+            let pixels = s.as_slice_of_cells();
+            let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
+            pixels[pixel_index as usize].set(pixel_value);
         }
     }
 
@@ -356,25 +353,21 @@ impl Renderer {
                         self.attribute_entry.set(entry);
                     }
                     5 => {
-                        // TODO: Scrolling affects this.
-                        let index = self.nametable_entry.get() as u16 * 16
+                        let index = (self.nametable_entry.get() as u16) << 4
                             | (registers.v_addr.get().fine_y() as u16);
                         self.fetch_addr
                             .set(index + registers.ctrl.get().bg_pattern_table_address());
                     }
-                    6 => self
-                        .pattern_data
-                        .latch
-                        .low
-                        .set(bus.read_u8(self.fetch_addr.get())),
+                    6 => {
+                        let value = bus.read_u8(self.fetch_addr.get());
+                        self.pattern_data.latch.low.set(value)
+                    }
                     7 => {
                         self.fetch_addr.update(|v| v + 8);
                     }
                     0 => {
-                        self.pattern_data
-                            .latch
-                            .high
-                            .set(bus.read_u8(self.fetch_addr.get()));
+                        let value = bus.read_u8(self.fetch_addr.get());
+                        self.pattern_data.latch.high.set(value);
                         if registers.mask.get().is_rendering() {
                             registers.v_addr.update(|mut v| {
                                 if self.dot.get() == 256 {
@@ -410,7 +403,7 @@ impl Renderer {
                     }
                 }
             }
-            // no latch
+            // same as % 8 == 1, exctept without the latch
             1 | 321 | 339 => self.fetch_addr.set(registers.v_addr.get().nametable_addr()),
             338 => {
                 let entry = bus.read_u8(self.fetch_addr.get());
