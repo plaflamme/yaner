@@ -1,9 +1,12 @@
-use libretro_backend::{Core, CoreInfo, GameData, RuntimeHandle, LoadGameResult, AudioVideoInfo, PixelFormat, Region, JoypadButton};
+use crate::cartridge::Cartridge;
+use crate::input::JoypadButtons;
 use crate::nes::{Nes, Stepper};
 use crate::ppu::PpuCycle;
-use crate::cartridge::Cartridge;
+use libretro_backend::{
+    AudioVideoInfo, Core, CoreInfo, GameData, JoypadButton, LoadGameResult, PixelFormat, Region,
+    RuntimeHandle,
+};
 use std::convert::TryFrom;
-use crate::input::JoypadButtons;
 use std::path::PathBuf;
 use std::pin::Pin;
 
@@ -15,15 +18,14 @@ struct YanerCore {
 
 impl Core for YanerCore {
     fn info() -> CoreInfo {
-        CoreInfo::new( "Yaner", env!( "CARGO_PKG_VERSION" ) )
-            .supports_roms_with_extension( "nes" )
+        CoreInfo::new("Yaner", env!("CARGO_PKG_VERSION")).supports_roms_with_extension("nes")
     }
 
     fn on_load_game(&mut self, game_data: GameData) -> LoadGameResult {
         let cartridge = match (game_data.data(), game_data.path()) {
             (Some(data), _) => Cartridge::try_from(data),
             (_, Some(path)) => Cartridge::try_from(PathBuf::from(path)),
-            _ => return LoadGameResult::Failed( game_data ),
+            _ => return LoadGameResult::Failed(game_data),
         };
 
         match cartridge {
@@ -32,9 +34,9 @@ impl Core for YanerCore {
                 self.nes = Some(Stepper::new(Nes::new(cartridge), None));
                 self.game_data = Some(game_data);
                 let av_info = AudioVideoInfo::new()
-                    .video( 256, 240, 60.0, PixelFormat::ARGB8888 )
-                    .audio( 44100.0 )
-                    .region( Region::NTSC );
+                    .video(256, 240, 60.0, PixelFormat::ARGB8888)
+                    .audio(44100.0)
+                    .region(Region::NTSC);
 
                 LoadGameResult::Success(av_info)
             }
@@ -59,12 +61,19 @@ impl Core for YanerCore {
             }}
         };
         if let Some(stepper) = self.nes.as_mut() {
-            stepper.nes().input1.update(extract_buttons!(0, A, B, Start, Select, Up, Down, Left, Right));
-            stepper.nes().input2.update(extract_buttons!(1, A, B, Start, Select, Up, Down, Left, Right));
+            stepper.nes().input1.update(extract_buttons!(
+                0, A, B, Start, Select, Up, Down, Left, Right
+            ));
+            stepper.nes().input2.update(extract_buttons!(
+                1, A, B, Start, Select, Up, Down, Left, Right
+            ));
             match stepper.step_frame().unwrap() {
                 PpuCycle::Frame => {
                     let state = stepper.nes().debug();
-                    let frame = state.ppu.frame.iter()
+                    let frame = state
+                        .ppu
+                        .frame
+                        .iter()
                         .flat_map(|pixel| {
                             let (r, g, b) = pixel.rgb();
                             vec![b, g, r, 0]
@@ -73,7 +82,7 @@ impl Core for YanerCore {
                     handle.upload_video_frame(frame.as_slice());
                     handle.upload_audio_frame(&[0; 1470]);
                 }
-                y => panic!("unexpected value yielded by NES: {:?}", y)
+                y => panic!("unexpected value yielded by NES: {:?}", y),
             }
         }
     }
@@ -83,4 +92,4 @@ impl Core for YanerCore {
     }
 }
 
-libretro_backend::libretro_core!( YanerCore );
+libretro_backend::libretro_core!(YanerCore);

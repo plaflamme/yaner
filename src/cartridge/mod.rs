@@ -94,6 +94,10 @@ impl TryFrom<&[u8]> for Cartridge {
 
         let mapper = mapper::from(&rom);
 
-        Ok(Cartridge { mapper, path: PathBuf::from(""), rom })
+        Ok(Cartridge {
+            mapper,
+            path: PathBuf::from(""),
+            rom,
+        })
     }
 }

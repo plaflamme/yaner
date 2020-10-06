@@ -8,11 +8,11 @@ use dma::DmaCycle;
 
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt, IoRegisters};
+use crate::input::Joypad;
 use crate::nes::dma::Dma;
-use crate::ppu::{Ppu, PpuRegisters, PpuCycle};
+use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use std::borrow::BorrowMut;
 use std::error::Error;
-use crate::input::Joypad;
 
 pub mod debug;
 mod dma;
@@ -212,7 +212,10 @@ impl Stepper {
             // NOTE: we extend the lifetime of the generator.
             //   This is necessary because I can't figure out how to tell / convince Rust that the reference to `boxed.nes` has a lifetime that is >= the generator's lifetime
             //   I have no idea how to avoid this and transmute is the most unsafe thing you can do...
-            let generator = std::mem::transmute::<Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + '_>, Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>>(Box::new(pinned.nes.ppu_steps(start_at)));
+            let generator = std::mem::transmute::<
+                Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + '_>,
+                Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>,
+            >(Box::new(pinned.nes.ppu_steps(start_at)));
 
             // Here we do the typical self-referencial struct trick described in Pin
             let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);

@@ -56,9 +56,7 @@ fn ppu_blargg_ppu_tests(case: &str) {
             frames += 1;
             frames >= 30
         },
-        |nes| {
-            assert_eq!(nes.ppu_bus.read_u8(0x20A4), 0x31)
-        },
+        |nes| assert_eq!(nes.ppu_bus.read_u8(0x20A4), 0x31),
     );
 }
 
@@ -92,8 +90,6 @@ fn ppu_sprite_hit_tests(case: &str) {
             assert_eq!(nes.cpu_bus.read_u8(0x00F8), 0x01);
         },
     );
-
-
 }
 
 #[test_case("1.Basics")]
@@ -114,6 +110,4 @@ fn ppu_sprite_overflow_tests(case: &str) {
             assert_eq!(nes.cpu_bus.read_u8(0x00F8), 0x01);
         },
     );
-
-
 }

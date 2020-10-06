@@ -188,7 +188,7 @@ impl Renderer {
                         registers.oam_addr.set(0);
                     }
                 }
-                _ => ()
+                _ => (),
             }
         } else {
             // We clear the output sprites for the next scanline to make sure we're not keeping
@@ -198,7 +198,8 @@ impl Renderer {
                 self.sprite_pipeline.reset_output_units();
             }
             if registers.mask.get().is_rendering() {
-                self.sprite_pipeline.cycle(self.scanline.get(), dot, registers, oam_ram, bus)
+                self.sprite_pipeline
+                    .cycle(self.scanline.get(), dot, registers, oam_ram, bus)
             }
         }
     }
@@ -219,7 +220,12 @@ impl Renderer {
         } else {
             let mut palette_color = PaletteColor::default();
             let mut front_priority = false;
-            for (idx, sprite_data) in self.sprite_pipeline.sprite_output_at(dot).iter().enumerate() {
+            for (idx, sprite_data) in self
+                .sprite_pipeline
+                .sprite_output_at(dot)
+                .iter()
+                .enumerate()
+            {
                 let mut x_sprite = dot - sprite_data.sprite.x as u16;
                 if sprite_data.sprite.attr.flip_h() {
                     x_sprite ^= 7;
@@ -227,10 +233,8 @@ impl Renderer {
                 let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
                 let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
                 let color = (high << 1 | low) as u8;
-                let sprite_color = PaletteColor::from(
-                    sprite_data.sprite.attr.palette() + 0b100,
-                    color,
-                );
+                let sprite_color =
+                    PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color);
 
                 // sprite-0 hit occurs when:
                 //   * sprite-0 is part of the output units

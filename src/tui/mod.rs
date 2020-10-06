@@ -251,10 +251,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
         ]),
         Spans::from(vec![
             Span::from(" O: "),
-            Span::styled(
-                format!("{:02X}",nes.ppu.oam_addr,),
-                value_style,
-            ),
+            Span::styled(format!("{:02X}", nes.ppu.oam_addr,), value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
@@ -314,21 +311,28 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 
     let mut s_spans = Vec::new();
 
-    s_spans.append(vec![
-        Spans::from(vec![
-            Span::from(" OE: "),
-            Span::styled(
-                format!("h:{:02X} l:{:02X}", nes.ppu.sprite_pipeline.oam_addr.high(), nes.ppu.sprite_pipeline.oam_addr.low()),
-                value_style,
-            )]),
-        Spans::from(vec![
-            Span::from(" OE: "),
-            Span::styled(
-                format!("{:02X}",nes.ppu.sprite_pipeline.oam_entry),
-                value_style,
-            ),
-        ])
-    ].as_mut()
+    s_spans.append(
+        vec![
+            Spans::from(vec![
+                Span::from(" OE: "),
+                Span::styled(
+                    format!(
+                        "h:{:02X} l:{:02X}",
+                        nes.ppu.sprite_pipeline.oam_addr.high(),
+                        nes.ppu.sprite_pipeline.oam_addr.low()
+                    ),
+                    value_style,
+                ),
+            ]),
+            Spans::from(vec![
+                Span::from(" OE: "),
+                Span::styled(
+                    format!("{:02X}", nes.ppu.sprite_pipeline.oam_entry),
+                    value_style,
+                ),
+            ]),
+        ]
+        .as_mut(),
     );
     let s_oam = nes.ppu.sprite_pipeline.secondary_oam;
 
@@ -336,7 +340,13 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     for i in 0..8 as usize {
         let base = i * 4;
         let span = Span::styled(
-            format!("    {:02X} {:02X} {:02X} {:02X}", s_oam[base], s_oam[base+1], s_oam[base+2], s_oam[base+3]),
+            format!(
+                "    {:02X} {:02X} {:02X} {:02X}",
+                s_oam[base],
+                s_oam[base + 1],
+                s_oam[base + 2],
+                s_oam[base + 3]
+            ),
             value_style,
         );
         s_spans.push(Spans::from(span));
@@ -346,8 +356,12 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     for output in nes.ppu.sprite_pipeline.output_units.iter() {
         let span = match output {
             None => "    -".to_owned(),
-            Some(sprite) =>
-                format!("    {},{} {:02X}", sprite.sprite.y, sprite.sprite.x, sprite.sprite.attr.raw())
+            Some(sprite) => format!(
+                "    {},{} {:02X}",
+                sprite.sprite.y,
+                sprite.sprite.x,
+                sprite.sprite.attr.raw()
+            ),
         };
         s_spans.push(Spans::from(Span::styled(span, value_style)));
     }
@@ -578,7 +592,9 @@ pub struct Debugger {
 
 impl Debugger {
     pub fn new(nes: Nes, start_at: Option<u16>) -> Self {
-        Debugger { stepper: Stepper::new(nes, start_at) }
+        Debugger {
+            stepper: Stepper::new(nes, start_at),
+        }
     }
 
     pub fn start(&mut self) -> Result<(), anyhow::Error> {
@@ -611,10 +627,12 @@ impl Debugger {
                     }
                     Key::Char('l') => {
                         let current_sl = self.stepper.nes().debug().ppu.scanline;
-                        self.stepper.tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
+                        self.stepper
+                            .tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
                     }
                     Key::Char('v') => {
-                        self.stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                        self.stepper
+                            .tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
                         self.stepper.tick_until(|nes| match nes.debug().cpu.intr {

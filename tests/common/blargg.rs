@@ -35,7 +35,7 @@ pub fn blargg_test(rom_path: &Path, expect_success: bool) {
                 (0xDE, 0xB0, 0x61) => {
                     match state.cpu_bus.read_u8(0x6000) {
                         0x80 => false, // test is running
-                        _ => true
+                        _ => true,
                     }
                 }
                 _ => false,
@@ -50,7 +50,6 @@ pub fn blargg_test(rom_path: &Path, expect_success: bool) {
             } else {
                 assert_ne!(0x00, result, "Test output: {}", result_str.trim());
             }
-        }
+        },
     );
-
 }

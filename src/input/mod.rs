@@ -3,11 +3,9 @@ use std::cell::Cell;
 use bitflags::bitflags;
 
 pub trait Input {
-
     fn strobe(&self, value: u8);
 
     fn read(&self) -> u8;
-
 }
 
 bitflags! {
@@ -40,7 +38,6 @@ impl Joypad {
 }
 
 impl Input for Joypad {
-
     fn strobe(&self, value: u8) {
         self.strobe.set(value & 0x1);
         if value & 0x1 == 1 {
@@ -59,7 +56,7 @@ impl Input for Joypad {
                     _ => 1,
                 }
             }
-            _ => panic!("invalid strobe value")
+            _ => panic!("invalid strobe value"),
         }
     }
 }

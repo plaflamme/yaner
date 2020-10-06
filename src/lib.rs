@@ -9,5 +9,5 @@ pub mod input;
 pub mod memory;
 pub mod nes;
 pub mod ppu;
-pub mod tui;
 pub mod retro;
+pub mod tui;

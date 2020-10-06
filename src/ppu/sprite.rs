@@ -1,6 +1,6 @@
-use bitregions::bitregions;
-use crate::ppu::reg::{PpuStatus, Registers};
 use crate::memory::AddressSpace;
+use crate::ppu::reg::{PpuStatus, Registers};
+use bitregions::bitregions;
 use std::cell::{Cell, RefCell};
 
 bitregions! {
@@ -83,7 +83,7 @@ struct OutputUnits {
     units: RefCell<Vec<SpriteData>>,
     // an index of where sprites are on the line, true when at least one sprite is present at that coordinate
     // sort-a like a bloom filter so we don't have to iterate over all sprites for each pixel.
-    filter: RefCell<[bool;256]>,
+    filter: RefCell<[bool; 256]>,
     // sprite0 hit is based on whether sprite0 is in any of the output units
     has_sprite0: Cell<bool>,
 }
@@ -112,7 +112,8 @@ impl OutputUnits {
         if !self.filter.borrow()[dot as usize] {
             Vec::new()
         } else {
-            self.units.borrow()
+            self.units
+                .borrow()
                 .iter()
                 .filter(|sprite_data| {
                     let sprite_x = sprite_data.sprite.x as u16;
@@ -127,7 +128,7 @@ impl OutputUnits {
         let mut filter = self.filter.borrow_mut();
         let x_start = sprite.x as usize;
         let x_end = (x_start + 8).min(256);
-        for x in x_start..x_end  {
+        for x in x_start..x_end {
             filter[x] = true;
         }
     }
@@ -154,7 +155,6 @@ pub(super) struct SpritePipeline {
 }
 
 impl SpritePipeline {
-
     fn write_u8(&self, value: u8) {
         self.secondary_oam.update(|mut oam| {
             oam[self.secondary_oam_index.get() as usize] = value;
@@ -218,7 +218,8 @@ impl SpritePipeline {
 
                 if dot & 0x01 != 0 {
                     // "On odd cycles, data is read from (primary) OAM"
-                    self.oam_entry.set(oam_ram.read_u8(registers.oam_addr.get() as u16));
+                    self.oam_entry
+                        .set(oam_ram.read_u8(registers.oam_addr.get() as u16));
                 } else if !self.oam_done.get() {
                     // "On even cycles, data is written to secondary OAM (unless secondary OAM is full, in which case it will read the value in secondary OAM instead)"
 
@@ -226,10 +227,13 @@ impl SpritePipeline {
                     let mut oam_addr = self.oam_addr.get();
                     let prev_oam_high = oam_addr.high();
 
-                    let in_range = if self.sprite_in_range.get() { true } else {
+                    let in_range = if self.sprite_in_range.get() {
+                        true
+                    } else {
                         let sprite_y = entry as u16;
                         let sprite_y_end = sprite_y + registers.ctrl.get().sprite_height() as u16;
-                        self.sprite_in_range.update(|_| scanline >= sprite_y && scanline < sprite_y_end)
+                        self.sprite_in_range
+                            .update(|_| scanline >= sprite_y && scanline < sprite_y_end)
                     };
 
                     if !self.is_full() {
@@ -281,40 +285,42 @@ impl SpritePipeline {
                 let cycle = (dot - 257) % 8;
                 let sprite_index = ((dot - 257) / 8) as usize;
                 match cycle {
-                    0 => if sprite_index < self.sprite_count() as usize {
-                        let ctrl = registers.ctrl.get();
-                        let oam = self.secondary_oam.get();
-                        let base = sprite_index * 4;
-                        let sprite = Sprite::new(&oam[base..base+4]);
+                    0 => {
+                        if sprite_index < self.sprite_count() as usize {
+                            let ctrl = registers.ctrl.get();
+                            let oam = self.secondary_oam.get();
+                            let base = sprite_index * 4;
+                            let sprite = Sprite::new(&oam[base..base + 4]);
 
-                        let base_addr = if ctrl.large_sprites() {
-                            let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
-                            let addr = (sprite.tile_index & 0b1111_1110) as u16;
-                            pattern_table | addr * 16
-                        } else {
-                            let pattern_table = ctrl.sprite_pattern_table_address();
-                            let addr = sprite.tile_index as u16;
-                            pattern_table | addr * 16
-                        };
+                            let base_addr = if ctrl.large_sprites() {
+                                let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
+                                let addr = (sprite.tile_index & 0b1111_1110) as u16;
+                                pattern_table | addr * 16
+                            } else {
+                                let pattern_table = ctrl.sprite_pattern_table_address();
+                                let addr = sprite.tile_index as u16;
+                                pattern_table | addr * 16
+                            };
 
-                        let sprite_height = ctrl.sprite_height() as u16;
-                        let mut y_sprite = scanline - sprite.y as u16;
-                        if sprite.attr.flip_v() {
-                            y_sprite ^= sprite_height - 1;
+                            let sprite_height = ctrl.sprite_height() as u16;
+                            let mut y_sprite = scanline - sprite.y as u16;
+                            if sprite.attr.flip_v() {
+                                y_sprite ^= sprite_height - 1;
+                            }
+                            // for large sprites, if y_sprite > 8, we must use the second tile
+                            let second_tile_offset = y_sprite & 8;
+                            let addr = base_addr + y_sprite + second_tile_offset;
+                            let tile_low = bus.read_u8(addr);
+                            let tile_high = bus.read_u8(addr + 8);
+                            let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
+
+                            self.output_units.push(sprite_data);
                         }
-                        // for large sprites, if y_sprite > 8, we must use the second tile
-                        let second_tile_offset = y_sprite & 8;
-                        let addr = base_addr + y_sprite + second_tile_offset;
-                        let tile_low = bus.read_u8(addr);
-                        let tile_high = bus.read_u8(addr + 8);
-                        let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
-
-                        self.output_units.push(sprite_data);
                     }
-                    _ => ()
+                    _ => (),
                 }
             }
-            _ => ()
+            _ => (),
         }
     }
 }
@@ -326,14 +332,16 @@ pub mod debug {
         pub oam_addr: OamAddr,
         pub oam_entry: u8,
         pub secondary_oam_index: u8,
-        pub secondary_oam: [u8;32],
-        pub output_units: [Option<SpriteData>;8],
+        pub secondary_oam: [u8; 32],
+        pub output_units: [Option<SpriteData>; 8],
     }
 
     impl SpritePipelineState {
         pub(in crate::ppu) fn new(p: &SpritePipeline) -> Self {
-            let mut output = [None;8];
-            p.output_units.units.borrow()
+            let mut output = [None; 8];
+            p.output_units
+                .units
+                .borrow()
                 .iter()
                 .enumerate()
                 .for_each(|(idx, sprite_data)| output[idx] = Some(sprite_data.clone()));
@@ -371,7 +379,7 @@ mod test {
         assert_eq!(0, addr.high());
         for i in 0..63 {
             assert!(!addr.incr_high());
-            assert_eq!(i+1, addr.high());
+            assert_eq!(i + 1, addr.high());
         }
         assert!(addr.incr_high());
         assert_eq!(0, addr.high())

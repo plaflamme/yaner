@@ -51,8 +51,6 @@ fn cpu_timing_test() {
             assert_eq!(nes.cpu_bus.read_u8(0x0001), 0xE6);
         },
     );
-
-
 }
 
 #[test_case("1.Branch_Basics")]
