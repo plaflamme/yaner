@@ -82,10 +82,18 @@ impl TryFrom<PathBuf> for Cartridge {
         let mut f = File::open(path.clone())?;
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)?;
-        let rom = Rom::try_from(buf.as_slice())?;
+        Cartridge::try_from(buf.as_slice())
+    }
+}
+
+impl TryFrom<&[u8]> for Cartridge {
+    type Error = CartridgeError;
+
+    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+        let rom = Rom::try_from(data)?;
 
         let mapper = mapper::from(&rom);
 
-        Ok(Cartridge { mapper, path, rom })
+        Ok(Cartridge { mapper, path: PathBuf::from(""), rom })
     }
 }
