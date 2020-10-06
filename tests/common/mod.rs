@@ -11,17 +11,17 @@ pub fn run_test(
     rom_path: &Path,
     start_at: Option<u16>,
     mut halt: impl FnMut(&NesState) -> bool,
-) -> Nes {
+    mut assert: impl FnMut(&NesState),
+) {
     let cart = Cartridge::try_from(rom_path.to_owned()).unwrap();
-    let nes = Nes::new(cart);
     {
-        let mut clock = Stepper::new(&nes, start_at);
+        let mut stepper = Stepper::new(Nes::new(cart), start_at);
         loop {
-            clock.step_frame().unwrap();
-            if halt(&nes.debug()) {
+            stepper.step_frame().unwrap();
+            if halt(&stepper.nes().debug()) {
                 break;
             }
         }
+        assert(&stepper.nes().debug());
     }
-    nes
 }

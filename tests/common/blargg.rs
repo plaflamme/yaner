@@ -21,33 +21,36 @@ pub fn run_blargg_test(rom_path: &str) {
 }
 
 pub fn blargg_test(rom_path: &Path, expect_success: bool) {
-    let mut result = 0xFF;
-    let mut result_str = String::new();
-    run_test(rom_path, None, |state| {
-        let marker = (
-            state.cpu_bus.read_u8(0x6001),
-            state.cpu_bus.read_u8(0x6002),
-            state.cpu_bus.read_u8(0x6003),
-        );
-        match marker {
-            // this marker indicates that 0x6000 is useful
-            (0xDE, 0xB0, 0x61) => {
-                match state.cpu_bus.read_u8(0x6000) {
-                    0x80 => false, // test is running
-                    done => {
-                        result = done;
-                        result_str = read_zero_terminated_string(state.cpu_bus, 0x6004);
-                        true
+    run_test(
+        rom_path,
+        None,
+        |state| {
+            let marker = (
+                state.cpu_bus.read_u8(0x6001),
+                state.cpu_bus.read_u8(0x6002),
+                state.cpu_bus.read_u8(0x6003),
+            );
+            match marker {
+                // this marker indicates that 0x6000 is useful
+                (0xDE, 0xB0, 0x61) => {
+                    match state.cpu_bus.read_u8(0x6000) {
+                        0x80 => false, // test is running
+                        _ => true
                     }
                 }
+                _ => false,
             }
-            _ => false,
-        }
-    });
+        },
+        |state| {
+            let result = state.cpu_bus.read_u8(0x6000);
+            let result_str = read_zero_terminated_string(state.cpu_bus, 0x6004);
 
-    if expect_success {
-        assert_eq!(0x00, result, "Test output: {}", result_str.trim());
-    } else {
-        assert_ne!(0x00, result, "Test output: {}", result_str.trim());
-    }
+            if expect_success {
+                assert_eq!(0x00, result, "Test output: {}", result_str.trim());
+            } else {
+                assert_ne!(0x00, result, "Test output: {}", result_str.trim());
+            }
+        }
+    );
+
 }

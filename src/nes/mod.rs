@@ -92,10 +92,10 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps(
-        &self,
+    pub fn ppu_steps<'a>(
+        &'a self,
         start_at: Option<u16>,
-    ) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
+    ) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
         let mut cpu_suspended = false;
         let mut cpu = self.cpu.run(start_at);
         let mut ppu = self.ppu.run();
@@ -158,7 +158,7 @@ impl Nes {
     }
 
     // runs the program until the CPU halts
-    pub fn run(&self, start_at: Option<u16>) {
+    pub fn run(self, start_at: Option<u16>) {
         let mut stepper = Stepper::new(self, start_at);
         loop {
             match stepper.step_frame() {
@@ -190,20 +190,39 @@ impl Display for StepperError {
 
 impl Error for StepperError {}
 
-pub struct Stepper<'a> {
-    nes: &'a Nes,
-    steps: Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'a>,
+pub struct Stepper {
+    nes: Nes,
+    steps: Option<Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>>,
     halted: bool,
 }
 
-impl<'a> Stepper<'a> {
-    // TODO: normally, this should consume `Nes`, but this requires more refactoring
-    pub fn new(nes: &'a Nes, start_at: Option<u16>) -> Self {
-        Stepper {
+impl Stepper {
+    pub fn new(nes: Nes, start_at: Option<u16>) -> Pin<Box<Stepper>> {
+        let s = Stepper {
             nes,
-            steps: Box::new(nes.ppu_steps(start_at)),
+            steps: None,
             halted: false,
-        }
+        };
+
+        // NOTE: we use pin to fix the address of `s.nes`
+        let mut pinned = Box::pin(s);
+
+        // here be dragons...
+        unsafe {
+            // NOTE: we extend the lifetime of the generator.
+            //   This is necessary because I can't figure out how to tell / convince Rust that the reference to `boxed.nes` has a lifetime that is >= the generator's lifetime
+            //   I have no idea how to avoid this and transmute is the most unsafe thing you can do...
+            let generator = std::mem::transmute::<Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + '_>, Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>>(Box::new(pinned.nes.ppu_steps(start_at)));
+
+            // Here we do the typical self-referencial struct trick described in Pin
+            let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);
+            Pin::get_unchecked_mut(mut_ref).steps = Some(generator);
+        };
+        pinned
+    }
+
+    pub fn nes(&self) -> &Nes {
+        &self.nes
     }
 
     pub fn halted(&self) -> bool {
@@ -216,7 +235,7 @@ impl<'a> Stepper<'a> {
         } else {
             // NOTE: we have to help the compiler here by using type ascription
             let gen: &mut (dyn Generator<Yield = NesCycle, Return = ()> + Unpin) =
-                self.steps.borrow_mut();
+                self.steps.as_mut().unwrap().borrow_mut();
             match Pin::new(gen).resume(()) {
                 GeneratorState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
                     self.halted = true;

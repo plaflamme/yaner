@@ -17,6 +17,7 @@ use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, Stepper};
 use crate::ppu::reg::{PpuCtrl, PpuMask, PpuStatus};
+use std::pin::Pin;
 
 impl Display for Flags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -572,52 +573,51 @@ impl AppState {
 
 // TODO: implement debugger state here.
 pub struct Debugger {
-    nes: Nes,
+    stepper: Pin<Box<Stepper>>,
 }
 
 impl Debugger {
-    pub fn new(nes: Nes) -> Self {
-        Debugger { nes }
+    pub fn new(nes: Nes, start_at: Option<u16>) -> Self {
+        Debugger { stepper: Stepper::new(nes, start_at) }
     }
 
-    pub fn start(&self, start_at: Option<u16>) -> Result<(), anyhow::Error> {
+    pub fn start(&mut self) -> Result<(), anyhow::Error> {
         let stdout = io::stdout().into_raw_mode()?;
         let backend = TermionBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
         terminal.clear()?;
 
-        let mut stepper = Stepper::new(&self.nes, start_at);
         let mut input = io::stdin().keys();
 
         let mut app_state = AppState::new();
 
         loop {
-            if stepper.halted() {
+            if self.stepper.halted() {
                 break;
             }
-            draw(&mut terminal, &self.nes.debug(), app_state)?;
+            draw(&mut terminal, &self.stepper.nes().debug(), app_state)?;
             if let Some(input_result) = input.next() {
                 match input_result? {
                     Key::Char('[') | Key::Char(']') => app_state.cycle_view(),
                     Key::Ctrl('c') | Key::Char('q') => break,
                     Key::Char('f') => {
-                        stepper.step_frame()?;
+                        self.stepper.step_frame()?;
                     }
                     Key::Char('o') => {
-                        stepper.step_cpu()?;
+                        self.stepper.step_cpu()?;
                     }
                     Key::Char(' ') | Key::Char('s') => {
-                        stepper.tick()?;
+                        self.stepper.tick()?;
                     }
                     Key::Char('l') => {
-                        let current_sl = self.nes.debug().ppu.scanline;
-                        stepper.tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
+                        let current_sl = self.stepper.nes().debug().ppu.scanline;
+                        self.stepper.tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
                     }
                     Key::Char('v') => {
-                        stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                        self.stepper.tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
-                        stepper.tick_until(|nes| match nes.debug().cpu.intr {
+                        self.stepper.tick_until(|nes| match nes.debug().cpu.intr {
                             Some(Interrupt::Nmi) => true,
                             _ => false,
                         })?;

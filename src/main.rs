@@ -33,9 +33,6 @@ enum YanerCommand {
         #[structopt(short, parse(try_from_str = parse_hex))]
         /// Sets the initial PC value instead of reading it from the reset vector.
         pc: Option<u16>,
-        #[structopt(short, parse(try_from_str = parse_hex))]
-        /// Outputs a u16 value at this memory location after execution.
-        output: Option<u16>,
         /// The iNES ROM file.
         rom: PathBuf,
     },
@@ -65,20 +62,16 @@ fn main() {
             let cartridge = Cartridge::try_from(rom).unwrap();
             println!("{}", cartridge);
         }
-        Run { pc, output, rom } => {
+        Run { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
             nes.run(pc);
-            if let Some(addr) = output {
-                let value = nes.debug().cpu_bus.read_u16(addr);
-                println!("{:#04X} -> {:#04X}", addr, value);
-            }
         }
         Debug { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new(cartridge);
-            let debugger = yaner::tui::Debugger::new(nes);
-            debugger.start(pc).unwrap();
+            let mut debugger = yaner::tui::Debugger::new(nes, pc);
+            debugger.start().unwrap();
         }
         Generate => yaner::cpu::generator::generate_opcode_table(),
     }
