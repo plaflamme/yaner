@@ -3,14 +3,15 @@ use super::Mapper;
 use super::NametableMirroring;
 use crate::memory::AddressSpace;
 
+pub mod cnrom;
 pub mod nrom;
 pub mod sxrom;
 
 pub struct Unknown();
 
 impl Mapper for Unknown {
-    fn name(&self) -> String {
-        "Unknown".to_string()
+    fn name(&self) -> &'static str {
+        "Unknown"
     }
 
     fn nametable_mirroring(&self) -> NametableMirroring {
@@ -30,6 +31,7 @@ pub fn from(rom: &Rom) -> Box<dyn Mapper> {
     match rom.mapper {
         0 => Box::new(nrom::NROM::from(rom)),
         1 => Box::new(sxrom::SxROM::from(rom)),
+        3 => Box::new(cnrom::CNROM::from(rom)),
         _ => Box::new(Unknown()), // NOTE: this allows parsing to succeed, but running it will fail
     }
 }

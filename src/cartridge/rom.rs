@@ -78,6 +78,7 @@ impl From<Flags9> for TvStandard {
     }
 }
 
+#[derive(Clone)]
 pub enum Chr {
     Rom(Vec<u8>),
     Ram(Ram8KB),

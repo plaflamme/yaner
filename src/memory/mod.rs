@@ -88,6 +88,7 @@ impl AddressSpace for Ram2KB {
 }
 
 // https://github.com/rust-lang/rust/issues/43408
+#[derive(Clone)]
 pub struct Ram8KB {
     data: Cell<[u8; 0x2000]>,
 }

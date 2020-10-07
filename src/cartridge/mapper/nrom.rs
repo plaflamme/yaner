@@ -19,9 +19,7 @@ impl From<&Rom> for NROM {
 }
 
 impl Mapper for NROM {
-    fn name(&self) -> String {
-        "NROM".to_string()
-    }
+    fn name(&self) -> &'static str { "NROM" }
 
     fn nametable_mirroring(&self) -> NametableMirroring {
         self.mirroring

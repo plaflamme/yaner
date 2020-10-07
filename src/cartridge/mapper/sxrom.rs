@@ -163,8 +163,8 @@ impl From<&Rom> for SxROM {
 }
 
 impl Mapper for SxROM {
-    fn name(&self) -> String {
-        "SxROM".to_string()
+    fn name(&self) -> &'static str {
+        "SxROM"
     }
 
     fn nametable_mirroring(&self) -> NametableMirroring {

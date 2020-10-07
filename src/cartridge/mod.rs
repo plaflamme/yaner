@@ -19,7 +19,7 @@ pub enum NametableMirroring {
 }
 
 pub trait Mapper {
-    fn name(&self) -> String;
+    fn name(&self) -> &'static str;
 
     fn nametable_mirroring(&self) -> NametableMirroring;
 
