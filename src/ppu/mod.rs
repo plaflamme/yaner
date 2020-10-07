@@ -117,11 +117,11 @@ impl PpuBus {
 
     fn nametable_mirroring(&self, addr: u16) -> u16 {
         match self.mapper.borrow().nametable_mirroring() {
-            NametableMirroring::Horizontal => {
+            NametableMirroring::Vertical => {
                 // 0x2000 is mirrored at 0x2800
                 ((addr - 0x2000) % 0x800) + 0x2000
             }
-            NametableMirroring::Vertical => {
+            NametableMirroring::Horizontal => {
                 // 0x2000 is mirrored at 0x2400
                 ((addr - 0x2000) % 0x400) + 0x2000
             }

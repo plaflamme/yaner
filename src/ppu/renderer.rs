@@ -277,15 +277,15 @@ impl Renderer {
             //   Afterwards, the shift registers are shifted once, to the data for the next pixel.
             // The last step is implemented in self.shift()
 
-            // TODO: scrolling affects this
-            let high = (self.pattern_data.value.high.get() >> 14) & 0b10;
-            let low = (self.pattern_data.value.low.get() >> 15) & 0x01;
+            let fine_x = registers.fine_x.get();
+            let high = ((self.pattern_data.value.high.get() >> (15 - fine_x)) & 0b01) << 1;
+            let low = (self.pattern_data.value.low.get() >> (15 - fine_x)) & 0x01;
 
             let color = (high | low) as u8;
 
             let high =
-                (self.attribute_data.value.high.get() >> (6 - registers.fine_x.get())) & 0b10;
-            let low = (self.attribute_data.value.low.get() >> (7 - registers.fine_x.get())) & 0x01;
+                ((self.attribute_data.value.high.get() >> (7 - fine_x)) & 0b01) << 1;
+            let low = (self.attribute_data.value.low.get() >> (7 - fine_x)) & 0x01;
 
             let palette = (high | low) as u8;
 
@@ -304,9 +304,8 @@ impl Renderer {
 
             // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
             // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
-            // NOTE: we add sprite_color.is_opaque() because it's implicit in the statement
             let pixel_color =
-                if sprite_color.is_opaque() && (bg_color.is_transparent() || fg_priority) {
+                if fg_priority || bg_color.is_transparent() {
                     sprite_color
                 } else {
                     bg_color
