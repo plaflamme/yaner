@@ -3,7 +3,7 @@
 mod common;
 
 use common::blargg::run_blargg_test;
-use common::run_test;
+use common::run_test_frames;
 use std::path::Path;
 use test_case::test_case;
 
@@ -42,8 +42,7 @@ fn ppu_vbl_nmi(case: &str) {
 #[test_case("vbl_clear_time")]
 #[test_case("vram_access")]
 fn ppu_blargg_ppu_tests(case: &str) {
-    let mut frames = 0;
-    run_test(
+    run_test_frames(
         &Path::new(
             format!(
                 "roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes",
@@ -52,10 +51,7 @@ fn ppu_blargg_ppu_tests(case: &str) {
             .as_str(),
         ),
         None,
-        |_| {
-            frames += 1;
-            frames >= 30
-        },
+        30,
         |nes| assert_eq!(nes.ppu_bus.read_u8(0x20A4), 0x31),
     );
 }
@@ -72,8 +68,7 @@ fn ppu_blargg_ppu_tests(case: &str) {
 #[test_case("10.timing_order")]
 #[test_case("11.edge_timing")]
 fn ppu_sprite_hit_tests(case: &str) {
-    let mut frames = 0;
-    run_test(
+    run_test_frames(
         &Path::new(
             format!(
                 "roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes",
@@ -82,10 +77,7 @@ fn ppu_sprite_hit_tests(case: &str) {
             .as_str(),
         ),
         None,
-        |_| {
-            frames += 1;
-            frames >= 80
-        },
+        80,
         |nes| {
             assert_eq!(nes.cpu_bus.read_u8(0x00F8), 0x01);
         },
@@ -98,14 +90,10 @@ fn ppu_sprite_hit_tests(case: &str) {
 #[test_case("4.Obscure")]
 #[test_case("5.Emulator")]
 fn ppu_sprite_overflow_tests(case: &str) {
-    let mut frames = 0;
-    run_test(
+    run_test_frames(
         &Path::new(format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case).as_str()),
         None,
-        |_| {
-            frames += 1;
-            frames >= 160
-        },
+        160,
         |nes| {
             assert_eq!(nes.cpu_bus.read_u8(0x00F8), 0x01);
         },

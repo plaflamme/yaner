@@ -3,7 +3,7 @@
 mod common;
 
 use common::blargg::run_blargg_test;
-use common::run_test;
+use common::run_test_frames;
 use std::path::Path;
 use test_case::test_case;
 
@@ -37,14 +37,10 @@ fn instr_misc(case: &str) {
 
 #[test]
 fn cpu_timing_test() {
-    let mut frames = 0;
-    run_test(
+    run_test_frames(
         &Path::new("roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes"),
         None,
-        |_| {
-            frames += 1;
-            frames >= 640
-        },
+        640,
         |nes| {
             // NOTE: these were shown to be different when the test fails. It's not documented anywhere though...
             assert_eq!(nes.cpu_bus.read_u8(0x0000), 0x60);
@@ -57,18 +53,19 @@ fn cpu_timing_test() {
 #[test_case("2.Backward_Branch")]
 #[test_case("3.Forward_Branch")]
 fn cpu_branch_timing_test(case: &str) {
-    let mut frames = 0;
-    run_test(
+    run_test_frames(
         &Path::new(format!("roms/nes-test-roms/branch_timing_tests/{}.nes", case).as_str()),
         None,
-        |_| {
-            frames += 1;
-            frames >= 30
-        },
+        30,
         |nes| {
             // NOTE: these were shown to be different when the test fails. It's not documented anywhere though...
             assert_eq!(nes.cpu_bus.read_u8(0x0000), 0x80);
             assert_eq!(nes.cpu_bus.read_u8(0x0001), 0xE0);
         },
     );
+}
+
+#[test]
+fn cpu_reset() {
+    run_blargg_test("roms/nes-test-roms/cpu_reset/ram_after_reset.nes");
 }

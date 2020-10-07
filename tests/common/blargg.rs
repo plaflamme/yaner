@@ -3,6 +3,7 @@ use super::run_test;
 use std::path::Path;
 
 use yaner::memory::AddressSpace;
+use crate::common::Eval;
 
 fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
@@ -21,10 +22,18 @@ pub fn run_blargg_test(rom_path: &str) {
 }
 
 pub fn blargg_test(rom_path: &Path, expect_success: bool) {
+    let mut reset_pending = None;
     run_test(
         rom_path,
         None,
         |state| {
+            if let Some(remaining) = reset_pending {
+                if remaining == 0 {
+                    reset_pending = None;
+                    return Eval::Reset;
+                }
+                reset_pending = Some(remaining - 1);
+            }
             let marker = (
                 state.cpu_bus.read_u8(0x6001),
                 state.cpu_bus.read_u8(0x6002),
@@ -34,11 +43,17 @@ pub fn blargg_test(rom_path: &Path, expect_success: bool) {
                 // this marker indicates that 0x6000 is useful
                 (0xDE, 0xB0, 0x61) => {
                     match state.cpu_bus.read_u8(0x6000) {
-                        0x80 => false, // test is running
-                        _ => true,
+                        0x80 => Eval::Continue, // test is running
+                        0x81 if reset_pending.is_some() => Eval::Continue,
+                        0x81 => {
+                            // requires reset, at least 100ms from now
+                            reset_pending = Some(10);
+                            Eval::Continue
+                        },
+                        _ => Eval::Halt,
                     }
                 }
-                _ => false,
+                _ => Eval::Continue,
             }
         },
         |state| {
