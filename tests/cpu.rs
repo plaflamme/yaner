@@ -69,3 +69,9 @@ fn cpu_branch_timing_test(case: &str) {
 fn cpu_reset() {
     run_blargg_test("roms/nes-test-roms/cpu_reset/ram_after_reset.nes");
 }
+
+#[test_case("test_cpu_exec_space_ppuio")]
+#[test_case("test_cpu_exec_space_apu" => panics "Failure To Obey Predetermined Execution Path")] // requires more io ports
+fn cpu_exec_space(case: &str) {
+    run_blargg_test(format!("roms/nes-test-roms/cpu_exec_space/{}.nes", case).as_str());
+}
