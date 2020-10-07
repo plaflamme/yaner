@@ -763,11 +763,13 @@ impl AddressSpace for IoRegisters {
             0x4016 => {
                 self.out_latch.set(value & 0x7); // lower 3 bits
 
+                // The first bit is connected to the inputs
+                // TODO: is this supposed to happen now or on the next tick?
                 let out0 = value & 0x01;
                 self.input1.strobe(out0);
                 self.input2.strobe(out0);
             }
-            0x4017 => (), // joy2
+            0x4017 => (),
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => (),
         }
