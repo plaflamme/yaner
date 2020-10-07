@@ -11,3 +11,9 @@ pub mod nes;
 pub mod ppu;
 pub mod retro;
 pub mod tui;
+
+// implement for things that reset
+// not very useful at this point
+pub trait Reset {
+    fn reset(&self);
+}

@@ -9,10 +9,11 @@ use libretro_backend::{
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::pin::Pin;
+use crate::Reset;
 
 #[derive(Default)]
 struct YanerCore {
-    nes: Option<Pin<Box<Stepper>>>,
+    stepper: Option<Pin<Box<Stepper>>>,
     game_data: Option<GameData>,
 }
 
@@ -31,7 +32,7 @@ impl Core for YanerCore {
         match cartridge {
             Err(_) => LoadGameResult::Failed(game_data),
             Ok(cartridge) => {
-                self.nes = Some(Stepper::new(Nes::new(cartridge)));
+                self.stepper = Some(Stepper::new(Nes::new(cartridge)));
                 self.game_data = Some(game_data);
                 let av_info = AudioVideoInfo::new()
                     .video(256, 240, 60.0, PixelFormat::ARGB8888)
@@ -60,7 +61,7 @@ impl Core for YanerCore {
                 buttons
             }}
         };
-        if let Some(stepper) = self.nes.as_mut() {
+        if let Some(stepper) = self.stepper.as_mut() {
             stepper.nes().input1.update(extract_buttons!(
                 0, A, B, Start, Select, Up, Down, Left, Right
             ));
@@ -88,7 +89,9 @@ impl Core for YanerCore {
     }
 
     fn on_reset(&mut self) {
-        unimplemented!()
+        if let Some(stepper) = &self.stepper {
+            stepper.reset()
+        }
     }
 }
 

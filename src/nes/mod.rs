@@ -13,6 +13,7 @@ use crate::nes::dma::Dma;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use std::borrow::BorrowMut;
 use std::error::Error;
+use crate::Reset;
 
 pub mod debug;
 mod dma;
@@ -164,6 +165,12 @@ impl Display for Nes {
     }
 }
 
+impl Reset for Nes {
+    fn reset(&self) {
+        self.cpu.reset();
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum StepperError {
     Halted,
@@ -266,5 +273,11 @@ impl Stepper {
                 _ => (),
             }
         }
+    }
+}
+
+impl Reset for Stepper {
+    fn reset(&self) {
+        self.nes.reset();
     }
 }

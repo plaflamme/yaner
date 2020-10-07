@@ -5,16 +5,16 @@ pub(in crate::cpu) fn interrupt<'a>(
     interrupt: Interrupt,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
 
-    let (interrupt_vector, push, extra_ticks) = match interrupt {
-        Interrupt::Nmi => (0xFFFA, true, 0),
-        Interrupt::Brk => (0xFFFE, true, 0),
+    let (interrupt_vector, rst, extra_ticks) = match interrupt {
+        Interrupt::Nmi => (0xFFFA, false, 0),
+        Interrupt::Brk => (0xFFFE, false, 0),
         //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        Interrupt::Rst => (0xFFFC, false, 2),
+        Interrupt::Rst => (0xFFFC, true, 2),
     };
 
     move || {
 
-        if push {
+        if !rst {
             let pc_hi = (cpu.pc.get() >> 8) as u8;
             cpu.push_stack(pc_hi);
             yield CpuCycle::Tick;
@@ -28,6 +28,10 @@ pub(in crate::cpu) fn interrupt<'a>(
             cpu.push_stack(p.bits());
             yield CpuCycle::Tick;
         } else {
+            // According to http://wiki.nesdev.com/w/index.php/CPU_power_up_state#cite_note-reset-stack-push-3
+            // What actually happens is that the pushes still happen, but nothing is written to the stack.
+            cpu.sp.set(0xFD);
+            cpu.flags.set(Flags::from_bits(0x34).unwrap());
             yield CpuCycle::Tick;
             yield CpuCycle::Tick;
             yield CpuCycle::Tick;

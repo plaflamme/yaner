@@ -108,6 +108,7 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
 }
 
 fn assert_log(nes: &Nes, line: &LogLine) {
+    let irrelevant_flags = Flags::B - Flags::U;
     let state = nes.debug();
     assert_eq!(
         nes.clocks.cpu_cycles.get(),
@@ -119,9 +120,11 @@ fn assert_log(nes: &Nes, line: &LogLine) {
     assert_eq!(state.cpu.a, line.a, "incorrect acc at {}", line);
     assert_eq!(state.cpu.x, line.x, "incorrect x at {}", line);
     assert_eq!(state.cpu.y, line.y, "incorrect y at {}", line);
+    // nestest's log is wrong about the flags on power up:
+    // http://wiki.nesdev.com/w/index.php/CPU_power_up_state#cite_note-1
     assert_eq!(
-        state.cpu.flags,
-        Flags::from_bits_truncate(line.flags),
+        state.cpu.flags - irrelevant_flags,
+        Flags::from_bits_truncate(line.flags) - irrelevant_flags,
         "incorrect flags at {}",
         line
     );
