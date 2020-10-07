@@ -49,6 +49,12 @@ fn cpu_timing_test() {
     );
 }
 
+#[test]
+#[ignore] // we pass this, but I'm not sure where to look to find the correct passing state.
+fn cpu_dummy_reads() {
+    run_blargg_test("roms/nes-test-roms/cpu_dummy_reads/cpu_dummy_reads.nes");
+}
+
 #[test_case("1.Branch_Basics")]
 #[test_case("2.Backward_Branch")]
 #[test_case("3.Forward_Branch")]
