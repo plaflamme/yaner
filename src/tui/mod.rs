@@ -623,19 +623,19 @@ impl Debugger {
                         self.stepper.step_cpu()?;
                     }
                     Key::Char(' ') | Key::Char('s') => {
-                        self.stepper.tick()?;
+                        self.stepper.step()?;
                     }
                     Key::Char('l') => {
                         let current_sl = self.stepper.nes().debug().ppu.scanline;
                         self.stepper
-                            .tick_until(|nes| nes.debug().ppu.scanline != current_sl)?;
+                            .step_until(|nes| nes.debug().ppu.scanline != current_sl)?;
                     }
                     Key::Char('v') => {
                         self.stepper
-                            .tick_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                            .step_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
-                        self.stepper.tick_until(|nes| match nes.debug().cpu.intr {
+                        self.stepper.step_until(|nes| match nes.debug().cpu.intr {
                             Some(Interrupt::Nmi) => true,
                             _ => false,
                         })?;

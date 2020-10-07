@@ -52,7 +52,6 @@ pub struct Nes {
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
     pub input2: Rc<Joypad>,
     // TODO: apu
-    // TODO: input
 }
 
 impl Nes {
@@ -207,7 +206,7 @@ impl Stepper {
                 Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>,
             >(Box::new(pinned.nes.ppu_steps()));
 
-            // Here we do the typical self-referencial struct trick described in Pin
+            // Here we do the typical self-referential struct trick described in Pin
             let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);
             Pin::get_unchecked_mut(mut_ref).steps = Some(generator);
         };
@@ -222,7 +221,7 @@ impl Stepper {
         self.halted
     }
 
-    pub fn tick(&mut self) -> Result<NesCycle, StepperError> {
+    pub fn step(&mut self) -> Result<NesCycle, StepperError> {
         if self.halted {
             Err(StepperError::Halted)
         } else {
@@ -240,9 +239,9 @@ impl Stepper {
         }
     }
 
-    pub fn tick_until(&mut self, mut stop: impl FnMut(&Nes) -> bool) -> Result<(), StepperError> {
+    pub fn step_until(&mut self, mut stop: impl FnMut(&Nes) -> bool) -> Result<(), StepperError> {
         loop {
-            self.tick()?;
+            self.step()?;
             if stop(&self.nes) {
                 break Ok(());
             }
@@ -251,7 +250,7 @@ impl Stepper {
 
     pub fn step_frame(&mut self) -> Result<PpuCycle, StepperError> {
         loop {
-            match self.tick()? {
+            match self.step()? {
                 NesCycle::CpuCycle(_, PpuCycle::Frame) => break Ok(PpuCycle::Frame),
                 NesCycle::PpuCycle(PpuCycle::Frame) => break Ok(PpuCycle::Frame),
                 _ => (),
@@ -261,7 +260,7 @@ impl Stepper {
 
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
-            match self.tick()? {
+            match self.step()? {
                 NesCycle::CpuCycle(cycle @ CpuCycle::OpComplete(_, _), _) => break Ok(cycle),
                 NesCycle::CpuCycle(CpuCycle::Halt, _) => break Ok(CpuCycle::Halt),
                 _ => (),
