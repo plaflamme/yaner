@@ -591,9 +591,9 @@ pub struct Debugger {
 }
 
 impl Debugger {
-    pub fn new(nes: Nes, start_at: Option<u16>) -> Self {
+    pub fn new(nes: Nes) -> Self {
         Debugger {
-            stepper: Stepper::new(nes, start_at),
+            stepper: Stepper::new(nes),
         }
     }
 

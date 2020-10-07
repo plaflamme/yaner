@@ -64,13 +64,13 @@ fn main() {
         }
         Run { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
-            let nes = Nes::new(cartridge);
-            nes.run(pc);
+            let nes = Nes::new_with_pc(cartridge, pc);
+            nes.run();
         }
         Debug { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
-            let nes = Nes::new(cartridge);
-            let mut debugger = yaner::tui::Debugger::new(nes, pc);
+            let nes = Nes::new_with_pc(cartridge, pc);
+            let mut debugger = yaner::tui::Debugger::new(nes);
             debugger.start().unwrap();
         }
         Generate => yaner::cpu::generator::generate_opcode_table(),

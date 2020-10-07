@@ -194,6 +194,7 @@ bitflags!(
 pub enum Interrupt {
     Nmi,
     Brk,
+    Rst,
 }
 
 // http://nesdev.com/6502_cpu.txt
@@ -207,6 +208,9 @@ pub struct Cpu {
     pc: Cell<u16>,
 
     pub bus: CpuBus,
+
+    // Override the rst_pc
+    rst_pc: Option<u16>,
 }
 
 impl Display for Cpu {
@@ -254,7 +258,7 @@ pub enum CpuCycle {
 }
 
 impl Cpu {
-    pub fn new(bus: CpuBus) -> Self {
+    pub fn new(bus: CpuBus, rst_pc: Option<u16>) -> Self {
         // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
         Cpu {
             acc: Cell::new(0),
@@ -265,6 +269,8 @@ impl Cpu {
             pc: Cell::new(0),
 
             bus,
+
+            rst_pc,
         }
     }
 
@@ -334,14 +340,11 @@ impl Cpu {
 
     pub fn run<'a>(
         &'a self,
-        start_at: Option<u16>,
     ) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-        let pc = start_at.unwrap_or_else(|| self.bus.read_u16(0xFFFC));
-        self.pc.set(pc);
 
         // used to delay interrupts by one op
-        // TODO: this probably requires more granular timing
-        let mut interrupt: Option<Interrupt> = None;
+        // TODO: this probably requires more granular timing.
+        let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
 
         move || loop {
             if let Some(intr) = interrupt {

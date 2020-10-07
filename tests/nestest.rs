@@ -138,19 +138,18 @@ fn assert_log(nes: &Nes, line: &LogLine) {
         "incorrect ppu dot at {}",
         line
     );
-    // TODO: check ppu scanline and cycle
 }
 
 // Steps the same way nintendulator does, which is:
 //   (cpu_step + 3 * ppu_step)
 //   if cpu_step == OpComplete { yield () }
 fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '_ {
-    let mut ppu_steps = nes.ppu_steps(Some(0xC000));
+    let mut ppu_steps = nes.ppu_steps();
     move || {
         let mut yield_on_next = false;
         loop {
             match Generator::resume(Pin::new(&mut ppu_steps), ()) {
-                GeneratorState::Yielded(NesCycle::PowerUp) => yield (),
+                GeneratorState::Yielded(NesCycle::PowerUp) => (),
                 GeneratorState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
                     yield_on_next = true;
                 }
@@ -172,7 +171,7 @@ fn test_nestest() {
 
     let cartridge =
         Cartridge::try_from(Path::new("roms/nes-test-roms/other/nestest.nes").to_owned()).unwrap();
-    let nes = Nes::new(cartridge);
+    let nes = Nes::new_with_pc(cartridge, Some(0xC000));
 
     let mut steps = nintendulator_steps(&nes);
 

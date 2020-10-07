@@ -17,6 +17,7 @@ use std::error::Error;
 pub mod debug;
 mod dma;
 
+#[derive(Default)]
 pub struct Clocks {
     pub cpu_cycles: Cell<u64>,
     pub ppu_cycles: Cell<u64>,
@@ -24,19 +25,6 @@ pub struct Clocks {
 }
 
 impl Clocks {
-    fn new() -> Self {
-        // start at 7 due to reset interrupt handling
-        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        let cpu_cycles = 7u64;
-        // starts at 21, probably for the same reason as above, but this doesn't seem to be documented anywhere
-        let ppu_cycles = 21u64;
-        Clocks {
-            cpu_cycles: Cell::new(cpu_cycles),
-            ppu_cycles: Cell::new(ppu_cycles),
-            ppu_frames: Cell::default(),
-        }
-    }
-
     fn tick(&self, with_cpu_cycle: bool) {
         self.ppu_cycles.update(|c| c.wrapping_add(1));
         if with_cpu_cycle {
@@ -69,6 +57,9 @@ pub struct Nes {
 
 impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
+        Nes::new_with_pc(cartridge, None)
+    }
+    pub fn new_with_pc(cartridge: Cartridge, start_at: Option<u16>) -> Self {
         let input1 = Rc::new(crate::input::Joypad::default());
         let input2 = Rc::new(crate::input::Joypad::default());
         let mapper = Rc::new(RefCell::new(cartridge.mapper));
@@ -78,10 +69,10 @@ impl Nes {
         let cpu_bus = CpuBus::new(io_registers, ppu_mem_registers, mapper.clone());
 
         Nes {
-            cpu: Cpu::new(cpu_bus),
+            cpu: Cpu::new(cpu_bus, start_at),
             ppu,
             dma: Dma::new(),
-            clocks: Clocks::new(),
+            clocks: Clocks::default(),
             input1,
             input2,
         }
@@ -94,10 +85,9 @@ impl Nes {
     // yields on every nes ppu tick
     pub fn ppu_steps<'a>(
         &'a self,
-        start_at: Option<u16>,
     ) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
         let mut cpu_suspended = false;
-        let mut cpu = self.cpu.run(start_at);
+        let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
 
@@ -158,8 +148,8 @@ impl Nes {
     }
 
     // runs the program until the CPU halts
-    pub fn run(self, start_at: Option<u16>) {
-        let mut stepper = Stepper::new(self, start_at);
+    pub fn run(self) {
+        let mut stepper = Stepper::new(self);
         loop {
             match stepper.step_frame() {
                 Ok(_) => (),
@@ -197,7 +187,7 @@ pub struct Stepper {
 }
 
 impl Stepper {
-    pub fn new(nes: Nes, start_at: Option<u16>) -> Pin<Box<Stepper>> {
+    pub fn new(nes: Nes) -> Pin<Box<Stepper>> {
         let s = Stepper {
             nes,
             steps: None,
@@ -215,7 +205,7 @@ impl Stepper {
             let generator = std::mem::transmute::<
                 Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + '_>,
                 Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>,
-            >(Box::new(pinned.nes.ppu_steps(start_at)));
+            >(Box::new(pinned.nes.ppu_steps()));
 
             // Here we do the typical self-referencial struct trick described in Pin
             let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);

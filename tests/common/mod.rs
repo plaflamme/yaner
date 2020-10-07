@@ -15,7 +15,7 @@ pub fn run_test(
 ) {
     let cart = Cartridge::try_from(rom_path.to_owned()).unwrap();
     {
-        let mut stepper = Stepper::new(Nes::new(cart), start_at);
+        let mut stepper = Stepper::new(Nes::new_with_pc(cart, start_at));
         loop {
             stepper.step_frame().unwrap();
             if halt(&stepper.nes().debug()) {

@@ -31,7 +31,7 @@ impl Core for YanerCore {
         match cartridge {
             Err(_) => LoadGameResult::Failed(game_data),
             Ok(cartridge) => {
-                self.nes = Some(Stepper::new(Nes::new(cartridge), None));
+                self.nes = Some(Stepper::new(Nes::new(cartridge)));
                 self.game_data = Some(game_data);
                 let av_info = AudioVideoInfo::new()
                     .video(256, 240, 60.0, PixelFormat::ARGB8888)

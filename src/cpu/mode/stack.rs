@@ -4,33 +4,53 @@ pub(in crate::cpu) fn interrupt<'a>(
     cpu: &'a Cpu,
     interrupt: Interrupt,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
-    let interrupt_pc = match interrupt {
-        Interrupt::Nmi => 0xFFFA,
-        Interrupt::Brk => 0xFFFE,
+
+    let (interrupt_vector, push, extra_ticks) = match interrupt {
+        Interrupt::Nmi => (0xFFFA, true, 0),
+        Interrupt::Brk => (0xFFFE, true, 0),
+        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
+        Interrupt::Rst => (0xFFFC, false, 2),
     };
 
     move || {
-        let pc_hi = (cpu.pc.get() >> 8) as u8;
-        cpu.push_stack(pc_hi);
-        yield CpuCycle::Tick;
 
-        let pc_lo = (cpu.pc.get() & 0x00FF) as u8;
-        cpu.push_stack(pc_lo);
-        yield CpuCycle::Tick;
+        if push {
+            let pc_hi = (cpu.pc.get() >> 8) as u8;
+            cpu.push_stack(pc_hi);
+            yield CpuCycle::Tick;
 
-        let mut p = cpu.flags.get();
-        p.insert(Flags::B | Flags::U);
-        cpu.push_stack(p.bits());
-        yield CpuCycle::Tick;
+            let pc_lo = (cpu.pc.get() & 0x00FF) as u8;
+            cpu.push_stack(pc_lo);
+            yield CpuCycle::Tick;
 
-        let pc_lo = cpu.bus.read_u8(interrupt_pc) as u16;
+            let mut p = cpu.flags.get();
+            p.insert(Flags::B | Flags::U);
+            cpu.push_stack(p.bits());
+            yield CpuCycle::Tick;
+        } else {
+            yield CpuCycle::Tick;
+            yield CpuCycle::Tick;
+            yield CpuCycle::Tick;
+        }
+        // http://wiki.nesdev.com/w/index.php/CPU_pin_out_and_signal_description
+        // When [the reset button is] released, CPU starts executing code (read $FFFC, read $FFFD, ...) after 6 M2 clocks.
+        for _ in 0..extra_ticks {
+            yield CpuCycle::Tick;
+        }
+
+        let pc_lo = cpu.bus.read_u8(interrupt_vector) as u16;
         yield CpuCycle::Tick;
 
         cpu.set_flag(Flags::I, true);
 
-        let pc_hi = cpu.bus.read_u8(interrupt_pc.wrapping_add(1)) as u16;
+        let pc_hi = cpu.bus.read_u8(interrupt_vector.wrapping_add(1)) as u16;
         let pc = pc_hi << 8 | pc_lo;
         cpu.pc.set(pc);
+
+        // Allow the user to override the resulting pc
+        if let Some(pc) = cpu.rst_pc {
+            cpu.pc.set(pc);
+        }
 
         OpTrace::Implicit
     }
