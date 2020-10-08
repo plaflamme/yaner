@@ -7,13 +7,17 @@ use std::cell::Cell;
 pub struct CNROM {
     mirroring: NametableMirroring,
     prg_rom: Switched<crate::memory::Rom>,
-    chr: Switched<Chr>,
+    chr: Switched<crate::memory::Rom>,
     chr_select: Cell<u8>,
 }
 
 impl From<&Rom> for CNROM {
     fn from(rom: &Rom) -> Self {
         let data = RomData::new(&rom);
+        let chr_rom = match data.chr {
+            Chr::Rom(chr_data) => crate::memory::Rom::new(chr_data),
+            Chr::Ram(_) => panic!("CNROM doesn't support CHR RAM"), // TODO: we should use TryFrom now that these can fail
+        };
         CNROM {
             mirroring: rom.nametable_mirroring,
             prg_rom: Switched::new(
@@ -21,7 +25,7 @@ impl From<&Rom> for CNROM {
                 data.prg_rom.len(),
                 16_384,
             ),
-            chr: Switched::new(data.chr.clone(), data.chr.addr_space_size(), 8_192),
+            chr: Switched::new(chr_rom, 32_768, 8_192),
             chr_select: Cell::default(),
         }
     }
@@ -48,9 +52,10 @@ impl Mapper for CNROM {
 impl AddressSpace for CNROM {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x1FFF => self
-                .chr
-                .read_u8(BankSelect::Index(self.chr_select.get()), addr),
+            0x0000..=0x1FFF => {
+                let idx = BankSelect::Index(self.chr_select.get());
+                self.chr.read_u8(idx, addr)
+            }
 
             // PRG RAM => None
             0x6000..=0x7FFF => 0x00,
