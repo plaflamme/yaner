@@ -12,8 +12,8 @@ pub mod blargg;
 // used to determine what the test loop should do
 pub enum Eval {
     Continue, // test should continue
-    Reset, // should issue a reset
-    Halt // test should stop
+    Reset,    // should issue a reset
+    Halt,     // test should stop
 }
 
 pub fn run_test(
@@ -55,6 +55,6 @@ pub fn run_test_frames(
             }
             Eval::Continue
         },
-        assert
+        assert,
     )
 }

@@ -283,8 +283,7 @@ impl Renderer {
 
             let color = (high | low) as u8;
 
-            let high =
-                ((self.attribute_data.value.high.get() >> (7 - fine_x)) & 0b01) << 1;
+            let high = ((self.attribute_data.value.high.get() >> (7 - fine_x)) & 0b01) << 1;
             let low = (self.attribute_data.value.low.get() >> (7 - fine_x)) & 0x01;
 
             let palette = (high | low) as u8;
@@ -304,12 +303,11 @@ impl Renderer {
 
             // If the sprite has foreground priority or the BG pixel is zero, the sprite pixel is output.
             // If the sprite has background priority and the BG pixel is nonzero, the BG pixel is output.
-            let pixel_color =
-                if fg_priority || bg_color.is_transparent() {
-                    sprite_color
-                } else {
-                    bg_color
-                };
+            let pixel_color = if fg_priority || bg_color.is_transparent() {
+                sprite_color
+            } else {
+                bg_color
+            };
 
             let pixel_index = pixel + sl * 256;
             let s: &Cell<[Pixel]> = &self.frame_pixels;

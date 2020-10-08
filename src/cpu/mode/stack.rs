@@ -4,7 +4,6 @@ pub(in crate::cpu) fn interrupt<'a>(
     cpu: &'a Cpu,
     interrupt: Interrupt,
 ) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
-
     let (interrupt_vector, rst, extra_ticks) = match interrupt {
         Interrupt::Nmi => (0xFFFA, false, 0),
         Interrupt::Brk => (0xFFFE, false, 0),
@@ -13,7 +12,6 @@ pub(in crate::cpu) fn interrupt<'a>(
     };
 
     move || {
-
         if !rst {
             let pc_hi = (cpu.pc.get() >> 8) as u8;
             cpu.push_stack(pc_hi);

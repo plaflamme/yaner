@@ -2,6 +2,7 @@ use crate::cartridge::Cartridge;
 use crate::input::JoypadButtons;
 use crate::nes::{Nes, Stepper};
 use crate::ppu::PpuCycle;
+use crate::Reset;
 use libretro_backend::{
     AudioVideoInfo, Core, CoreInfo, GameData, JoypadButton, LoadGameResult, PixelFormat, Region,
     RuntimeHandle,
@@ -9,7 +10,6 @@ use libretro_backend::{
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::pin::Pin;
-use crate::Reset;
 
 #[derive(Default)]
 struct YanerCore {

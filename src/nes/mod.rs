@@ -11,9 +11,9 @@ use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt, IoRegisters};
 use crate::input::Joypad;
 use crate::nes::dma::Dma;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
+use crate::Reset;
 use std::borrow::BorrowMut;
 use std::error::Error;
-use crate::Reset;
 
 pub mod debug;
 mod dma;
@@ -83,9 +83,7 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps<'a>(
-        &'a self,
-    ) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
+    pub fn ppu_steps<'a>(&'a self) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
         let mut cpu_suspended = false;
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();

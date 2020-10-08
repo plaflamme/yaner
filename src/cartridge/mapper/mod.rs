@@ -102,7 +102,10 @@ mod test {
         }
         let switched = Switched::new(ram, 8_192, 1_024);
         for i in 0..1024 {
-            assert_eq!((i % 256) as u8, switched.read_u8(BankSelect::First, i as u16));
+            assert_eq!(
+                (i % 256) as u8,
+                switched.read_u8(BankSelect::First, i as u16)
+            );
             assert_eq!(0, switched.read_u8(BankSelect::Last, i as u16));
         }
     }
@@ -115,7 +118,10 @@ mod test {
         }
         let switched = Switched::new(ram, 8_192, 1_024);
         for i in 0..1024 {
-            assert_eq!((i % 256) as u8, switched.read_u8(BankSelect::Last, i as u16));
+            assert_eq!(
+                (i % 256) as u8,
+                switched.read_u8(BankSelect::Last, i as u16)
+            );
             assert_eq!(0, switched.read_u8(BankSelect::First, i as u16));
         }
     }

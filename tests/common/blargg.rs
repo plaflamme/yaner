@@ -2,8 +2,8 @@ use super::run_test;
 
 use std::path::Path;
 
-use yaner::memory::AddressSpace;
 use crate::common::Eval;
+use yaner::memory::AddressSpace;
 
 fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
@@ -49,7 +49,7 @@ pub fn blargg_test(rom_path: &Path, expect_success: bool) {
                             // requires reset, at least 100ms from now
                             reset_pending = Some(10);
                             Eval::Continue
-                        },
+                        }
                         _ => Eval::Halt,
                     }
                 }

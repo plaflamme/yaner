@@ -108,7 +108,8 @@ mod test {
 
     #[test]
     fn test_joypad_read_multiple() {
-        let multiple = JoypadButtons::A | JoypadButtons::Select | JoypadButtons::Up | JoypadButtons::Left;
+        let multiple =
+            JoypadButtons::A | JoypadButtons::Select | JoypadButtons::Up | JoypadButtons::Left;
         let joypad = Joypad::default();
         joypad.strobe(1);
         joypad.update(multiple);

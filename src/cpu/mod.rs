@@ -17,11 +17,11 @@ pub mod generator;
 use crate::cartridge::Mapper;
 use crate::input::Input;
 use crate::ppu::PpuRegisters;
+use crate::Reset;
 use instr::*;
 use opcode::OpCode;
 use opcode::OPCODES;
 use std::rc::Rc;
-use crate::Reset;
 
 // http://obelisk.me.uk/6502/reference.html
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -345,10 +345,7 @@ impl Cpu {
         self.set_flags_from(self.acc.get())
     }
 
-    pub fn run<'a>(
-        &'a self,
-    ) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
-
+    pub fn run<'a>(&'a self) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
         // used to delay interrupts by one op
         // TODO: this probably requires more granular timing.
         let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
