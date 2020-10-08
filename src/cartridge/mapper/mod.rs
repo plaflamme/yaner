@@ -4,6 +4,7 @@ use super::NametableMirroring;
 use crate::memory::AddressSpace;
 
 pub mod cnrom;
+pub mod mmc3;
 pub mod nrom;
 pub mod sxrom;
 
@@ -32,6 +33,7 @@ pub fn from(rom: &Rom) -> Box<dyn Mapper> {
         0 => Box::new(nrom::NROM::from(rom)),
         1 => Box::new(sxrom::SxROM::from(rom)),
         3 => Box::new(cnrom::CNROM::from(rom)),
+        4 => Box::new(mmc3::MMC3::from(rom)),
         _ => Box::new(Unknown()), // NOTE: this allows parsing to succeed, but running it will fail
     }
 }
@@ -40,6 +42,7 @@ enum BankSelect {
     First,
     Last,
     Index(u8),
+    Back(u8), // from the end, 0 is the last bank
 }
 
 struct Switched<T: AddressSpace> {
@@ -69,6 +72,7 @@ impl<T: AddressSpace> Switched<T> {
             BankSelect::First => 0,
             BankSelect::Last => (self.addr_space_size - self.bank_size) as u16,
             BankSelect::Index(idx) => (idx as usize * self.bank_size) as u16,
+            BankSelect::Back(idx) => (self.addr_space_size - (1 + idx as usize) * self.bank_size) as u16,
         }
     }
 
@@ -138,6 +142,22 @@ mod test {
         for page in 0..8u8 {
             for i in 0..1024 {
                 assert_eq!(page, switched.read_u8(BankSelect::Index(page), i as u16));
+            }
+        }
+    }
+
+    #[test]
+    fn test_switched_select_back() {
+        let ram = Ram8KB::new();
+        for page in 0..8u16 {
+            for i in 0..1024 {
+                ram.write_u8(page * 1024 + i, page as u8);
+            }
+        }
+        let switched = Switched::new(ram, 8_192, 1_024);
+        for page in 0..8u8 {
+            for i in 0..1024 {
+                assert_eq!(7-page, switched.read_u8(BankSelect::Back(page), i as u16));
             }
         }
     }
