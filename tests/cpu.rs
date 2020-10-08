@@ -50,6 +50,12 @@ fn cpu_timing_test() {
 }
 
 #[test]
+#[should_panic] // requires APU
+fn instr_timing() {
+    run_blargg_test("roms/nes-test-roms/instr_timing/instr_timing.nes");
+}
+
+#[test]
 #[ignore] // we pass this, but I'm not sure where to look to find the correct passing state.
 fn cpu_dummy_reads() {
     run_blargg_test("roms/nes-test-roms/cpu_dummy_reads/cpu_dummy_reads.nes");
@@ -87,4 +93,13 @@ fn cpu_reset() {
 #[test_case("test_cpu_exec_space_apu" => panics "Failure To Obey Predetermined Execution Path")] // requires more io ports
 fn cpu_exec_space(case: &str) {
     run_blargg_test(format!("roms/nes-test-roms/cpu_exec_space/{}.nes", case).as_str());
+}
+
+#[test_case("1-cli_latency" => panics "assertion failed")]
+#[test_case("2-nmi_and_brk" => panics "assertion failed")]
+#[test_case("3-nmi_and_irq" => panics "assertion failed")]
+#[test_case("4-irq_and_dma" => panics "assertion failed")]
+// #[test_case("5-branch_delays_irq" => panics "assertion failed")] // runs forever...
+fn cpu_interrupts_v2(case: &str) {
+    run_blargg_test(format!("roms/nes-test-roms/cpu_interrupts_v2/rom_singles/{}.nes", case).as_str());
 }
