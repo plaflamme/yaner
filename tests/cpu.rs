@@ -55,6 +55,13 @@ fn cpu_dummy_reads() {
     run_blargg_test("roms/nes-test-roms/cpu_dummy_reads/cpu_dummy_reads.nes");
 }
 
+// we fail this due to writes to read-only memory. Not clear yet how this will be fixed.
+#[test_case("cpu_dummy_writes_oam" => panics "tried writing to a read only location")]
+#[test_case("cpu_dummy_writes_ppumem" => panics "tried writing to a read only location")]
+fn cpu_dummy_writes(case: &str) {
+    run_blargg_test(format!("roms/nes-test-roms/cpu_dummy_writes/{}.nes", case).as_str());
+}
+
 #[test_case("1.Branch_Basics")]
 #[test_case("2.Backward_Branch")]
 #[test_case("3.Forward_Branch")]
