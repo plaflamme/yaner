@@ -1,4 +1,4 @@
-use crate::memory::{AddressSpace, Ram, Ram8KB};
+use crate::memory::{AddressSpace, Ram8KB, Dyn};
 use bitflags::bitflags;
 use nom::{
     bits, combinator::rest, cond, do_parse, error::ErrorKind, map_opt, named,
@@ -110,8 +110,8 @@ impl AddressSpace for Chr {
 }
 
 pub struct RomData {
-    pub prg_rom: Vec<u8>,
-    pub prg_ram: Ram,
+    pub prg_rom: Dyn,
+    pub prg_ram: Dyn,
     pub chr: Chr,
 }
 
@@ -122,8 +122,8 @@ impl RomData {
             _ => Chr::Rom(rom.chr_rom.clone()),
         };
         RomData {
-            prg_rom: rom.prg_rom.clone(),
-            prg_ram: Ram::new(rom.prg_ram_size),
+            prg_rom: Dyn::new(rom.prg_rom.clone()),
+            prg_ram: Dyn::with_capacity(rom.prg_ram_size),
             chr,
         }
     }

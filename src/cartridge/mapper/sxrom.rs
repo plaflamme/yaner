@@ -1,7 +1,7 @@
 use super::{Mapper, NametableMirroring, Switched};
 use crate::cartridge::mapper::BankSelect;
 use crate::cartridge::rom::{Chr, Rom, RomData};
-use crate::memory::{AddressSpace, Ram};
+use crate::memory::{AddressSpace, Dyn};
 use bitflags::bitflags;
 use std::cell::Cell;
 
@@ -91,9 +91,9 @@ enum BankAddr {
 // http://wiki.nesdev.com/w/index.php/MMC1
 pub struct SxROM {
     mirroring: NametableMirroring,
-    prg_rom: Switched<crate::memory::Rom>,
+    prg_rom: Switched<Dyn>,
     chr: Switched<Chr>,
-    prg_ram: Ram,
+    prg_ram: Dyn,
     shift_register: Cell<ShiftRegister>,
     control: Cell<Ctrl>,
     prg_bank: Cell<u8>,
@@ -140,8 +140,8 @@ impl From<&Rom> for SxROM {
         let data = RomData::new(rom);
 
         let prg_rom = Switched::new(
-            crate::memory::Rom::new(rom.prg_rom.clone()),
-            rom.prg_rom.len(),
+            data.prg_rom.clone(),
+            data.prg_rom.len(),
             16_384,
         );
 

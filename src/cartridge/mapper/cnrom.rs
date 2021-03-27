@@ -1,13 +1,13 @@
 use crate::cartridge::mapper::{BankSelect, Switched};
 use crate::cartridge::rom::{Chr, Rom, RomData};
 use crate::cartridge::{Mapper, NametableMirroring};
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, Dyn};
 use std::cell::Cell;
 
 pub struct CNROM {
     mirroring: NametableMirroring,
-    prg_rom: Switched<crate::memory::Rom>,
-    chr: Switched<crate::memory::Rom>,
+    prg_rom: Switched<Dyn>,
+    chr: Switched<Dyn>,
     chr_select: Cell<u8>,
 }
 
@@ -15,13 +15,13 @@ impl From<&Rom> for CNROM {
     fn from(rom: &Rom) -> Self {
         let data = RomData::new(&rom);
         let chr_rom = match data.chr {
-            Chr::Rom(chr_data) => crate::memory::Rom::new(chr_data),
+            Chr::Rom(chr_data) => Dyn::new(chr_data),
             Chr::Ram(_) => panic!("CNROM doesn't support CHR RAM"), // TODO: we should use TryFrom now that these can fail
         };
         CNROM {
             mirroring: rom.nametable_mirroring,
             prg_rom: Switched::new(
-                crate::memory::Rom::new(data.prg_rom.clone()),
+                data.prg_rom.clone(),
                 data.prg_rom.len(),
                 16_384,
             ),

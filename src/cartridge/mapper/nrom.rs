@@ -2,13 +2,13 @@ use super::{Mapper, NametableMirroring};
 use crate::cartridge::mapper::{BankSelect, Switched};
 use crate::cartridge::rom::RomData;
 use crate::cartridge::rom::{Chr, Rom};
-use crate::memory::{AddressSpace, Ram};
+use crate::memory::{AddressSpace, Dyn};
 
 // http://wiki.nesdev.com/w/index.php/NROM
 pub struct NROM {
     mirroring: NametableMirroring,
-    prg_ram: Ram,
-    prg_rom: Switched<crate::memory::Rom>,
+    prg_ram: Dyn,
+    prg_rom: Switched<Dyn>,
     chr: Chr,
 }
 
@@ -16,7 +16,7 @@ impl From<&Rom> for NROM {
     fn from(rom: &Rom) -> Self {
         let data = RomData::new(&rom);
         let prg_rom = Switched::new(
-            crate::memory::Rom::new(data.prg_rom.clone()),
+            data.prg_rom.clone(),
             data.prg_rom.len(),
             16_384,
         );

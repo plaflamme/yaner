@@ -18,49 +18,47 @@ pub trait AddressSpace {
     }
 }
 
-pub struct Rom {
-    data: Vec<u8>,
-}
-
-impl Rom {
-    pub fn new(data: Vec<u8>) -> Self {
-        Rom { data }
-    }
-}
-
-impl AddressSpace for Rom {
-    fn read_u8(&self, addr: u16) -> u8 {
-        self.data[addr as usize % self.data.len()]
-    }
-
-    fn write_u8(&self, _: u16, _: u8) {}
-}
-
 fn write_u8(data: &Cell<[u8]>, addr: u16, value: u8) {
     // TODO: for some reason as_slice_of_cells can only be invoked on &Cell<[u8]>
     let cells = data.as_slice_of_cells();
     cells[addr as usize].set(value);
 }
 
-pub struct Ram {
+#[derive(Clone)]
+pub struct Dyn {
     data: Vec<Cell<u8>>,
+    ro: bool,
 }
 
-impl Ram {
-    pub fn new(size: usize) -> Self {
-        Ram {
-            data: vec![Cell::new(0u8); size],
+impl Dyn {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self {
+            data: data.into_iter().map(Cell::new).collect(),
+            ro: true,
         }
+    }
+
+    pub fn with_capacity(size: usize) -> Self {
+        Self {
+            data: vec![Cell::new(0u8); size],
+            ro: false,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 }
 
-impl AddressSpace for Ram {
+impl AddressSpace for Dyn {
     fn read_u8(&self, addr: u16) -> u8 {
         self.data[addr as usize % self.data.len()].get()
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
-        self.data[addr as usize % self.data.len()].set(value)
+        if !self.ro {
+            self.data[addr as usize % self.data.len()].set(value)
+        }
     }
 }
 

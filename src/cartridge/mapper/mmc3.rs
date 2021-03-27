@@ -1,4 +1,4 @@
-use crate::memory::AddressSpace;
+use crate::memory::{AddressSpace, Dyn};
 use crate::cartridge::NametableMirroring;
 use std::cell::Cell;
 use bitregions::bitregions;
@@ -23,7 +23,7 @@ bitregions! {
 
 pub(super) struct MMC3 {
     mirroring: Cell<NametableMirroring>,
-    prg_rom: Switched<crate::memory::Rom>,
+    prg_rom: Switched<Dyn>,
     registers: Cell<[u8; 8]>,
     bank_select: Cell<Select>,
 }
@@ -63,7 +63,7 @@ impl From<&super::Rom> for MMC3 {
         MMC3 {
             mirroring: Cell::new(rom.nametable_mirroring),
             prg_rom: Switched::new(
-                crate::memory::Rom::new(rom_data.prg_rom.clone()),
+                rom_data.prg_rom.clone(),
                 rom_data.prg_rom.len(),
                 8_192,
             ),
