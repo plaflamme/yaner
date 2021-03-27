@@ -62,20 +62,19 @@ impl AddressSpace for Dyn {
     }
 }
 
-// https://github.com/rust-lang/rust/issues/43408
-pub struct Ram2KB {
-    data: Cell<[u8; 0x0800]>,
+pub struct Ram<const N: usize> {
+    data: Cell<[u8; N]>,
 }
 
-impl Ram2KB {
+impl<const N: usize> Ram<N> {
     pub fn new() -> Self {
-        Ram2KB {
-            data: Cell::new([0; 0x0800]),
+        Self {
+            data: Cell::new([0; N]),
         }
     }
 }
 
-impl AddressSpace for Ram2KB {
+impl<const N: usize> AddressSpace for Ram<N> {
     fn read_u8(&self, addr: u16) -> u8 {
         self.data.get()[addr as usize]
     }
@@ -85,73 +84,10 @@ impl AddressSpace for Ram2KB {
     }
 }
 
-// https://github.com/rust-lang/rust/issues/43408
-#[derive(Clone)]
-pub struct Ram8KB {
-    data: Cell<[u8; 0x2000]>,
-}
-
-impl Ram8KB {
-    pub fn new() -> Self {
-        Ram8KB {
-            data: Cell::new([0; 0x2000]),
-        }
-    }
-}
-
-impl AddressSpace for Ram8KB {
-    fn read_u8(&self, addr: u16) -> u8 {
-        self.data.get()[addr as usize]
-    }
-
-    fn write_u8(&self, addr: u16, value: u8) {
-        write_u8(&self.data, addr, value);
-    }
-}
-
-pub struct Ram256 {
-    data: Cell<[u8; 0x0100]>,
-}
-
-impl Ram256 {
-    pub fn new() -> Self {
-        Ram256 {
-            data: Cell::new([0; 0x0100]),
-        }
-    }
-}
-
-impl AddressSpace for Ram256 {
-    fn read_u8(&self, addr: u16) -> u8 {
-        self.data.get()[addr as usize]
-    }
-
-    fn write_u8(&self, addr: u16, value: u8) {
-        write_u8(&self.data, addr, value);
-    }
-}
-
-pub struct Ram32 {
-    data: Cell<[u8; 0x20]>,
-}
-
-impl Ram32 {
-    pub fn new() -> Self {
-        Ram32 {
-            data: Cell::new([0; 0x20]),
-        }
-    }
-}
-
-impl AddressSpace for Ram32 {
-    fn read_u8(&self, addr: u16) -> u8 {
-        self.data.get()[addr as usize]
-    }
-
-    fn write_u8(&self, addr: u16, value: u8) {
-        write_u8(&self.data, addr, value);
-    }
-}
+pub type Ram32 = Ram<0x0020>;
+pub type Ram256 = Ram<0x0100>;
+pub type Ram2KB = Ram<0x0800>;
+pub type Ram8KB = Ram<0x2000>;
 
 pub struct Mirrored<T: AddressSpace> {
     addr_space: T,

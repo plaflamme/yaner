@@ -1,4 +1,4 @@
-use crate::memory::{AddressSpace, Ram8KB, Dyn};
+use crate::memory::{AddressSpace, Dyn};
 use bitflags::bitflags;
 use nom::{
     bits, combinator::rest, cond, do_parse, error::ErrorKind, map_opt, named,
@@ -81,7 +81,7 @@ impl From<Flags9> for TvStandard {
 #[derive(Clone)]
 pub enum Chr {
     Rom(Vec<u8>),
-    Ram(Ram8KB),
+    Ram(Dyn),
 }
 
 impl Chr {
@@ -97,14 +97,14 @@ impl AddressSpace for Chr {
     fn read_u8(&self, addr: u16) -> u8 {
         match self {
             Chr::Rom(rom) => rom[addr as usize % rom.len()],
-            Chr::Ram(ram) => ram.read_u8(addr % 0x2000),
+            Chr::Ram(ram) => ram.read_u8(addr % 8_192),
         }
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
         match self {
             Chr::Rom(_) => (),
-            Chr::Ram(ram) => ram.write_u8(addr % 0x2000, value),
+            Chr::Ram(ram) => ram.write_u8(addr % 8_192, value),
         }
     }
 }
@@ -118,7 +118,7 @@ pub struct RomData {
 impl RomData {
     pub fn new(rom: &Rom) -> Self {
         let chr = match rom.chr_rom.len() {
-            0 => Chr::Ram(Ram8KB::new()),
+            0 => Chr::Ram(Dyn::with_capacity(8_192)),
             _ => Chr::Rom(rom.chr_rom.clone()),
         };
         RomData {
