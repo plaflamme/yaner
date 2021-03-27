@@ -20,11 +20,7 @@ impl From<&Rom> for CNROM {
         };
         CNROM {
             mirroring: rom.nametable_mirroring,
-            prg_rom: Switched::new(
-                data.prg_rom.clone(),
-                data.prg_rom.len(),
-                16_384,
-            ),
+            prg_rom: Switched::new(data.prg_rom.clone(), data.prg_rom.len(), 16_384),
             chr: Switched::new(chr_rom, 32_768, 8_192),
             chr_select: Cell::default(),
         }

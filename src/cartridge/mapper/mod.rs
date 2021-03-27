@@ -72,7 +72,9 @@ impl<T: AddressSpace> Switched<T> {
             BankSelect::First => 0,
             BankSelect::Last => (self.addr_space_size - self.bank_size) as u16,
             BankSelect::Index(idx) => (idx as usize * self.bank_size) as u16,
-            BankSelect::Back(idx) => (self.addr_space_size - (1 + idx as usize) * self.bank_size) as u16,
+            BankSelect::Back(idx) => {
+                (self.addr_space_size - (1 + idx as usize) * self.bank_size) as u16
+            }
         }
     }
 
@@ -157,7 +159,7 @@ mod test {
         let switched = Switched::new(ram, 8_192, 1_024);
         for page in 0..8u8 {
             for i in 0..1024 {
-                assert_eq!(7-page, switched.read_u8(BankSelect::Back(page), i as u16));
+                assert_eq!(7 - page, switched.read_u8(BankSelect::Back(page), i as u16));
             }
         }
     }

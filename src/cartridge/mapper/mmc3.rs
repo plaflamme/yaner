@@ -1,9 +1,9 @@
-use crate::memory::{AddressSpace, Dyn};
-use crate::cartridge::NametableMirroring;
-use std::cell::Cell;
-use bitregions::bitregions;
 use crate::cartridge::mapper::{BankSelect, Switched};
 use crate::cartridge::rom::RomData;
+use crate::cartridge::NametableMirroring;
+use crate::memory::{AddressSpace, Dyn};
+use bitregions::bitregions;
+use std::cell::Cell;
 
 bitregions! {
     Select u8 {
@@ -62,11 +62,7 @@ impl From<&super::Rom> for MMC3 {
         let rom_data = RomData::new(rom);
         MMC3 {
             mirroring: Cell::new(rom.nametable_mirroring),
-            prg_rom: Switched::new(
-                rom_data.prg_rom.clone(),
-                rom_data.prg_rom.len(),
-                8_192,
-            ),
+            prg_rom: Switched::new(rom_data.prg_rom.clone(), rom_data.prg_rom.len(), 8_192),
             registers: Cell::default(),
             bank_select: Cell::default(),
         }
@@ -76,18 +72,12 @@ impl From<&super::Rom> for MMC3 {
 impl AddressSpace for MMC3 {
     fn read_u8(&self, addr: u16) -> u8 {
         match (addr, self.bank_select.get().prg_mode()) {
-            (0x8000..=0x9FFF, false) =>
-                self.prg_rom.read_u8(
-                    BankSelect::Index(self.read_register(6)),
-                    addr - 0x8000
-                ),
-            (0x8000..=0x9FFF, true) =>
-                self.prg_rom.read_u8(
-                    BankSelect::Back(1),
-                    addr - 0x8000
-                ),
+            (0x8000..=0x9FFF, false) => self
+                .prg_rom
+                .read_u8(BankSelect::Index(self.read_register(6)), addr - 0x8000),
+            (0x8000..=0x9FFF, true) => self.prg_rom.read_u8(BankSelect::Back(1), addr - 0x8000),
 
-            _ => invalid_address!(addr)
+            _ => invalid_address!(addr),
         }
     }
 
@@ -98,7 +88,7 @@ impl AddressSpace for MMC3 {
             // Odd Bank Data (0x8001, 0x8003, etc.)
             (0x8000..=0x9FFF, 1) => self.write_register(value),
 
-            _ => invalid_address!(addr)
+            _ => invalid_address!(addr),
         }
     }
 }
