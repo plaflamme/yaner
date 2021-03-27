@@ -1,4 +1,4 @@
-#![feature(cell_update, generators, generator_trait, slice_fill)]
+#![feature(cell_update, generators, generator_trait)]
 
 #[macro_use]
 pub mod helper;

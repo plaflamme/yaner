@@ -60,7 +60,7 @@ impl Core for YanerCore {
                 )+
                 buttons
             }}
-        };
+        }
         if let Some(stepper) = self.stepper.as_mut() {
             stepper.nes().input1.update(extract_buttons!(
                 0, A, B, Start, Select, Up, Down, Left, Right

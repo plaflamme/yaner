@@ -68,7 +68,7 @@ named!(parse_logline<&str, LogLine>,
     do_parse!(
         pc: hex_u16 >>
         take!(12) >>
-        op: take!(3) >>
+        _op: take!(3) >>
         take!(29) >>
         tag!("A:") >> a: hex_u8 >> tag!(" ") >>
         tag!("X:") >> x: hex_u8 >> tag!(" ") >>
