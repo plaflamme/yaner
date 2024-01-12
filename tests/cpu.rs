@@ -95,10 +95,10 @@ fn cpu_exec_space(case: &str) {
     run_blargg_test(format!("roms/nes-test-roms/cpu_exec_space/{}.nes", case).as_str());
 }
 
-#[test_case("1-cli_latency" => panics "assertion failed")]
-#[test_case("2-nmi_and_brk" => panics "assertion failed")]
-#[test_case("3-nmi_and_irq" => panics "assertion failed")]
-#[test_case("4-irq_and_dma" => panics "assertion failed")]
+#[test_case("1-cli_latency" => panics "assertion `left == right` failed")]
+#[test_case("2-nmi_and_brk" => panics "assertion `left == right` failed")]
+#[test_case("3-nmi_and_irq" => panics "assertion `left == right` failed")]
+#[test_case("4-irq_and_dma" => panics "assertion `left == right` failed")]
 // #[test_case("5-branch_delays_irq" => panics "assertion failed")] // runs forever...
 fn cpu_interrupts_v2(case: &str) {
     run_blargg_test(
