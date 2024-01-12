@@ -55,6 +55,7 @@ enum ChrBankMode {
 }
 
 bitflags!(
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Ctrl: u8 {
         const MIRRORING = 0b0000_0011;
         const PRG_BANK_0 = 0b0000_0100;

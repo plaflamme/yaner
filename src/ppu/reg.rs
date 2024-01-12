@@ -5,10 +5,11 @@ use super::vram_address::VramAddress;
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuCtrl: u8 {
         const N_LO = 1 << 0;
         const N_HI = 1 << 1;
-        const N = Self::N_LO.bits | Self::N_HI.bits; // Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+        const N = Self::N_LO.bits() | Self::N_HI.bits(); // Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
 
         const I = 1 << 2; // VRAM address increment
 
@@ -71,6 +72,7 @@ impl PpuCtrl {
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuMask: u8 {
         const GREYSCALE = 1 << 0; // Greyscale
         const m = 1 << 1; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
@@ -98,6 +100,7 @@ impl PpuMask {
 
 bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuStatus: u8 {
         const O = 1 << 5; // Sprite overflow
         const S = 1 << 6; // Sprite 0 Hit

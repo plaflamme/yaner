@@ -21,6 +21,7 @@ pub struct Header {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Flags6: u8 {
         const VERTICAL = 0b0000_0001; // 0 == horizontal, 1 == vertical
         const PRG_RAM = 0b0000_0010;
@@ -30,6 +31,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Flags7: u8 {
         const VS_UNISYSTEM = 0b0000_0001;
         const PLAYCHOICE_10 = 0b0000_0010;
@@ -45,6 +47,7 @@ impl Flags7 {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Flags9: u8 {
         const PAL = 0b0000_0001;
     }

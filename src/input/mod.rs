@@ -9,6 +9,7 @@ pub trait Input {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct JoypadButtons: u8 {
         const A = 1 << 0;
         const B = 1 << 1;
@@ -33,7 +34,7 @@ pub struct Joypad {
 
 impl Joypad {
     pub fn update(&self, state: JoypadButtons) {
-        self.state.set(state.bits);
+        self.state.set(state.bits());
     }
 }
 

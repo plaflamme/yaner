@@ -164,6 +164,7 @@ impl AddressingMode {
 
 // http://wiki.nesdev.com/w/index.php/Status_flags
 bitflags!(
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Flags: u8 {
         // http://wiki.nesdev.com/w/index.php/Status_flags#C:_Carry
         const C = 1 << 0;
