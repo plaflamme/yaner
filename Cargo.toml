@@ -10,20 +10,20 @@ bitflags = "1.2.1"
 bitregions = "0.2.4"
 nom = "5.1.2"
 log = "0.4.8"
-stderrlog = "0.4.3"
-rand = "0.7.2"
+stderrlog = "0.5.4"
+rand = "0.8.5"
 
 # terminal ui
 tui = "0.10"
-termion = "1.5"
+termion = "3.0.0"
 anyhow = "1.0.32"
 
 # libretro
 libretro-backend = "0.2"
 
 [dev-dependencies]
-criterion = "0.3"
-test-case = "1.0.0"
+criterion = "0.5.1"
+test-case = "3.3.1"
 
 # Disable benchmarks in the lib and binary modules
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
