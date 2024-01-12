@@ -3,23 +3,24 @@ use std::fmt::Display;
 use AddressingMode::*;
 use Op::*;
 
+// http://www.oxyron.de/html/opcodes02.html
 const RAW_CODES: &str = r#"
-0x|BRK7|ORAizx 6|KIL|SLOizx 8|NOPzp 3|ORAzp 3|ASLzp 5|SLOzp 5|PHP3|ORAimm 2|ASL2|ANCimm 2|NOPabs 4|ORAabs 4|ASLabs 6|SLOabs 6|
-1x|BPLrel 2*|ORAizy 5*|KIL|SLOizy 8|NOPzpx 4|ORAzpx 4|ASLzpx 6|SLOzpx 6|CLC2|ORAaby 4*|NOP2|SLOaby 7|NOPabx 4*|ORAabx 4*|ASLabx 7|SLOabx 7|
-2x|JSRabs 6|ANDizx 6|KIL|RLAizx 8|BITzp 3|ANDzp 3|ROLzp 5|RLAzp 5|PLP4|ANDimm 2|ROL2|ANCimm 2|BITabs 4|ANDabs 4|ROLabs 6|RLAabs 6|
-3x|BMIrel 2*|ANDizy 5*|KIL|RLAizy 8|NOPzpx 4|ANDzpx 4|ROLzpx 6|RLAzpx 6|SEC2|ANDaby 4*|NOP2|RLAaby 7|NOPabx 4*|ANDabx 4*|ROLabx 7|RLAabx 7|
-4x|RTI6|EORizx 6|KIL|SREizx 8|NOPzp 3|EORzp 3|LSRzp 5|SREzp 5|PHA3|EORimm 2|LSR2|ALRimm 2|JMPabs 3|EORabs 4|LSRabs 6|SREabs 6|
-5x|BVCrel 2*|EORizy 5*|KIL|SREizy 8|NOPzpx 4|EORzpx 4|LSRzpx 6|SREzpx 6|CLI2|EORaby 4*|NOP2|SREaby 7|NOPabx 4*|EORabx 4*|LSRabx 7|SREabx 7|
-6x|RTS6|ADCizx 6|KIL|RRAizx 8|NOPzp 3|ADCzp 3|RORzp 5|RRAzp 5|PLA4|ADCimm 2|ROR2|ARRimm 2|JMPind 5|ADCabs 4|RORabs 6|RRAabs 6|
-7x|BVSrel 2*|ADCizy 5*|KIL|RRAizy 8|NOPzpx 4|ADCzpx 4|RORzpx 6|RRAzpx 6|SEI2|ADCaby 4*|NOP2|RRAaby 7|NOPabx 4*|ADCabx 4*|RORabx 7|RRAabx 7|
-8x|NOPimm 2|STAizx 6|NOPimm 2|SAXizx 6|STYzp 3|STAzp 3|STXzp 3|SAXzp 3|DEY2|NOPimm 2|TXA2|XAAimm 2|STYabs 4|STAabs 4|STXabs 4|SAXabs 4|
-9x|BCCrel 2*|STAizy 6|KIL|AHXizy 6|STYzpx 4|STAzpx 4|STXzpy 4|SAXzpy 4|TYA2|STAaby 5|TXS2|TASaby 5|SHYabx 5|STAabx 5|SHXaby 5|AHXaby 5|
-Ax|LDYimm 2|LDAizx 6|LDXimm 2|LAXizx 6|LDYzp 3|LDAzp 3|LDXzp 3|LAXzp 3|TAY2|LDAimm 2|TAX2|LAXimm 2|LDYabs 4|LDAabs 4|LDXabs 4|LAXabs 4|
-Bx|BCSrel 2*|LDAizy 5*|KIL|LAXizy 5*|LDYzpx 4|LDAzpx 4|LDXzpy 4|LAXzpy 4|CLV2|LDAaby 4*|TSX2|LASaby 4*|LDYabx 4*|LDAabx 4*|LDXaby 4*|LAXaby 4*|
-Cx|CPYimm 2|CMPizx 6|NOPimm 2|DCPizx 8|CPYzp 3|CMPzp 3|DECzp 5|DCPzp 5|INY2|CMPimm 2|DEX2|AXSimm 2|CPYabs 4|CMPabs 4|DECabs 6|DCPabs 6|
-Dx|BNErel 2*|CMPizy 5*|KIL|DCPizy 8|NOPzpx 4|CMPzpx 4|DECzpx 6|DCPzpx 6|CLD2|CMPaby 4*|NOP2|DCPaby 7|NOPabx 4*|CMPabx 4*|DECabx 7|DCPabx 7|
-Ex|CPXimm 2|SBCizx 6|NOPimm 2|ISCizx 8|CPXzp 3|SBCzp 3|INCzp 5|ISCzp 5|INX2|SBCimm 2|NOP2|SBCimm 2|CPXabs 4|SBCabs 4|INCabs 6|ISCabs 6|
-Fx|BEQrel 2*|SBCizy 5*|KIL|ISCizy 8|NOPzpx 4|SBCzpx 4|INCzpx 6|ISCzpx 6|SED2|SBCaby 4*|NOP2|ISCaby 7|NOPabx 4*|SBCabx 4*|INCabx 7|ISCabx 7|
+0x,BRK 7,ORA izx 6,KIL,SLO izx 8,NOP zp 3,ORA zp 3,ASL zp 5,SLO zp 5,PHP 3,ORA imm 2,ASL 2,ANC imm 2,NOP abs 4,ORA abs 4,ASL abs 6,SLO abs 6
+1x,BPL rel 2*,ORA izy 5*,KIL,SLO izy 8,NOP zpx 4,ORA zpx 4,ASL zpx 6,SLO zpx 6,CLC 2,ORA aby 4*,NOP 2,SLO aby 7,NOP abx 4*,ORA abx 4*,ASL abx 7,SLO abx 7
+2x,JSR abs 6,AND izx 6,KIL,RLA izx 8,BIT zp 3,AND zp 3,ROL zp 5,RLA zp 5,PLP 4,AND imm 2,ROL 2,ANC imm 2,BIT abs 4,AND abs 4,ROL abs 6,RLA abs 6
+3x,BMI rel 2*,AND izy 5*,KIL,RLA izy 8,NOP zpx 4,AND zpx 4,ROL zpx 6,RLA zpx 6,SEC 2,AND aby 4*,NOP 2,RLA aby 7,NOP abx 4*,AND abx 4*,ROL abx 7,RLA abx 7
+4x,RTI 6,EOR izx 6,KIL,SRE izx 8,NOP zp 3,EOR zp 3,LSR zp 5,SRE zp 5,PHA 3,EOR imm 2,LSR 2,ALR imm 2,JMP abs 3,EOR abs 4,LSR abs 6,SRE abs 6
+5x,BVC rel 2*,EOR izy 5*,KIL,SRE izy 8,NOP zpx 4,EOR zpx 4,LSR zpx 6,SRE zpx 6,CLI 2,EOR aby 4*,NOP 2,SRE aby 7,NOP abx 4*,EOR abx 4*,LSR abx 7,SRE abx 7
+6x,RTS 6,ADC izx 6,KIL,RRA izx 8,NOP zp 3,ADC zp 3,ROR zp 5,RRA zp 5,PLA 4,ADC imm 2,ROR 2,ARR imm 2,JMP ind 5,ADC abs 4,ROR abs 6,RRA abs 6
+7x,BVS rel 2*,ADC izy 5*,KIL,RRA izy 8,NOP zpx 4,ADC zpx 4,ROR zpx 6,RRA zpx 6,SEI 2,ADC aby 4*,NOP 2,RRA aby 7,NOP abx 4*,ADC abx 4*,ROR abx 7,RRA abx 7
+8x,NOP imm 2,STA izx 6,NOP imm 2,SAX izx 6,STY zp 3,STA zp 3,STX zp 3,SAX zp 3,DEY 2,NOP imm 2,TXA 2,XAA imm 2,STY abs 4,STA abs 4,STX abs 4,SAX abs 4
+9x,BCC rel 2*,STA izy 6,KIL,AHX izy 6,STY zpx 4,STA zpx 4,STX zpy 4,SAX zpy 4,TYA 2,STA aby 5,TXS 2,TAS aby 5,SHY abx 5,STA abx 5,SHX aby 5,AHX aby 5
+Ax,LDY imm 2,LDA izx 6,LDX imm 2,LAX izx 6,LDY zp 3,LDA zp 3,LDX zp 3,LAX zp 3,TAY 2,LDA imm 2,TAX 2,LAX imm 2,LDY abs 4,LDA abs 4,LDX abs 4,LAX abs 4
+Bx,BCS rel 2*,LDA izy 5*,KIL,LAX izy 5*,LDY zpx 4,LDA zpx 4,LDX zpy 4,LAX zpy 4,CLV 2,LDA aby 4*,TSX 2,LAS aby 4*,LDY abx 4*,LDA abx 4*,LDX aby 4*,LAX aby 4*
+Cx,CPY imm 2,CMP izx 6,NOP imm 2,DCP izx 8,CPY zp 3,CMP zp 3,DEC zp 5,DCP zp 5,INY 2,CMP imm 2,DEX 2,AXS imm 2,CPY abs 4,CMP abs 4,DEC abs 6,DCP abs 6
+Dx,BNE rel 2*,CMP izy 5*,KIL,DCP izy 8,NOP zpx 4,CMP zpx 4,DEC zpx 6,DCP zpx 6,CLD 2,CMP aby 4*,NOP 2,DCP aby 7,NOP abx 4*,CMP abx 4*,DEC abx 7,DCP abx 7
+Ex,CPX imm 2,SBC izx 6,NOP imm 2,ISC izx 8,CPX zp 3,SBC zp 3,INC zp 5,ISC zp 5,INX 2,SBC imm 2,NOP 2,SBC imm 2,CPX abs 4,SBC abs 4,INC abs 6,ISC abs 6
+Fx,BEQ rel 2*,SBC izy 5*,KIL,ISC izy 8,NOP zpx 4,SBC zpx 4,INC zpx 6,ISC zpx 6,SED 2,SBC aby 4*,NOP 2,ISC aby 7,NOP abx 4*,SBC abx 4*,INC abx 7,ISC abx 7
 "#;
 
 #[derive(Debug)]
@@ -41,12 +42,28 @@ impl Display for Code {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
             Code(_, ModeOp::unimplemented, _) => write!(f, "unimplemented!()"),
-            Code(mode, _, Op::JMP) => write!(f, "{}jmp(self, mem_map)", mode),
             Code(AddressingMode::Implicit, ModeOp::read, op) => {
-                write!(f, "implicit::run(&{}, self, mem_map)", op)
+                write!(f, "implicit::run(&{}, self)", op)
             }
-            Code(_, ModeOp::stack, op) => write!(f, "stack::{}(self, mem_map)", op),
-            Code(addr, mode, op) => write!(f, "{}{:?}(&{}, self, mem_map)", addr, mode, op),
+            Code(mode, _, Op::JMP) => write!(f, "yield_complete!({}jmp(self))", mode),
+            Code(_, ModeOp::stack, op) => write!(f, "yield_complete!(stack::{}(self))", op),
+            Code(addr, mode, op) => {
+                let is_generator = !matches!(
+                    addr,
+                    AddressingMode::Immediate | AddressingMode::Accumulator
+                );
+                if is_generator {
+                    write!(f, "yield_complete!(")?;
+                }
+
+                write!(f, "{}{:?}(&{}, self)", addr, mode, op)?;
+
+                if is_generator {
+                    write!(f, ")")?;
+                }
+
+                Ok(())
+            }
         }
     }
 }
@@ -84,7 +101,13 @@ impl Display for AddressingMode {
 
 pub fn generate_opcode_table() {
     fn parse_code(code: &str) -> Code {
-        let (op_str, addr_str) = code.split_at(3);
+        let parts = code.split_ascii_whitespace().collect::<Vec<_>>();
+        let (op_str, addr_str) = match parts[..] {
+            [code] => (code, None),
+            [code, addr_or_timing] => (code, Some(addr_or_timing)),
+            [code, addr, _] => (code, Some(addr)),
+            _ => panic!("unexpeced input {}", code),
+        };
         let op = match op_str {
             "ADC" => ADC,
             "AHX" => AHX,
@@ -164,20 +187,23 @@ pub fn generate_opcode_table() {
             c => panic!("Unexpected code {}", c),
         };
 
-        let addr = match addr_str {
-            "zp" => ZeroPage,
-            "zpx" => ZeroPageX,
-            "zpy" => ZeroPageY,
-            "ind" => Indirect,
-            "izx" => IndirectX,
-            "izy" => IndirectY,
-            "abs" => Absolute,
-            "abx" => AbsoluteX,
-            "aby" => AbsoluteY,
-            "imm" => Immediate,
-            "rel" => Relative,
-            "" => Implicit,
-            c => panic!("Unexpected addressing mode {}", c),
+        let addr = if let Some(str) = addr_str {
+            match str {
+                "zp" => ZeroPage,
+                "zpx" => ZeroPageX,
+                "zpy" => ZeroPageY,
+                "ind" => Indirect,
+                "izx" => IndirectX,
+                "izy" => IndirectY,
+                "abs" => Absolute,
+                "abx" => AbsoluteX,
+                "aby" => AbsoluteY,
+                "imm" => Immediate,
+                "rel" => Relative,
+                _ => Implicit,
+            }
+        } else {
+            Implicit
         };
 
         let mode = match op {
@@ -291,37 +317,19 @@ pub fn generate_opcode_table() {
         Code(addr, mode, op)
     }
 
-    fn parse_opcode(code: &str) -> Code {
-        let (code_str, _) = match code.len() {
-            3 => {
-                (code, "") // KIL
-            }
-            4 => {
-                code.split_at(3) // BRK7
-            }
-            _ => {
-                // ORAzp 7
-                let parts = code.split_ascii_whitespace().collect::<Vec<_>>();
-                (parts[0], parts[1])
-            }
-        };
-
-        parse_code(code_str)
-    }
-
     println!("{{");
     RAW_CODES
         .trim()
         .lines()
         .enumerate()
         .for_each(|(high_bits, line)| {
-            let codes_str: Vec<&str> = line.split_terminator('|').collect::<Vec<_>>();
+            let codes_str: Vec<&str> = line.split_terminator(',').collect::<Vec<_>>();
             assert_eq!(17, codes_str.len());
             codes_str
                 .iter()
                 .skip(1)
                 .map(|&code_str| {
-                    let code = parse_opcode(code_str);
+                    let code = parse_code(code_str);
                     match code {
                         Code(AddressingMode::Implicit, ModeOp::modify, op) => {
                             Code(AddressingMode::Accumulator, ModeOp::modify, op)
@@ -334,10 +342,10 @@ pub fn generate_opcode_table() {
                     let code = (high_bits as u8) << 4 | low_bits as u8;
                     match kind {
                         Code(_, _, Op::KIL) => {
-                            println!("\t0x{:02X?} => yield CpuCycle::Halt,", code)
+                            println!("\t0x{:02X?} => OpTrace::Implicit,", code)
                         }
                         Code(_, ModeOp::unimplemented, _) => (),
-                        _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind),
+                        _ => println!("\t0x{:02X?} => {},", code, kind),
                     }
                 });
         });
