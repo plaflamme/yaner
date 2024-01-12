@@ -23,7 +23,7 @@ fn ppu_benchmark(c: &mut Criterion) {
         let cart =
             Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
         let nes = Nes::new(cart);
-        let mut stepper = Stepper::new(&nes, None);
+        let mut stepper = Stepper::new(nes);
 
         // group.sample_size(10);
         group.bench_function(format!("{}", frames), |b| {

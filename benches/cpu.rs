@@ -11,7 +11,7 @@ use yaner::nes::Nes;
 extern crate yaner;
 
 fn run(nes: &yaner::nes::Nes) {
-    consume_generator!(nes.cpu.run(None), {
+    consume_generator!(nes.cpu.run(), {
         let state = nes.debug();
         if state.cpu_bus.read_u8(0x6001) == 0xDE
             && state.cpu_bus.read_u8(0x6002) == 0xB0
