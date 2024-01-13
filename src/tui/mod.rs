@@ -1,15 +1,15 @@
 use std::fmt::{Display, Formatter};
 use std::io;
 
+use ratatui::backend::{Backend, TermionBackend};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
+use ratatui::{Frame, Terminal};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-use tui::backend::{Backend, TermionBackend};
-use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Modifier, Style};
-use tui::text::{Span, Spans, Text};
-use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
-use tui::{Frame, Terminal};
 
 use crate::cpu::opcode::OpCode;
 use crate::cpu::{Cpu, Flags, Interrupt};
@@ -111,38 +111,38 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
     };
 
     let state = Text::from(vec![
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" PC: "),
             Span::styled(format!("{:04X}", state.cpu.pc), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" A: "),
             Span::styled(format!("{:02X}", state.cpu.a), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" X: "),
             Span::styled(format!("{:02X}", state.cpu.x), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" Y: "),
             Span::styled(format!("{:02X}", state.cpu.y), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" P: "),
             Span::styled(
                 format!("{:02X} {}", state.cpu.flags, state.cpu.flags),
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" SP: "),
             Span::styled(format!("{:02X}", state.cpu.sp), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" INTR: "),
             Span::styled(intr_display, value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" CYC: "),
             Span::styled(format!("{}", state.clocks.cpu_cycles), value_style),
         ]),
@@ -154,28 +154,28 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
     let state = Text::from(vec![
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" C: "),
             Span::styled(
                 format!("{:02X} {}", nes.ppu.ctrl, nes.ppu.ctrl),
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" M: "),
             Span::styled(
                 format!("{:02X} {}", nes.ppu.mask, nes.ppu.mask),
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" S: "),
             Span::styled(
                 format!("{:02X} {}", nes.ppu.status, nes.ppu.status),
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" T: "),
             Span::styled(
                 format!(
@@ -186,7 +186,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from("    "),
             Span::styled(
                 format!(
@@ -197,7 +197,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" V: "),
             Span::styled(
                 format!(
@@ -208,7 +208,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from("    "),
             Span::styled(
                 format!(
@@ -219,11 +219,11 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" FX: "),
             Span::styled(format!("{}", nes.ppu.fine_x), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" P: "),
             Span::styled(
                 format!(
@@ -236,7 +236,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" A: "),
             Span::styled(
                 format!(
@@ -249,11 +249,11 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" O: "),
             Span::styled(format!("{:02X}", nes.ppu.oam_addr,), value_style),
         ]),
-        Spans::from(vec![
+        Line::from(vec![
             Span::from(" CYC: "),
             Span::styled(
                 format!(
@@ -268,12 +268,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 }
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
-fn prg_rom<B: Backend>(
-    f: &mut Frame<B>,
-    state: &NesState,
-    addr_space: &dyn AddressSpace,
-    chunk: Rect,
-) {
+fn prg_rom(f: &mut Frame<'_>, state: &NesState, addr_space: &dyn AddressSpace, chunk: Rect) {
     let start = 0x8000;
 
     let mut items = Vec::new();
@@ -309,11 +304,11 @@ fn prg_rom<B: Backend>(
 fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     let value_style = Style::default().add_modifier(Modifier::BOLD);
 
-    let mut s_spans = Vec::new();
+    let mut s_line = Vec::new();
 
-    s_spans.append(
+    s_line.append(
         vec![
-            Spans::from(vec![
+            Line::from(vec![
                 Span::from(" OE: "),
                 Span::styled(
                     format!(
@@ -324,7 +319,7 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                     value_style,
                 ),
             ]),
-            Spans::from(vec![
+            Line::from(vec![
                 Span::from(" OE: "),
                 Span::styled(
                     format!("{:02X}", nes.ppu.sprite_pipeline.oam_entry),
@@ -336,7 +331,7 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     );
     let s_oam = nes.ppu.sprite_pipeline.secondary_oam;
 
-    s_spans.push(Spans::from(Span::from(" SOAM: ")));
+    s_line.push(Line::from(Span::from(" SOAM: ")));
     for i in 0..8 {
         let base = i * 4;
         let span = Span::styled(
@@ -349,10 +344,10 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             ),
             value_style,
         );
-        s_spans.push(Spans::from(span));
+        s_line.push(Line::from(span));
     }
 
-    s_spans.push(Spans::from(Span::from(" OUT: ")));
+    s_line.push(Line::from(Span::from(" OUT: ")));
     for output in nes.ppu.sprite_pipeline.output_units.iter() {
         let span = match output {
             None => "    -".to_owned(),
@@ -363,18 +358,13 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 sprite.sprite.attr.raw()
             ),
         };
-        s_spans.push(Spans::from(Span::styled(span, value_style)));
+        s_line.push(Line::from(Span::styled(span, value_style)));
     }
 
-    Paragraph::new(Text::from(s_spans)).block(Block::default().title("OAM").borders(Borders::ALL))
+    Paragraph::new(Text::from(s_line)).block(Block::default().title("OAM").borders(Borders::ALL))
 }
 
-fn statusbar<B: Backend>(
-    f: &mut Frame<B>,
-    nes: &NesState,
-    addr_space: &dyn AddressSpace,
-    size: Rect,
-) {
+fn statusbar(f: &mut Frame<'_>, nes: &NesState, addr_space: &dyn AddressSpace, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -422,33 +412,32 @@ impl<'a> MemoryBlock<'a> {
                 )
             })
             .map(Row::new);
+        let widths = [
+            Constraint::Length(7),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+        ];
 
-        Table::new(rows)
-            .block(Block::default().title(self.name).borders(Borders::ALL))
-            .widths(&[
-                Constraint::Length(7),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-                Constraint::Length(2),
-            ])
+        Table::new(rows, widths).block(Block::default().title(self.name).borders(Borders::ALL))
     }
 }
 
-fn h_rams<'a, B: Backend>(
-    f: &mut Frame<B>,
+fn h_rams<'a>(
+    f: &mut Frame<'_>,
     left: &MemoryBlock<'a>,
     right: &MemoryBlock<'a>,
     shift: u16,
@@ -462,7 +451,7 @@ fn h_rams<'a, B: Backend>(
     f.render_widget(right.to_block(shift), chunks[1]);
 }
 
-fn rams<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: u16, size: Rect) {
+fn rams(f: &mut Frame<'_>, nes: &NesState<'_>, shift: u16, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -484,7 +473,7 @@ fn rams<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: u16, size: Rect
     );
 }
 
-fn frame<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: Shift, size: Rect) {
+fn frame(f: &mut Frame<'_>, nes: &NesState<'_>, shift: Shift, size: Rect) {
     // read the value of the bg color
     let mut frame = Vec::new();
     for sl in shift.down..240 {
@@ -493,9 +482,12 @@ fn frame<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: Shift, size: R
             let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
             let (r, g, b) = pixel.rgb();
             let style = Style::default().fg(Color::Rgb(r, g, b));
-            line.push(Span::styled(String::from(tui::symbols::block::FULL), style));
+            line.push(Span::styled(
+                String::from(ratatui::symbols::block::FULL),
+                style,
+            ));
         }
-        frame.push(Spans::from(line));
+        frame.push(Line::from(line));
     }
     let widget = Paragraph::new(Text::from(frame))
         .block(Block::default().title("Frame").borders(Borders::ALL));
@@ -507,7 +499,7 @@ fn draw<'a, B: Backend>(
     terminal: &'a mut Terminal<B>,
     state: &NesState<'_>,
     app_state: AppState,
-) -> Result<tui::terminal::CompletedFrame<'a>, io::Error> {
+) -> Result<ratatui::terminal::CompletedFrame<'a>, io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()

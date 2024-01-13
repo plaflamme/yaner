@@ -14,8 +14,9 @@ stderrlog = "0.5.4"
 rand = "0.8.5"
 
 # terminal ui
-tui = { version = "0.19", features = ["termion"] }
-termion = "3.0.0"
+ratatui = { version = "0.25", features = ["termion"], default-features = false }
+# align with ratatui
+termion = "2"
 anyhow = "1.0.32"
 
 # libretro
