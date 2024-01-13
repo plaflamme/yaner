@@ -47,14 +47,6 @@ impl super::Mapper for MMC3 {
     fn nametable_mirroring(&self) -> NametableMirroring {
         self.mirroring.get()
     }
-
-    fn cpu_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
-
-    fn ppu_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
 }
 
 impl From<&super::Rom> for MMC3 {

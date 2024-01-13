@@ -18,14 +18,10 @@ pub enum NametableMirroring {
     FourScreen,
 }
 
-pub trait Mapper {
+pub trait Mapper: AddressSpace {
     fn name(&self) -> &'static str;
 
     fn nametable_mirroring(&self) -> NametableMirroring;
-
-    fn cpu_addr_space(&self) -> &dyn AddressSpace;
-
-    fn ppu_addr_space(&self) -> &dyn AddressSpace;
 }
 
 pub struct Cartridge {

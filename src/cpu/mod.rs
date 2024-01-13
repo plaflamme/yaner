@@ -705,7 +705,7 @@ impl crate::memory::AddressSpace for CpuBus {
 
             0x4000..=0x401F => self.io_regsiters.read_u8(addr),
 
-            0x4020..=0xFFFF => self.mapper.borrow().cpu_addr_space().read_u8(addr), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.mapper.borrow().read_u8(addr), // PRG ROM/RAM and mapper
         }
     }
 
@@ -719,7 +719,7 @@ impl crate::memory::AddressSpace for CpuBus {
 
             0x4000..=0x401F => self.io_regsiters.write_u8(addr, value),
 
-            0x4020..=0xFFFF => self.mapper.borrow().cpu_addr_space().write_u8(addr, value), // PRG ROM/RAM and mapper
+            0x4020..=0xFFFF => self.mapper.borrow().write_u8(addr, value), // PRG ROM/RAM and mapper
         }
     }
 }

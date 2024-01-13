@@ -18,12 +18,14 @@ impl Mapper for Unknown {
     fn nametable_mirroring(&self) -> NametableMirroring {
         unimplemented!()
     }
+}
 
-    fn cpu_addr_space(&self) -> &dyn AddressSpace {
+impl AddressSpace for Unknown {
+    fn read_u8(&self, addr: u16) -> u8 {
         unimplemented!()
     }
 
-    fn ppu_addr_space(&self) -> &dyn AddressSpace {
+    fn write_u8(&self, addr: u16, value: u8) {
         unimplemented!()
     }
 }

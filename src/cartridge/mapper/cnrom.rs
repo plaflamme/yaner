@@ -38,14 +38,6 @@ impl Mapper for CNROM {
     fn nametable_mirroring(&self) -> NametableMirroring {
         self.mirroring
     }
-
-    fn cpu_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
-
-    fn ppu_addr_space(&self) -> &dyn AddressSpace {
-        self
-    }
 }
 
 impl AddressSpace for CNROM {
