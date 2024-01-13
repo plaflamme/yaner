@@ -20,22 +20,26 @@ pub struct Header {
 }
 
 bitflags! {
+    // https://www.nesdev.org/wiki/INES#Flags_6
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Flags6: u8 {
         const VERTICAL = 0b0000_0001; // 0 == horizontal, 1 == vertical
         const PRG_RAM = 0b0000_0010;
         const TRAINER = 0b0000_0100;
         const FOUR_SCREEN = 0b0000_1000;
+        const MAPPER_LO = 0b1111_0000;
     }
 }
 
 bitflags! {
+    // https://www.nesdev.org/wiki/INES#Flags_7
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     struct Flags7: u8 {
         const VS_UNISYSTEM = 0b0000_0001;
         const PLAYCHOICE_10 = 0b0000_0010;
         const NES2_0 = 0b0000_0100; // NES2 format: this bit is not set
         const NES2_1 = 0b0000_1000; // NES2 format: this bit is set
+        const MAPPER_HI = 0b1111_0000;
     }
 }
 
@@ -150,46 +154,32 @@ pub enum RomError {
     UnexpectedEof,
 }
 
-type BitInput<'a> = (&'a [u8], usize);
-fn take_nibble(i: BitInput) -> nom::IResult<BitInput, u8> {
-    nom::bits::streaming::take(4_usize)(i)
-}
-
-fn flags_6(i: &[u8]) -> nom::IResult<&[u8], (u8, Flags6)> {
-    nom::bits(nom::sequence::tuple((
-        take_nibble,
-        nom::combinator::map_opt(take_nibble, Flags6::from_bits),
-    )))(i)
-}
-
-fn flags_7(i: &[u8]) -> nom::IResult<&[u8], (u8, Flags7)> {
-    let flags_7 = nom::combinator::verify(
-        nom::combinator::map_opt(take_nibble, Flags7::from_bits),
-        |flags| !flags.is_nes2(),
-    );
-    nom::bits(nom::sequence::tuple((take_nibble, flags_7)))(i)
-}
-
-fn flags_9(i: &[u8]) -> nom::IResult<&[u8], Flags9> {
-    nom::combinator::map_opt(be_u8, Flags9::from_bits)(i)
+fn flags<F, T>(flags: F, i: &[u8]) -> nom::IResult<&[u8], T>
+where
+    F: Fn(u8) -> Option<T>,
+{
+    nom::combinator::map_opt(be_u8, flags)(i)
 }
 
 fn ines_header(i: &[u8]) -> nom::IResult<&[u8], Header> {
+    let (i, _) = nom::bytes::streaming::tag(b"NES\x1A")(i)?;
     let (i, prg_rom_size) = be_u8(i)?;
     let (i, chr_rom_size) = be_u8(i)?;
-    let (i, (mapper_lsb, flags_6)) = flags_6(i)?;
-    let (i, (mapper_msb, flags_7)) = flags_7(i)?;
+    let (i, flags_6) = flags(Flags6::from_bits, i)?;
+    let (i, flags_7) = flags(Flags7::from_bits, i)?;
     let (i, prg_ram_size) = be_u8(i)?;
-
-    let (i, flags_9) = flags_9(i)?;
+    let (i, flags_9) = flags(Flags9::from_bits, i)?;
     let (i, flags_10) = be_u8(i)?;
     let (i, _) = nom::bytes::streaming::take(5_usize)(i)?;
+
+    let mapper = (flags_7.bits() & 0xF0) | (flags_6.bits() >> 4);
+
     let header = Header {
         prg_rom_size,
         chr_rom_size,
         flags_6,
         flags_7,
-        mapper: mapper_msb << 4 | mapper_lsb,
+        mapper,
         prg_ram_size,
         flags_9,
         flags_10,
@@ -198,12 +188,15 @@ fn ines_header(i: &[u8]) -> nom::IResult<&[u8], Header> {
 }
 
 fn ines_rom(i: &[u8]) -> nom::IResult<&[u8], Rom> {
-    let (i, _) = nom::bytes::streaming::tag(b"NES\x1A")(i)?;
-    let (i, header) = ines_header(i)?;
+    let (i, header) = nom::combinator::verify(ines_header, |h| !h.flags_7.is_nes2())(i)?;
+
+    // Trainer is not present on cartridge dumps; ignore it if present.
+    // https://www.nesdev.org/wiki/INES#Trainer
     let (i, _) = nom::combinator::cond(
         header.flags_6.contains(Flags6::TRAINER),
         nom::bytes::streaming::take(512_usize),
     )(i)?;
+
     let (i, prg_rom) = nom::bytes::streaming::take(header.prg_rom_size as usize * 16_384)(i)?;
     let (title_bytes, chr_rom) =
         nom::bytes::streaming::take(header.chr_rom_size as usize * 8_192)(i)?;
