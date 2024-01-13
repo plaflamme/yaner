@@ -1,9 +1,6 @@
 use crate::memory::{AddressSpace, Dyn};
 use bitflags::bitflags;
-use nom::{
-    bits, combinator::rest, cond, do_parse, error::ErrorKind, map_opt, named,
-    number::complete::be_u8, tag, take, take_bits, tuple, verify,
-};
+use nom::{error::ErrorKind, number::streaming::be_u8};
 use std::convert::TryFrom;
 
 use super::NametableMirroring;
@@ -13,10 +10,12 @@ pub struct Header {
     prg_rom_size: u8,
     chr_rom_size: u8,
     flags_6: Flags6,
+    #[allow(dead_code)]
     flags_7: Flags7,
     mapper: u8,
     prg_ram_size: u8,
     flags_9: Flags9,
+    #[allow(dead_code)]
     flags_10: u8,
 }
 
@@ -66,6 +65,7 @@ impl From<Flags6> for NametableMirroring {
 }
 
 #[derive(PartialEq, Eq, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum TvStandard {
     NTSC,
     PAL,
@@ -150,76 +150,78 @@ pub enum RomError {
     UnexpectedEof,
 }
 
-named!(flags_6<&[u8], (u8, Flags6)>,
-    do_parse!(
-        flags: bits!(
-            tuple!(
-                take_bits!(4u8),
-                map_opt!(take_bits!(4u8), Flags6::from_bits)
-            )
-        ) >>
-        ( flags )
-    )
-);
+type BitInput<'a> = (&'a [u8], usize);
+fn take_nibble(i: BitInput) -> nom::IResult<BitInput, u8> {
+    nom::bits::streaming::take(4_usize)(i)
+}
 
-named!(flags_7<&[u8], (u8, Flags7)>,
-    do_parse!(
-        flags: verify!(bits!(
-            tuple!(
-                take_bits!(4u8),
-                map_opt!(take_bits!(4u8), Flags7::from_bits)
-            )
-        ), |(_, flags)| !flags.is_nes2()) >> // TODO better error message
-        ( flags )
-    )
-);
+fn flags_6(i: &[u8]) -> nom::IResult<&[u8], (u8, Flags6)> {
+    nom::bits(nom::sequence::tuple((
+        take_nibble,
+        nom::combinator::map_opt(take_nibble, Flags6::from_bits),
+    )))(i)
+}
 
-named!(ines_header<&[u8], Header>,
-    do_parse!(
-        prg_rom_size: be_u8 >>
-        chr_rom_size: be_u8 >>
-        flags_6: flags_6 >>
-        flags_7: flags_7 >>
-        prg_ram_size: be_u8 >>
-        flags_9: bits!(map_opt!(take_bits!(4u8), Flags9::from_bits)) >>
-        flags_10: be_u8 >>
-        take!(5) >>
-        (
-            Header {
-                prg_rom_size,
-                chr_rom_size,
-                flags_6: flags_6.1,
-                flags_7: flags_7.1,
-                mapper: flags_7.0 << 4 | flags_6.0,
-                prg_ram_size: prg_ram_size,
-                flags_9: flags_9,
-                flags_10: flags_10
-            }
-        )
-    )
-);
+fn flags_7(i: &[u8]) -> nom::IResult<&[u8], (u8, Flags7)> {
+    let flags_7 = nom::combinator::verify(
+        nom::combinator::map_opt(take_nibble, Flags7::from_bits),
+        |flags| !flags.is_nes2(),
+    );
+    nom::bits(nom::sequence::tuple((take_nibble, flags_7)))(i)
+}
 
-named!(ines_rom<&[u8], Rom>,
-    do_parse!(
-        tag!(b"NES\x1A") >>
-        header: ines_header >>
-        cond!(header.flags_6.contains(Flags6::TRAINER), take!(512)) >> // ignore trainer data if any
-        prg_rom: take!(header.prg_rom_size as usize * 16_384) >>
-        chr_rom: take!(header.chr_rom_size as usize * 8_192) >>
-        title_bytes: rest >>
-        (
-            Rom {
-                title: Some(String::from_utf8_lossy(&title_bytes).into_owned()).filter(|s| !s.is_empty()),
-                mapper: header.mapper,
-                nametable_mirroring: header.flags_6.into(),
-                tv_standard: header.flags_9.into(),
-                prg_ram_size: if header.prg_ram_size == 0 { 8_192 } else { header.prg_ram_size as usize * 8_192 },
-                prg_rom: prg_rom.into(),
-                chr_rom: chr_rom.into(),
-            }
-        )
-    )
-);
+fn flags_9(i: &[u8]) -> nom::IResult<&[u8], Flags9> {
+    nom::combinator::map_opt(be_u8, Flags9::from_bits)(i)
+}
+
+fn ines_header(i: &[u8]) -> nom::IResult<&[u8], Header> {
+    let (i, prg_rom_size) = be_u8(i)?;
+    let (i, chr_rom_size) = be_u8(i)?;
+    let (i, (mapper_lsb, flags_6)) = flags_6(i)?;
+    let (i, (mapper_msb, flags_7)) = flags_7(i)?;
+    let (i, prg_ram_size) = be_u8(i)?;
+
+    let (i, flags_9) = flags_9(i)?;
+    let (i, flags_10) = be_u8(i)?;
+    let (i, _) = nom::bytes::streaming::take(5_usize)(i)?;
+    let header = Header {
+        prg_rom_size,
+        chr_rom_size,
+        flags_6,
+        flags_7,
+        mapper: mapper_msb << 4 | mapper_lsb,
+        prg_ram_size,
+        flags_9,
+        flags_10,
+    };
+    Ok((i, header))
+}
+
+fn ines_rom(i: &[u8]) -> nom::IResult<&[u8], Rom> {
+    let (i, _) = nom::bytes::streaming::tag(b"NES\x1A")(i)?;
+    let (i, header) = ines_header(i)?;
+    let (i, _) = nom::combinator::cond(
+        header.flags_6.contains(Flags6::TRAINER),
+        nom::bytes::streaming::take(512_usize),
+    )(i)?;
+    let (i, prg_rom) = nom::bytes::streaming::take(header.prg_rom_size as usize * 16_384)(i)?;
+    let (title_bytes, chr_rom) =
+        nom::bytes::streaming::take(header.chr_rom_size as usize * 8_192)(i)?;
+    let rom = Rom {
+        title: Some(String::from_utf8_lossy(title_bytes).into_owned()).filter(|s| !s.is_empty()),
+        mapper: header.mapper,
+        nametable_mirroring: header.flags_6.into(),
+        tv_standard: header.flags_9.into(),
+        prg_ram_size: if header.prg_ram_size == 0 {
+            8_192
+        } else {
+            header.prg_ram_size as usize * 8_192
+        },
+        prg_rom: prg_rom.into(),
+        chr_rom: chr_rom.into(),
+    };
+    Ok((&[], rom))
+}
 
 impl TryFrom<&[u8]> for Rom {
     type Error = RomError;
@@ -228,12 +230,15 @@ impl TryFrom<&[u8]> for Rom {
         match ines_rom(value) {
             Ok((_, rom)) => Ok(rom),
             Err(nom::Err::Incomplete(_)) => Err(RomError::UnexpectedEof),
-            Err(nom::Err::Error((_, ErrorKind::Tag))) => Err(RomError::InvalidFormat), // tag error means the magic header didn't match
-            Err(nom::Err::Error((_, error))) => {
-                Err(RomError::ParseError(error.description().into()))
+            Err(nom::Err::Error(error)) => {
+                if matches!(error.code, ErrorKind::Tag) {
+                    Err(RomError::InvalidFormat) // tag error means the magic header didn't match
+                } else {
+                    Err(RomError::ParseError(error.code.description().into()))
+                }
             }
-            Err(nom::Err::Failure((_, error))) => {
-                Err(RomError::ParseError(error.description().into()))
+            Err(nom::Err::Failure(error)) => {
+                Err(RomError::ParseError(error.code.description().into()))
             }
         }
     }

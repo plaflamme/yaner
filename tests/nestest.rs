@@ -64,34 +64,38 @@ fn d_u32(input: &str) -> IResult<&str, u32> {
     map_res(take_while(|c: char| c.is_digit(10)), FromStr::from_str)(input)
 }
 
-named!(parse_logline<&str, LogLine>,
-    do_parse!(
-        pc: hex_u16 >>
-        take!(12) >>
-        _op: take!(3) >>
-        take!(29) >>
-        tag!("A:") >> a: hex_u8 >> tag!(" ") >>
-        tag!("X:") >> x: hex_u8 >> tag!(" ") >>
-        tag!("Y:") >> y: hex_u8 >> tag!(" ") >>
-        tag!("P:") >> flags: hex_u8 >> tag!(" ") >>
-        tag!("SP:") >> sp: hex_u8 >> tag!(" ") >>
-        tag!("PPU:") >> ppu_scanline: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
-        tag!("CYC:") >> cpu_cyc: ws!(d_u32) >>
-        (
-            LogLine {
-                pc,
-                a,
-                x,
-                y,
-                flags,
-                sp,
-                ppu_dot,
-                ppu_scanline,
-                cpu_cyc
-            }
-        )
-    )
-);
+fn parse_logline(input: &str) -> IResult<&str, LogLine> {
+    todo!()
+}
+
+// named!(parse_logline<&str, LogLine>,
+//     do_parse!(
+//         pc: hex_u16 >>
+//         take!(12) >>
+//         _op: take!(3) >>
+//         take!(29) >>
+//         tag!("A:") >> a: hex_u8 >> tag!(" ") >>
+//         tag!("X:") >> x: hex_u8 >> tag!(" ") >>
+//         tag!("Y:") >> y: hex_u8 >> tag!(" ") >>
+//         tag!("P:") >> flags: hex_u8 >> tag!(" ") >>
+//         tag!("SP:") >> sp: hex_u8 >> tag!(" ") >>
+//         tag!("PPU:") >> ppu_scanline: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
+//         tag!("CYC:") >> cpu_cyc: ws!(d_u32) >>
+//         (
+//             LogLine {
+//                 pc,
+//                 a,
+//                 x,
+//                 y,
+//                 flags,
+//                 sp,
+//                 ppu_dot,
+//                 ppu_scanline,
+//                 cpu_cyc
+//             }
+//         )
+//     )
+// );
 
 fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
     let log = std::fs::read_to_string("roms/nes-test-roms/other/nestest.log")?;
