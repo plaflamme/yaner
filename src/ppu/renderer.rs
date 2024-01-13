@@ -35,6 +35,14 @@ impl PatternData {
         self.value.low.update(|v| v << 1);
         self.value.high.update(|v| v << 1);
     }
+
+    fn value(&self, fine_x: u8) -> u8 {
+        let bit = 15 - fine_x;
+        let high = (self.value.high.get() >> bit) & 0b01;
+        let low = (self.value.low.get() >> bit) & 0x01;
+
+        (high << 1 | low) as u8
+    }
 }
 
 #[derive(Clone, Default)]
@@ -55,6 +63,14 @@ impl AttributeData {
     pub fn shift(&self) {
         self.value.low.update(|v| v << 1 | self.latch.low.get());
         self.value.high.update(|v| v << 1 | self.latch.high.get());
+    }
+
+    fn value(&self, fine_x: u8) -> u8 {
+        let bit = 7 - fine_x;
+        let high = (self.value.high.get() >> bit) & 0b01;
+        let low = (self.value.low.get() >> bit) & 0x01;
+
+        high << 1 | low
     }
 }
 
@@ -280,15 +296,8 @@ impl Renderer {
             // The last step is implemented in self.shift()
 
             let fine_x = registers.fine_x.get();
-            let high = ((self.pattern_data.value.high.get() >> (15 - fine_x)) & 0b01) << 1;
-            let low = (self.pattern_data.value.low.get() >> (15 - fine_x)) & 0x01;
-
-            let color = (high | low) as u8;
-
-            let high = ((self.attribute_data.value.high.get() >> (7 - fine_x)) & 0b01) << 1;
-            let low = (self.attribute_data.value.low.get() >> (7 - fine_x)) & 0x01;
-
-            let palette = high | low;
+            let color = self.pattern_data.value(fine_x);
+            let palette = self.attribute_data.value(fine_x);
 
             PaletteColor::from(palette, color)
         }
