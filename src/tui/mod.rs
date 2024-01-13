@@ -421,9 +421,9 @@ impl<'a> MemoryBlock<'a> {
                         .map(|v| format!("{:02X}", v)),
                 )
             })
-            .map(Row::Data);
+            .map(Row::new);
 
-        Table::new(std::iter::empty::<&str>(), rows)
+        Table::new(rows)
             .block(Block::default().title(self.name).borders(Borders::ALL))
             .widths(&[
                 Constraint::Length(7),
@@ -444,7 +444,6 @@ impl<'a> MemoryBlock<'a> {
                 Constraint::Length(2),
                 Constraint::Length(2),
             ])
-            .header_gap(0)
     }
 }
 
@@ -504,11 +503,11 @@ fn frame<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: Shift, size: R
     f.render_widget(widget, size);
 }
 
-fn draw<B: Backend>(
-    terminal: &mut Terminal<B>,
+fn draw<'a, B: Backend>(
+    terminal: &'a mut Terminal<B>,
     state: &NesState<'_>,
     app_state: AppState,
-) -> Result<(), io::Error> {
+) -> Result<tui::terminal::CompletedFrame<'a>, io::Error> {
     terminal.draw(|f| {
         let size = f.size();
         let chunks = Layout::default()
