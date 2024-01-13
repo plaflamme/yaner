@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::debug::NesState;
@@ -17,12 +17,12 @@ pub enum Eval {
 }
 
 pub fn run_test(
-    rom_path: &Path,
+    rom_path: impl Into<PathBuf>,
     start_at: Option<u16>,
     mut eval: impl FnMut(&NesState) -> Eval,
     assert: impl FnOnce(&NesState),
 ) {
-    let cart = Cartridge::try_from(rom_path.to_owned()).unwrap();
+    let cart = Cartridge::try_from(rom_path.into()).unwrap();
     {
         let mut stepper = Stepper::new(Nes::new_with_pc(cart, start_at));
         loop {
@@ -46,7 +46,7 @@ pub fn run_test_frames(
 ) {
     let mut counter = 0;
     run_test(
-        &rom_path.into(),
+        rom_path,
         start_at,
         |_| {
             counter += 1;

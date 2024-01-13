@@ -1,6 +1,6 @@
 use super::run_test;
 
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::common::Eval;
 use yaner::memory::AddressSpace;
@@ -17,11 +17,11 @@ fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String
     String::from_utf8(str_vec).unwrap()
 }
 
-pub fn run_blargg_test(rom_path: &str) {
-    blargg_test(Path::new(rom_path), true)
+pub fn run_blargg_test(rom_path: impl Into<PathBuf>) {
+    blargg_test(rom_path, true)
 }
 
-pub fn blargg_test(rom_path: &Path, expect_success: bool) {
+pub fn blargg_test(rom_path: impl Into<PathBuf>, expect_success: bool) {
     let mut reset_pending = None;
     run_test(
         rom_path,

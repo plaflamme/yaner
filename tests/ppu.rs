@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::blargg::run_blargg_test;
+use common::blargg::{blargg_test, run_blargg_test};
 use common::run_test_frames;
 use test_case::test_case;
 
@@ -21,18 +21,21 @@ fn oam_stress() {
     run_blargg_test("roms/nes-test-roms/oam_stress/oam_stress.nes");
 }
 
-#[test_case("01-vbl_basics")]
-#[test_case("02-vbl_set_time")]
-#[test_case("03-vbl_clear_time")]
-#[test_case("04-nmi_control")]
-// #[test_case("05-nmi_timing")]
-// #[test_case("06-suppression")]
-// #[test_case("07-nmi_on_timing")]
-// #[test_case("08-nmi_off_timing")]
-// #[test_case("09-even_odd_frames")]
-// #[test_case("10-even_odd_timing")]
-fn ppu_vbl_nmi(case: &str) {
-    run_blargg_test(format!("roms/nes-test-roms/ppu_vbl_nmi/rom_singles/{}.nes", case).as_str());
+#[test_case("01-vbl_basics", true)]
+#[test_case("02-vbl_set_time", true)]
+#[test_case("03-vbl_clear_time", true)]
+#[test_case("04-nmi_control", true)]
+#[test_case("05-nmi_timing", false)]
+#[test_case("06-suppression", false)]
+#[test_case("07-nmi_on_timing", false)]
+#[test_case("08-nmi_off_timing", false)]
+#[test_case("09-even_odd_frames", true)]
+#[test_case("10-even_odd_timing", false)]
+fn ppu_vbl_nmi(case: &str, success: bool) {
+    blargg_test(
+        format!("roms/nes-test-roms/ppu_vbl_nmi/rom_singles/{}.nes", case),
+        success,
+    );
 }
 
 #[test_case("palette_ram")]
