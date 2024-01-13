@@ -140,7 +140,7 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
         ]),
         Spans::from(vec![
             Span::from(" INTR: "),
-            Span::styled(format!("{}", intr_display), value_style),
+            Span::styled(intr_display, value_style),
         ]),
         Spans::from(vec![
             Span::from(" CYC: "),
@@ -337,7 +337,7 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     let s_oam = nes.ppu.sprite_pipeline.secondary_oam;
 
     s_spans.push(Spans::from(Span::from(" SOAM: ")));
-    for i in 0..8 as usize {
+    for i in 0..8 {
         let base = i * 4;
         let span = Span::styled(
             format!(
@@ -391,7 +391,7 @@ fn statusbar<B: Backend>(
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
     f.render_widget(sprite_block(nes), chunks[2]);
-    prg_rom(f, &nes, addr_space, chunks[3]);
+    prg_rom(f, nes, addr_space, chunks[3]);
 }
 
 struct MemoryBlock<'a> {
@@ -421,7 +421,7 @@ impl<'a> MemoryBlock<'a> {
                         .map(|v| format!("{:02X}", v)),
                 )
             })
-            .map(|row| Row::Data(row));
+            .map(Row::Data);
 
         Table::new(std::iter::empty::<&str>(), rows)
             .block(Block::default().title(self.name).borders(Borders::ALL))
@@ -463,7 +463,7 @@ fn h_rams<'a, B: Backend>(
     f.render_widget(right.to_block(shift), chunks[1]);
 }
 
-fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: Rect) {
+fn rams<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: u16, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -485,7 +485,7 @@ fn rams<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: u16, size: 
     );
 }
 
-fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: Shift, size: Rect) {
+fn frame<B: Backend>(f: &mut Frame<B>, nes: &NesState<'_>, shift: Shift, size: Rect) {
     // read the value of the bg color
     let mut frame = Vec::new();
     for sl in shift.down..240 {
@@ -504,9 +504,9 @@ fn frame<'a, B: Backend>(f: &mut Frame<B>, nes: &NesState<'a>, shift: Shift, siz
     f.render_widget(widget, size);
 }
 
-fn draw<'a, B: Backend>(
+fn draw<B: Backend>(
     terminal: &mut Terminal<B>,
-    state: &NesState<'a>,
+    state: &NesState<'_>,
     app_state: AppState,
 ) -> Result<(), io::Error> {
     terminal.draw(|f| {
@@ -516,10 +516,10 @@ fn draw<'a, B: Backend>(
             .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
             .split(size);
 
-        statusbar(f, &state, state.prg_rom, chunks[0]);
+        statusbar(f, state, state.prg_rom, chunks[0]);
         match app_state.main_view {
-            View::Memory => rams(f, &state, app_state.shift.down, chunks[1]),
-            View::Frame => frame(f, &state, app_state.shift, chunks[1]),
+            View::Memory => rams(f, state, app_state.shift.down, chunks[1]),
+            View::Frame => frame(f, state, app_state.shift, chunks[1]),
         };
     })
 }
@@ -635,9 +635,8 @@ impl Debugger {
                             .step_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
-                        self.stepper.step_until(|nes| match nes.debug().cpu.intr {
-                            Some(Interrupt::Nmi) => true,
-                            _ => false,
+                        self.stepper.step_until(|nes| {
+                            matches!(nes.debug().cpu.intr, Some(Interrupt::Nmi))
                         })?;
                     }
                     Key::Down => app_state.shift.down(),

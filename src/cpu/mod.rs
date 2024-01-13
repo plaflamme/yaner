@@ -346,7 +346,7 @@ impl Cpu {
         self.set_flags_from(self.acc.get())
     }
 
-    pub fn run<'a>(&'a self) -> impl Generator<Yield = CpuCycle, Return = ()> + 'a {
+    pub fn run(&self) -> impl Generator<Yield = CpuCycle, Return = ()> + '_ {
         // used to delay interrupts by one op
         // TODO: this probably requires more granular timing.
         let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
@@ -354,7 +354,7 @@ impl Cpu {
         move || loop {
             if let Some(intr) = interrupt {
                 let trace = yield_complete!(stack::interrupt(self, intr));
-                yield CpuCycle::OpComplete(OPCODES[0x00].clone(), trace);
+                yield CpuCycle::OpComplete(OPCODES[0x00], trace);
             }
 
             let opcode = self.next_pc_read_u8();
@@ -629,13 +629,13 @@ impl Cpu {
             let opcode = &OPCODES[opcode as usize];
             match opcode.0 {
                 Op::KIL => yield CpuCycle::Halt,
-                _ => yield CpuCycle::OpComplete(opcode.clone(), trace),
+                _ => yield CpuCycle::OpComplete(*opcode, trace),
             }
         }
     }
 
     pub fn decompile(addr: u16, addr_space: &dyn AddressSpace) -> (OpCode, Operand) {
-        let opcode = OPCODES[addr_space.read_u8(addr) as usize].clone();
+        let opcode = OPCODES[addr_space.read_u8(addr) as usize];
         let operand = opcode.1.operand(addr, addr_space);
         (opcode, operand)
     }
@@ -681,11 +681,11 @@ impl CpuBus {
         mapper: Rc<RefCell<Box<dyn Mapper>>>,
     ) -> Self {
         CpuBus {
-            ram: Ram2KB::new(),
+            ram: Ram2KB::default(),
             io_regsiters,
             ppu_registers,
             mapper,
-            intr: Cell::new(None),
+            intr: Cell::default(),
         }
     }
 

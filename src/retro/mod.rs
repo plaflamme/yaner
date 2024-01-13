@@ -1,3 +1,5 @@
+#![allow(clippy::zero_ptr)]
+
 use crate::cartridge::Cartridge;
 use crate::input::JoypadButtons;
 use crate::nes::{Nes, Stepper};

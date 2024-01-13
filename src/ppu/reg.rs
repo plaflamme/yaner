@@ -121,6 +121,7 @@ impl Default for PpuStatus {
     }
 }
 
+#[derive(Default)]
 pub struct Registers {
     pub ctrl: Cell<PpuCtrl>,
     pub mask: Cell<PpuMask>,
@@ -139,17 +140,7 @@ pub struct Registers {
 
 impl Registers {
     pub fn new() -> Self {
-        Registers {
-            ctrl: Cell::new(PpuCtrl::default()),
-            mask: Cell::new(PpuMask::default()),
-            status: Cell::new(PpuStatus::default()),
-            oam_addr: Cell::new(0x00),
-
-            t_addr: Cell::new(VramAddress::default()),
-            v_addr: Cell::new(VramAddress::default()),
-            addr_latch: Cell::new(false),
-            fine_x: Cell::new(0),
-        }
+        Self::default()
     }
 
     // read PPUSTATUS, with side effects
@@ -220,6 +211,8 @@ impl Registers {
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::unusual_byte_groupings)]
+
     use super::*;
 
     #[test]
@@ -241,22 +234,22 @@ mod test {
     #[test]
     fn test_mask_is_rendering() {
         let mut mask = PpuMask::default();
-        assert_eq!(mask.is_rendering(), false);
+        assert!(!mask.is_rendering());
         mask.toggle(PpuMask::s);
-        assert_eq!(mask.is_rendering(), true);
+        assert!(mask.is_rendering());
         mask.toggle(PpuMask::b);
-        assert_eq!(mask.is_rendering(), true);
+        assert!(mask.is_rendering());
         mask.toggle(PpuMask::s);
-        assert_eq!(mask.is_rendering(), true);
+        assert!(mask.is_rendering());
         mask.toggle(PpuMask::b);
-        assert_eq!(mask.is_rendering(), false);
+        assert!(!mask.is_rendering());
     }
 
     #[test]
     fn test_status_default() {
         let status = PpuStatus::default();
-        assert_eq!(status.contains(PpuStatus::V | PpuStatus::O), true);
-        assert_eq!(status.contains(PpuStatus::S), false);
+        assert!(status.contains(PpuStatus::V | PpuStatus::O));
+        assert!(!status.contains(PpuStatus::S));
     }
 
     #[test]

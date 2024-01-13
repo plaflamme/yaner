@@ -4,6 +4,7 @@ use crate::cartridge::{Mapper, NametableMirroring};
 use crate::memory::{AddressSpace, Dyn};
 use std::cell::Cell;
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct CNROM {
     mirroring: NametableMirroring,
     prg_rom: Switched<Dyn>,
@@ -13,7 +14,7 @@ pub struct CNROM {
 
 impl From<&Rom> for CNROM {
     fn from(rom: &Rom) -> Self {
-        let data = RomData::new(&rom);
+        let data = RomData::new(rom);
         let chr_rom = match data.chr {
             Chr::Rom(chr_data) => Dyn::new(chr_data),
             Chr::Ram(_) => panic!("CNROM doesn't support CHR RAM"), // TODO: we should use TryFrom now that these can fail

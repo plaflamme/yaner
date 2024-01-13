@@ -49,11 +49,11 @@ impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
         Ppu {
             bus: PpuBus::new(mapper),
-            registers: Registers::new(),
+            registers: Registers::default(),
 
-            oam_data: Ram256::new(),
+            oam_data: Ram256::default(),
 
-            renderer: Renderer::new(),
+            renderer: Renderer::default(),
         }
     }
 
@@ -87,7 +87,7 @@ impl Ppu {
         self.bus.write_u8(self.registers.rw_vram_addr(), value);
     }
 
-    pub fn run<'a>(&'a self) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+    pub fn run(&self) -> impl Generator<Yield = PpuCycle, Return = ()> + '_ {
         self.renderer
             .run(&self.registers, &self.bus, &self.oam_data)
     }
@@ -109,8 +109,8 @@ pub struct PpuBus {
 impl PpuBus {
     pub fn new(mapper: Rc<RefCell<Box<dyn Mapper>>>) -> Self {
         PpuBus {
-            vram: Mirrored::new(Ram2KB::new(), 0x800, 0x2000),
-            palette: Mirrored::new(Ram32::new(), 0x20, 0x3F00),
+            vram: Mirrored::new(Ram2KB::default(), 0x800, 0x2000),
+            palette: Mirrored::new(Ram32::default(), 0x20, 0x3F00),
             mapper,
         }
     }

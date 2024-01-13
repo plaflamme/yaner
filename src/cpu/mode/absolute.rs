@@ -1,7 +1,7 @@
 use super::*;
 use crate::memory::AddressSpace;
 
-fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
+fn abs_addr(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '_ {
     move || {
         let addr_lo = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
@@ -17,9 +17,7 @@ fn abs_addr<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> 
 //  2    PC     R  fetch low address byte, increment PC
 //  3    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(in crate::cpu) fn jmp<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         cpu.pc.set(addr);

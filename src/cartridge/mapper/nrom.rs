@@ -5,6 +5,7 @@ use crate::cartridge::rom::{Chr, Rom};
 use crate::memory::{AddressSpace, Dyn};
 
 // http://wiki.nesdev.com/w/index.php/NROM
+#[allow(clippy::upper_case_acronyms)]
 pub struct NROM {
     mirroring: NametableMirroring,
     prg_ram: Dyn,
@@ -14,7 +15,7 @@ pub struct NROM {
 
 impl From<&Rom> for NROM {
     fn from(rom: &Rom) -> Self {
-        let data = RomData::new(&rom);
+        let data = RomData::new(rom);
         let prg_rom = Switched::new(data.prg_rom.clone(), data.prg_rom.len(), 16_384);
         NROM {
             mirroring: rom.nametable_mirroring,

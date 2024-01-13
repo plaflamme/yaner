@@ -45,6 +45,7 @@ impl Dyn {
         }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -68,6 +69,12 @@ pub struct Ram<const N: usize> {
 
 impl<const N: usize> Ram<N> {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<const N: usize> Default for Ram<N> {
+    fn default() -> Self {
         Self {
             data: Cell::new([0; N]),
         }
@@ -125,7 +132,5 @@ impl AddressSpace for NullAddressSpace {
         0x00
     }
 
-    fn write_u8(&self, _: u16, _: u8) {
-        ()
-    }
+    fn write_u8(&self, _: u16, _: u8) {}
 }

@@ -117,23 +117,25 @@ pub struct Renderer {
     pub(super) sprite_pipeline: SpritePipeline,
 }
 
-impl Renderer {
-    pub fn new() -> Self {
-        Renderer {
-            scanline: Cell::new(0),
-            dot: Cell::new(0),
+impl Default for Renderer {
+    fn default() -> Self {
+        Self {
+            scanline: Cell::default(),
+            dot: Cell::default(),
             pattern_data: PatternData::default(),
             attribute_data: AttributeData::default(),
             frame_pixels: Cell::new([Pixel::default(); 256 * 240]),
-            fetch_addr: Cell::new(0),
-            nametable_entry: Cell::new(0),
-            attribute_entry: Cell::new(0),
-            suppress_vbl: Cell::new(false),
-            suppress_nmi: Cell::new(false),
+            fetch_addr: Cell::default(),
+            nametable_entry: Cell::default(),
+            attribute_entry: Cell::default(),
+            suppress_vbl: Cell::default(),
+            suppress_nmi: Cell::default(),
             sprite_pipeline: SpritePipeline::default(),
         }
     }
+}
 
+impl Renderer {
     // interactions between vbl and PPUSTATUS reads:
     //   Reading PPUSTATUS one PPU clock before reads it as clear and never sets the flag
     //     or generates NMI for that frame
@@ -232,7 +234,7 @@ impl Renderer {
                 }
                 let high = (sprite_data.tile_high >> (7 - x_sprite)) & 0b01;
                 let low = (sprite_data.tile_low >> (7 - x_sprite)) & 0x01;
-                let color = (high << 1 | low) as u8;
+                let color = high << 1 | low;
                 let sprite_color =
                     PaletteColor::from(sprite_data.sprite.attr.palette() + 0b100, color);
 
@@ -286,7 +288,7 @@ impl Renderer {
             let high = ((self.attribute_data.value.high.get() >> (7 - fine_x)) & 0b01) << 1;
             let low = (self.attribute_data.value.low.get() >> (7 - fine_x)) & 0x01;
 
-            let palette = (high | low) as u8;
+            let palette = high | low;
 
             PaletteColor::from(palette, color)
         }
@@ -466,6 +468,9 @@ impl Renderer {
             }
 
             let previous_ctrl = registers.ctrl.get();
+            let nmi_tick = !self.suppress_nmi.get()
+                && generate_nmi
+                && registers.status.get().contains(PpuStatus::V);
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
                 self.suppress_vbl.set(false);
@@ -473,16 +478,12 @@ impl Renderer {
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
+            } else if nmi_tick {
+                yield PpuCycle::Nmi
             } else {
-                if !self.suppress_nmi.get()
-                    && generate_nmi
-                    && registers.status.get().contains(PpuStatus::V)
-                {
-                    yield PpuCycle::Nmi
-                } else {
-                    yield PpuCycle::Tick
-                }
+                yield PpuCycle::Tick
             }
+
             if registers.status.get().contains(PpuStatus::V) {
                 // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
                 generate_nmi = !self.suppress_nmi.get()
@@ -578,7 +579,7 @@ mod test {
     fn test_render_bg_pixel() {
         let registers = Registers::new();
         registers.mask.set(PpuMask::b | PpuMask::m);
-        let renderer = Renderer::new();
+        let renderer = Renderer::default();
         renderer.pattern_data.value.high.set(0b1100_0000_0000_0000);
         renderer.pattern_data.value.low.set(0b1000_0000_0000_0000);
         renderer.attribute_data.value.high.set(0b1100_0000);
@@ -633,7 +634,7 @@ mod test {
             palette: 0xEF,
         };
 
-        let renderer = Renderer::new();
+        let renderer = Renderer::default();
         // dot 0 is idle
         renderer.cycle_bg(&registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0);
@@ -662,7 +663,7 @@ mod test {
         // dot 5 prepares the low pattern byte address
         renderer.dot.set(5);
         renderer.cycle_bg(&registers, &vram, false);
-        assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16);
+        assert_eq!(renderer.fetch_addr.get(), 0xAB * 16);
 
         // dot 6 loads the low byte
         renderer.dot.set(6);
@@ -672,7 +673,7 @@ mod test {
         // dot 7 prepares the high pattern byte address
         renderer.dot.set(7);
         renderer.cycle_bg(&registers, &vram, false);
-        assert_eq!(renderer.fetch_addr.get(), 0xAB as u16 * 16 + 8);
+        assert_eq!(renderer.fetch_addr.get(), 0xAB * 16 + 8);
 
         // dot 8 loads the high byte and increments H
         renderer.dot.set(8);

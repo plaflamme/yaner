@@ -1,10 +1,10 @@
 use super::*;
 use crate::memory::AddressSpace;
 
-fn abs_indexed<'a>(
+fn abs_indexed(
     index: u8,
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + 'a {
+    cpu: &Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
     move || {
         let addr_lo = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;

@@ -17,7 +17,7 @@ fn run(stepper: &mut Stepper, frames: u64) {
 
 fn ppu_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("ppu-throughput");
-    for frames in vec![100, 200] {
+    for frames in [100, 200] {
         group.throughput(Throughput::Elements(frames));
 
         let cart =

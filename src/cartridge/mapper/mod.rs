@@ -104,7 +104,7 @@ mod test {
     fn test_switched_select_first() {
         let ram = Ram8KB::new();
         for i in 0..1024u16 {
-            ram.write_u8(i as u16, (i % 256) as u8);
+            ram.write_u8(i, (i % 256) as u8);
         }
         let switched = Switched::new(ram, 8_192, 1_024);
         for i in 0..1024 {
@@ -120,7 +120,7 @@ mod test {
     fn test_switched_select_last() {
         let ram = Ram8KB::new();
         for i in (8_192 - 1_024)..8_192u16 {
-            ram.write_u8(i as u16, (i % 256) as u8);
+            ram.write_u8(i, (i % 256) as u8);
         }
         let switched = Switched::new(ram, 8_192, 1_024);
         for i in 0..1024 {

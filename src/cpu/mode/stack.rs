@@ -1,9 +1,9 @@
 use super::*;
 
-pub(in crate::cpu) fn interrupt<'a>(
-    cpu: &'a Cpu,
+pub(in crate::cpu) fn interrupt(
+    cpu: &Cpu,
     interrupt: Interrupt,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     let (interrupt_vector, rst, extra_ticks) = match interrupt {
         Interrupt::Nmi => (0xFFFA, false, 0),
         Interrupt::Brk => (0xFFFE, false, 0),
@@ -68,9 +68,7 @@ pub(in crate::cpu) fn interrupt<'a>(
 //  5  $0100,S  W  push P on stack, decrement S
 //  6   $FFFE   R  fetch PCL
 //  7   $FFFF   R  fetch PCH
-pub(in crate::cpu) fn brk<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn brk(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -88,9 +86,7 @@ pub(in crate::cpu) fn brk<'a>(
 //  5  $0100,S  W  push PCL on stack, decrement S
 //  6    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(in crate::cpu) fn jsr<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn jsr(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let addr_lo = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
@@ -121,9 +117,7 @@ pub(in crate::cpu) fn jsr<'a>(
 //  4  $0100,S  R  pull P from stack, increment S
 //  5  $0100,S  R  pull PCL from stack, increment S
 //  6  $0100,S  R  pull PCH from stack
-pub(in crate::cpu) fn rti<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn rti(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -155,9 +149,7 @@ pub(in crate::cpu) fn rti<'a>(
 //  4  $0100,S  R  pull PCL from stack, increment S
 //  5  $0100,S  R  pull PCH from stack
 //  6    PC     R  increment PC
-pub(in crate::cpu) fn rts<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn rts(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let _ = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -183,7 +175,7 @@ pub(in crate::cpu) fn rts<'a>(
 //  1    PC     R  fetch opcode, increment PC
 //  2    PC     R  read next instruction byte (and throw it away)
 //  3  $0100,S  W  push register on stack, decrement S
-fn push<'a>(cpu: &'a Cpu, value: u8) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+fn push(cpu: &Cpu, value: u8) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let _ = cpu.pc_read_u8();
         yield CpuCycle::Tick;
@@ -192,17 +184,13 @@ fn push<'a>(cpu: &'a Cpu, value: u8) -> impl Generator<Yield = CpuCycle, Return 
         OpTrace::Implicit
     }
 }
-pub(in crate::cpu) fn php<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn php(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     // PHP sets the B flag
     let mut flags = cpu.flags.get();
     flags.set(Flags::B, true);
     push(cpu, flags.bits())
 }
-pub(in crate::cpu) fn pha<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn pha(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     push(cpu, cpu.acc.get())
 }
 
@@ -212,7 +200,7 @@ pub(in crate::cpu) fn pha<'a>(
 //  2    PC     R  read next instruction byte (and throw it away)
 //  3  $0100,S  R  increment S
 //  4  $0100,S  R  pull register from stack
-fn pull<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u8> + 'a {
+fn pull(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u8> + '_ {
     move || {
         let _ = cpu.pc_read_u8();
         yield CpuCycle::Tick;
@@ -224,9 +212,7 @@ fn pull<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u8> + 'a 
     }
 }
 
-pub(in crate::cpu) fn plp<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn plp(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let value = yield_complete!(pull(cpu));
         let mut flags = Flags::from_bits_truncate(value);
@@ -238,9 +224,7 @@ pub(in crate::cpu) fn plp<'a>(
     }
 }
 
-pub(in crate::cpu) fn pla<'a>(
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+pub(in crate::cpu) fn pla(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let value = yield_complete!(pull(cpu));
         cpu.acc.set(value);

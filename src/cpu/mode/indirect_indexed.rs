@@ -1,7 +1,7 @@
 use super::*;
 use crate::memory::AddressSpace;
 
-fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
+fn ind_x(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '_ {
     move || {
         let pointer = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -14,8 +14,7 @@ fn ind_x<'a>(cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '
         let addr_hi = cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16;
         yield CpuCycle::Tick;
 
-        let addr = (addr_hi << 8) | addr_lo;
-        addr
+        (addr_hi << 8) | addr_lo
     }
 }
 
@@ -97,10 +96,10 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
     }
 }
 
-fn ind_y<'a>(
+fn ind_y(
     eager: bool,
-    cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + 'a {
+    cpu: &Cpu,
+) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
     move || {
         let pointer = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;

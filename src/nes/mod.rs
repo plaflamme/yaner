@@ -83,7 +83,7 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps<'a>(&'a self) -> impl Generator<Yield = NesCycle, Return = ()> + 'a {
+    pub fn ppu_steps(&self) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
         let mut cpu_suspended = false;
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
@@ -148,12 +148,7 @@ impl Nes {
     // runs the program until the CPU halts
     pub fn run(self) {
         let mut stepper = Stepper::new(self);
-        loop {
-            match stepper.step_frame() {
-                Ok(_) => (),
-                Err(StepperError::Halted) => break,
-            }
-        }
+        while stepper.step_frame().is_ok() {}
     }
 }
 

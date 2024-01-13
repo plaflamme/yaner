@@ -284,40 +284,35 @@ impl SpritePipeline {
 
                 let cycle = (dot - 257) % 8;
                 let sprite_index = ((dot - 257) / 8) as usize;
-                match cycle {
-                    0 => {
-                        if sprite_index < self.sprite_count() as usize {
-                            let ctrl = registers.ctrl.get();
-                            let oam = self.secondary_oam.get();
-                            let base = sprite_index * 4;
-                            let sprite = Sprite::new(&oam[base..base + 4]);
+                if cycle == 0 && sprite_index < self.sprite_count() as usize {
+                    let ctrl = registers.ctrl.get();
+                    let oam = self.secondary_oam.get();
+                    let base = sprite_index * 4;
+                    let sprite = Sprite::new(&oam[base..base + 4]);
 
-                            let base_addr = if ctrl.large_sprites() {
-                                let pattern_table = sprite.tile_index as u16 & 1 * 0x1000;
-                                let addr = (sprite.tile_index & 0b1111_1110) as u16;
-                                pattern_table | addr * 16
-                            } else {
-                                let pattern_table = ctrl.sprite_pattern_table_address();
-                                let addr = sprite.tile_index as u16;
-                                pattern_table | addr * 16
-                            };
+                    let base_addr = if ctrl.large_sprites() {
+                        let pattern_table = sprite.tile_index as u16 & 0x1000;
+                        let addr = (sprite.tile_index & 0b1111_1110) as u16;
+                        pattern_table | (addr * 16)
+                    } else {
+                        let pattern_table = ctrl.sprite_pattern_table_address();
+                        let addr = sprite.tile_index as u16;
+                        pattern_table | (addr * 16)
+                    };
 
-                            let sprite_height = ctrl.sprite_height() as u16;
-                            let mut y_sprite = scanline - sprite.y as u16;
-                            if sprite.attr.flip_v() {
-                                y_sprite ^= sprite_height - 1;
-                            }
-                            // for large sprites, if y_sprite > 8, we must use the second tile
-                            let second_tile_offset = y_sprite & 8;
-                            let addr = base_addr + y_sprite + second_tile_offset;
-                            let tile_low = bus.read_u8(addr);
-                            let tile_high = bus.read_u8(addr + 8);
-                            let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
-
-                            self.output_units.push(sprite_data);
-                        }
+                    let sprite_height = ctrl.sprite_height() as u16;
+                    let mut y_sprite = scanline - sprite.y as u16;
+                    if sprite.attr.flip_v() {
+                        y_sprite ^= sprite_height - 1;
                     }
-                    _ => (),
+                    // for large sprites, if y_sprite > 8, we must use the second tile
+                    let second_tile_offset = y_sprite & 8;
+                    let addr = base_addr + y_sprite + second_tile_offset;
+                    let tile_low = bus.read_u8(addr);
+                    let tile_high = bus.read_u8(addr + 8);
+                    let sprite_data = SpriteData::new(sprite, tile_low, tile_high);
+
+                    self.output_units.push(sprite_data);
                 }
             }
             _ => (),
@@ -344,7 +339,7 @@ pub mod debug {
                 .borrow()
                 .iter()
                 .enumerate()
-                .for_each(|(idx, sprite_data)| output[idx] = Some(sprite_data.clone()));
+                .for_each(|(idx, sprite_data)| output[idx] = Some(*sprite_data));
             SpritePipelineState {
                 oam_addr: p.oam_addr.get(),
                 oam_entry: p.oam_entry.get(),

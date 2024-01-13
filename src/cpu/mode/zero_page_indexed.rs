@@ -1,7 +1,7 @@
 use super::*;
 use crate::memory::AddressSpace;
 
-fn zp_indexed<'a>(index: u8, cpu: &'a Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + 'a {
+fn zp_indexed(index: u8, cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '_ {
     move || {
         let addr = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;

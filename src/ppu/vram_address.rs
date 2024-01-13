@@ -1,3 +1,5 @@
+#![allow(clippy::unusual_byte_groupings)]
+
 use bitregions::bitregions;
 
 bitregions! {
@@ -24,7 +26,7 @@ impl VramAddress {
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the attribute table
     pub fn attribute_addr(&self) -> u16 {
-        let v: u16 = self.0.into();
+        let v = self.0;
         0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
     }
 
@@ -110,7 +112,7 @@ mod test {
         //  ++--------------- nametable select
         let high_x = addr.coarse_x() as u16 >> 2;
         let high_y = (addr.coarse_y() as u16 >> 2) << 3;
-        let attr_offs = 0b1111_000_000 as u16;
+        let attr_offs = 0b1111_000_000;
         let nt = (addr.nametable() as u16) << 10;
 
         assert_eq!(
