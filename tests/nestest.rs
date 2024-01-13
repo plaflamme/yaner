@@ -1,8 +1,4 @@
 #![feature(generators, generator_trait)]
-#![allow(deprecated)] // for ws! nom macro
-
-#[macro_use]
-extern crate nom;
 
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
@@ -10,10 +6,6 @@ use std::ops::{Generator, GeneratorState};
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
-
-use nom::bytes::complete::take_while;
-use nom::combinator::map_res;
-use nom::{AsChar, IResult};
 
 use yaner::cartridge::Cartridge;
 use yaner::cpu::{CpuCycle, Flags};
@@ -38,71 +30,41 @@ impl Display for LogLine {
     }
 }
 
-named!(hex_u16<&str, u16>,
-  map_res!(
-    take_while!(|c:char| c.is_hex_digit()),
-    |str| u16::from_str_radix(str, 16)
-  )
-);
+fn parse_logline(input: &str) -> Result<LogLine, Box<dyn std::error::Error>> {
+    //           1         2         3         4         5         6         7         8         9
+    // 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7
 
-named!(hex_u8<&str, u8>,
-  map_res!(
-    take_while!(|c:char| c.is_hex_digit()),
-    |str| u8::from_str_radix(str, 16)
-  )
-);
+    let hex_u8 = |r: std::ops::Range<usize>| u8::from_str_radix(&input[r], 16);
 
-// TODO: for some reason this doesn't produce the same result as the non-macro version
-// named!(d_u32<&str, u32>,
-//   map_res!(
-//     take_while!(|c:char| c.is_digit(10)),
-//     FromStr::from_str
-//   )
-// );
-
-fn d_u32(input: &str) -> IResult<&str, u32> {
-    map_res(take_while(|c: char| c.is_digit(10)), FromStr::from_str)(input)
+    let pc = u16::from_str_radix(&input[0..4], 16)?;
+    let a = hex_u8(50..52)?;
+    let x = hex_u8(55..57)?;
+    let y = hex_u8(60..62)?;
+    let flags = hex_u8(65..67)?;
+    let sp = hex_u8(71..73)?;
+    let ppu_scanline = u32::from_str(input[78..81].trim())?;
+    let ppu_dot = u32::from_str(input[82..85].trim())?;
+    let cpu_cyc = u32::from_str(input[90..].trim())?;
+    Ok(LogLine {
+        pc,
+        a,
+        x,
+        y,
+        flags,
+        sp,
+        ppu_dot,
+        ppu_scanline,
+        cpu_cyc,
+    })
 }
-
-fn parse_logline(input: &str) -> IResult<&str, LogLine> {
-    todo!()
-}
-
-// named!(parse_logline<&str, LogLine>,
-//     do_parse!(
-//         pc: hex_u16 >>
-//         take!(12) >>
-//         _op: take!(3) >>
-//         take!(29) >>
-//         tag!("A:") >> a: hex_u8 >> tag!(" ") >>
-//         tag!("X:") >> x: hex_u8 >> tag!(" ") >>
-//         tag!("Y:") >> y: hex_u8 >> tag!(" ") >>
-//         tag!("P:") >> flags: hex_u8 >> tag!(" ") >>
-//         tag!("SP:") >> sp: hex_u8 >> tag!(" ") >>
-//         tag!("PPU:") >> ppu_scanline: ws!(d_u32) >> tag!(",") >> ppu_dot: ws!(d_u32) >>
-//         tag!("CYC:") >> cpu_cyc: ws!(d_u32) >>
-//         (
-//             LogLine {
-//                 pc,
-//                 a,
-//                 x,
-//                 y,
-//                 flags,
-//                 sp,
-//                 ppu_dot,
-//                 ppu_scanline,
-//                 cpu_cyc
-//             }
-//         )
-//     )
-// );
 
 fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
     let log = std::fs::read_to_string("roms/nes-test-roms/other/nestest.log")?;
     let lines = log
         .lines()
         .map(|line| {
-            let (_, log_line) =
+            let log_line =
                 parse_logline(line).expect(format!("invalid log line {}", line).as_str());
             log_line
         })
@@ -184,17 +146,13 @@ fn test_nestest() {
 
     let mut log_iter = log.iter();
 
-    loop {
-        match Generator::resume(Pin::new(&mut steps), ()) {
-            GeneratorState::Yielded(_) => {
-                match log_iter.next() {
-                    Some(line) => assert_log(&nes, line),
-                    None => (), // log is shorter than actual test
-                }
-            }
-            GeneratorState::Complete(_) => break,
-        };
+    while let GeneratorState::Yielded(_) = Generator::resume(Pin::new(&mut steps), ()) {
+        if let Some(line) = log_iter.next() {
+            assert_log(&nes, line)
+        }
     }
+
+    assert!(log_iter.next().is_none(), "did not consume whole log");
 
     let result = nes.debug().ram.read_u16(0x02);
     assert_eq!(0x00, result);
