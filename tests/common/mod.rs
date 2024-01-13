@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::debug::NesState;
@@ -39,14 +39,14 @@ pub fn run_test(
 
 // runs a test for a specific number of frames
 pub fn run_test_frames(
-    rom_path: &Path,
+    rom_path: impl Into<PathBuf>,
     start_at: Option<u16>,
     frames: u16,
     assert: impl FnOnce(&NesState),
 ) {
     let mut counter = 0;
     run_test(
-        rom_path,
+        &rom_path.into(),
         start_at,
         |_| {
             counter += 1;

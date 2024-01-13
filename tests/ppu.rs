@@ -4,7 +4,6 @@ mod common;
 
 use common::blargg::run_blargg_test;
 use common::run_test_frames;
-use std::path::Path;
 use test_case::test_case;
 
 #[test]
@@ -43,12 +42,9 @@ fn ppu_vbl_nmi(case: &str) {
 #[test_case("vram_access")]
 fn ppu_blargg_ppu_tests(case: &str) {
     run_test_frames(
-        &Path::new(
-            format!(
-                "roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes",
-                case
-            )
-            .as_str(),
+        format!(
+            "roms/nes-test-roms/blargg_ppu_tests_2005.09.15b/{}.nes",
+            case
         ),
         None,
         30,
@@ -69,12 +65,9 @@ fn ppu_blargg_ppu_tests(case: &str) {
 #[test_case("11.edge_timing")]
 fn ppu_sprite_hit_tests(case: &str) {
     run_test_frames(
-        &Path::new(
-            format!(
-                "roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes",
-                case
-            )
-            .as_str(),
+        format!(
+            "roms/nes-test-roms/sprite_hit_tests_2005.10.05/{}.nes",
+            case
         ),
         None,
         80,
@@ -91,7 +84,7 @@ fn ppu_sprite_hit_tests(case: &str) {
 #[test_case("5.Emulator")]
 fn ppu_sprite_overflow_tests(case: &str) {
     run_test_frames(
-        &Path::new(format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case).as_str()),
+        format!("roms/nes-test-roms/sprite_overflow_tests/{}.nes", case),
         None,
         160,
         |nes| {

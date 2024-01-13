@@ -18,7 +18,7 @@ fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String
 }
 
 pub fn run_blargg_test(rom_path: &str) {
-    blargg_test(&Path::new(rom_path), true)
+    blargg_test(Path::new(rom_path), true)
 }
 
 pub fn blargg_test(rom_path: &Path, expect_success: bool) {

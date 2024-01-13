@@ -4,7 +4,6 @@ mod common;
 
 use common::blargg::run_blargg_test;
 use common::run_test_frames;
-use std::path::Path;
 use test_case::test_case;
 
 #[test_case("01-basics")]
@@ -38,7 +37,7 @@ fn instr_misc(case: &str) {
 #[test]
 fn cpu_timing_test() {
     run_test_frames(
-        &Path::new("roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes"),
+        "roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes",
         None,
         640,
         |nes| {
@@ -73,7 +72,7 @@ fn cpu_dummy_writes(case: &str) {
 #[test_case("3.Forward_Branch")]
 fn cpu_branch_timing_test(case: &str) {
     run_test_frames(
-        &Path::new(format!("roms/nes-test-roms/branch_timing_tests/{}.nes", case).as_str()),
+        format!("roms/nes-test-roms/branch_timing_tests/{}.nes", case),
         None,
         30,
         |nes| {
