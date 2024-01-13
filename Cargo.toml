@@ -15,6 +15,13 @@ rand = "0.8.5"
 
 # terminal ui
 ratatui = { version = "0.25", features = ["termion"], default-features = false }
+ratatui-image = { version = "0.7.3", features = [
+    "termion",
+    "rustix",
+], default-features = false }
+image = { version = "*", default-features = false }
+resize = "0"
+rgb = "*"
 # align with ratatui
 termion = "2"
 anyhow = "1.0.32"

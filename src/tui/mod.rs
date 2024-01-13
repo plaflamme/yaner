@@ -7,6 +7,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Row, Table, Widget};
 use ratatui::{Frame, Terminal};
+use ratatui_image::protocol::StatefulProtocol;
+use ratatui_image::{Resize, StatefulImage};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -495,22 +497,26 @@ fn frame(f: &mut Frame<'_>, nes: &NesState<'_>, shift: Shift, size: Rect) {
     f.render_widget(widget, size);
 }
 
+fn ppu_frame(f: &mut Frame<'_>, app_state: &mut AppState, size: Rect) {
+    let image = StatefulImage::new(None).resize(Resize::Fit);
+    f.render_stateful_widget(image, size, &mut app_state.ppu_frame);
+}
+
 fn draw<'a, B: Backend>(
     terminal: &'a mut Terminal<B>,
     state: &NesState<'_>,
-    app_state: AppState,
+    app_state: &mut AppState,
 ) -> Result<ratatui::terminal::CompletedFrame<'a>, io::Error> {
     terminal.draw(|f| {
-        let size = f.size();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
-            .split(size);
+            .split(f.size());
 
         statusbar(f, state, state.prg_rom, chunks[0]);
         match app_state.main_view {
             View::Memory => rams(f, state, app_state.shift.down, chunks[1]),
-            View::Frame => frame(f, state, app_state.shift, chunks[1]),
+            View::Frame => ppu_frame(f, app_state, chunks[1]),
         };
     })
 }
@@ -554,17 +560,19 @@ enum View {
     Frame,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct AppState {
     main_view: View,
     shift: Shift,
+    ppu_frame: Box<dyn StatefulProtocol>,
 }
 
 impl AppState {
-    fn new() -> Self {
+    fn new(ppu_frame: Box<dyn StatefulProtocol>) -> Self {
         AppState {
             main_view: View::Memory,
             shift: Shift::default(),
+            ppu_frame,
         }
     }
 
@@ -595,14 +603,52 @@ impl Debugger {
         terminal.clear()?;
 
         let mut input = io::stdin().keys();
+        let mut picker = ratatui_image::picker::Picker::from_termios().unwrap();
+        picker.guess_protocol();
 
-        let mut app_state = AppState::new();
+        let image = picker.new_resize_protocol(image::DynamicImage::new_rgb8(256, 240));
+        let mut app_state = AppState::new(image);
+
+        let scale_factor = 4;
+        let mut resizer = resize::new(
+            256,
+            240,
+            256 * scale_factor,
+            240 * scale_factor,
+            resize::Pixel::RGB8,
+            resize::Type::Point,
+        )?;
+        let mut src = [rgb::RGB8::default(); 256 * 240];
 
         loop {
             if self.stepper.halted() {
                 break;
             }
-            draw(&mut terminal, &self.stepper.nes().debug(), app_state)?;
+
+            let nes_state = self.stepper.nes().debug();
+            for line in 0..240 {
+                for dot in 0..256 {
+                    let idx = line * 256 + dot;
+                    let (r, g, b) = nes_state.ppu.frame[idx].rgb();
+                    src[idx] = rgb::RGB8::new(r, g, b);
+                }
+            }
+            let mut dst = vec![0_u8; 256 * scale_factor * 240 * scale_factor * 3];
+            use rgb::FromSlice;
+            resizer.resize(&src, dst.as_rgb_mut()).unwrap();
+
+            let ppu_frame = image::DynamicImage::from(
+                image::RgbImage::from_vec(
+                    (256 * scale_factor) as u32,
+                    (240 * scale_factor) as u32,
+                    dst,
+                )
+                .unwrap(),
+            );
+
+            app_state.ppu_frame = picker.new_resize_protocol(ppu_frame);
+
+            draw(&mut terminal, &nes_state, &mut app_state)?;
             if let Some(input_result) = input.next() {
                 match input_result? {
                     Key::Char('[') | Key::Char(']') => app_state.cycle_view(),
