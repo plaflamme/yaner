@@ -130,7 +130,7 @@ pub struct Renderer {
     suppress_vbl: Cell<bool>,
     suppress_nmi: Cell<bool>,
 
-    pub(super) sprite_pipeline: SpritePipeline,
+    pub(super) sprite_pipeline: std::cell::RefCell<SpritePipeline>,
 }
 
 impl Default for Renderer {
@@ -146,7 +146,7 @@ impl Default for Renderer {
             attribute_entry: Cell::default(),
             suppress_vbl: Cell::default(),
             suppress_nmi: Cell::default(),
-            sprite_pipeline: SpritePipeline::default(),
+            sprite_pipeline: std::cell::RefCell::new(SpritePipeline::default()),
         }
     }
 }
@@ -213,11 +213,16 @@ impl Renderer {
             // garbage around due to enabling / disabling rendering (which prevents evaluating this
             // for the next scanline)
             if dot == 257 {
-                self.sprite_pipeline.reset_output_units();
+                self.sprite_pipeline.borrow_mut().reset_output_units();
             }
             if registers.mask.get().is_rendering() {
-                self.sprite_pipeline
-                    .cycle(self.scanline.get(), dot, registers, oam_ram, bus)
+                self.sprite_pipeline.borrow_mut().cycle(
+                    self.scanline.get(),
+                    dot,
+                    registers,
+                    oam_ram,
+                    bus,
+                )
             }
         }
     }
@@ -240,8 +245,8 @@ impl Renderer {
             let mut front_priority = false;
             for (idx, sprite_data) in self
                 .sprite_pipeline
+                .borrow()
                 .sprite_output_at(dot)
-                .iter()
                 .enumerate()
             {
                 let mut x_sprite = dot - sprite_data.sprite.x as u16;
@@ -262,7 +267,7 @@ impl Renderer {
                 //   * background is outputing an opaque pixel
                 if idx == 0
                     && !registers.status.get().contains(PpuStatus::S)
-                    && self.sprite_pipeline.sprite0_in_output()
+                    && self.sprite_pipeline.borrow().sprite0_in_output()
                     && sprite_color.is_opaque()
                     && dot != 255
                     && mask.contains(PpuMask::b)

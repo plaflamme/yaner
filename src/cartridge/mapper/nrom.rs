@@ -54,7 +54,7 @@ impl AddressSpace for NROM {
         match addr {
             0x0000..=0x1FFF => self.chr.write_u8(addr, value),
             0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
-            0x8000..=0xFFFF => panic!("tried writing to a read only location 0x{:X?}", addr),
+            0x8000..=0xFFFF => invalid_address!(addr, "read-only location"),
             _ => invalid_address!(addr),
         }
     }

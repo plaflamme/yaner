@@ -22,13 +22,22 @@ pub trait Mapper: AddressSpace {
     fn name(&self) -> &'static str;
 
     fn nametable_mirroring(&self) -> NametableMirroring;
+
+    fn override_start_pc(&self, pc: u16) {
+        self.write_u16(0xFFFC, pc);
+    }
 }
 
 pub struct Cartridge {
-    pub mapper: Box<dyn Mapper>,
     path: PathBuf,
     rom: Rom,
     // TODO: memory backed RAM
+}
+
+impl Cartridge {
+    pub fn mapper(&self) -> Box<dyn Mapper> {
+        mapper::from(&self.rom)
+    }
 }
 
 impl Display for Cartridge {
@@ -45,7 +54,7 @@ impl Display for Cartridge {
         writeln!(
             f,
             "\tMapper      : {} ({})",
-            self.mapper.name(),
+            self.mapper().name(),
             self.rom.mapper
         )?;
         writeln!(f, "\tMirroring   : {:?}", self.rom.nametable_mirroring)?;
@@ -88,10 +97,7 @@ impl TryFrom<&[u8]> for Cartridge {
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
         let rom = Rom::try_from(data)?;
 
-        let mapper = mapper::from(&rom);
-
         Ok(Cartridge {
-            mapper,
             path: PathBuf::from(""),
             rom,
         })

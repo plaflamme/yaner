@@ -30,7 +30,7 @@ impl PpuState {
             v_addr: ppu.registers.v_addr.get(),
             fine_x: ppu.registers.fine_x.get(),
             oam_addr: ppu.registers.oam_addr.get(),
-            sprite_pipeline: SpritePipelineState::new(&ppu.renderer.sprite_pipeline),
+            sprite_pipeline: SpritePipelineState::new(&ppu.renderer.sprite_pipeline.borrow()),
             pattern_data: ppu.renderer.pattern_data.clone(),
             attribute_data: ppu.renderer.attribute_data.clone(),
             frame: ppu.renderer.frame_pixels.get(),

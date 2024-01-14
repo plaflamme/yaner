@@ -1,7 +1,6 @@
 use crate::memory::AddressSpace;
 use crate::ppu::reg::{PpuStatus, Registers};
 use bitregions::bitregions;
-use std::cell::{Cell, RefCell};
 
 bitregions! {
     pub Attributes u8 {
@@ -80,56 +79,69 @@ impl OamAddr {
 }
 
 struct OutputUnits {
-    units: RefCell<Vec<SpriteData>>,
+    units: Vec<SpriteData>,
     // an index of where sprites are on the line, true when at least one sprite is present at that coordinate
     // sort-a like a bloom filter so we don't have to iterate over all sprites for each pixel.
-    filter: RefCell<[bool; 256]>,
+    filter: [bool; 256],
     // sprite0 hit is based on whether sprite0 is in any of the output units
-    has_sprite0: Cell<bool>,
+    has_sprite0: bool,
 }
+
 impl Default for OutputUnits {
     fn default() -> Self {
         OutputUnits {
-            units: RefCell::default(),
-            filter: RefCell::new([false; 256]),
-            has_sprite0: Cell::default(),
+            units: Vec::new(),
+            filter: [false; 256],
+            has_sprite0: false,
         }
     }
 }
 
 impl OutputUnits {
-    fn push(&self, sprite_data: SpriteData) {
+    fn push(&mut self, sprite_data: SpriteData) {
         self.index_sprite(&sprite_data.sprite);
-        self.units.borrow_mut().push(sprite_data);
+        self.units.push(sprite_data);
     }
-    fn reset(&self, sprite0_in_range: bool) {
-        self.units.borrow_mut().clear();
-        self.filter.borrow_mut().fill(false);
-        self.has_sprite0.set(sprite0_in_range);
-    }
-    // returns the sprites that overlap with the provided dot (x coordinate)
-    pub fn sprites_at(&self, dot: u16) -> Vec<SpriteData> {
-        if !self.filter.borrow()[dot as usize] {
-            Vec::new()
-        } else {
-            self.units
-                .borrow()
-                .iter()
-                .filter(|sprite_data| {
-                    let sprite_x = sprite_data.sprite.x as u16;
-                    let sprite_end_x = sprite_x + 8;
-                    dot >= sprite_x && dot < sprite_end_x
-                })
-                .cloned()
-                .collect()
-        }
-    }
-    fn index_sprite(&self, sprite: &Sprite) {
-        let mut filter = self.filter.borrow_mut();
+    fn index_sprite(&mut self, sprite: &Sprite) {
         let x_start = sprite.x as usize;
         let x_end = (x_start + 8).min(256);
-        for x in x_start..x_end {
-            filter[x] = true;
+        self.filter[x_start..x_end].fill(true);
+    }
+    fn reset(&mut self, sprite0_in_range: bool) {
+        self.units.clear();
+        self.filter.fill(false);
+        self.has_sprite0 = sprite0_in_range;
+    }
+
+    // returns the sprites that overlap with the provided dot (x coordinate)
+    pub fn sprites_at(&self, dot: u16) -> impl Iterator<Item = &SpriteData> {
+        if !self.filter[dot as usize] {
+            SpritesInRange::None
+        } else {
+            SpritesInRange::Sprites(self.units.iter().filter(move |sprite_data| {
+                let sprite_x = sprite_data.sprite.x as u16;
+                let sprite_end_x = sprite_x + 8;
+                dot >= sprite_x && dot < sprite_end_x
+            }))
+        }
+    }
+}
+
+// a helper to allow returning a homegenous type in different branches.
+enum SpritesInRange<I> {
+    None,
+    Sprites(I),
+}
+impl<'a, I> Iterator for SpritesInRange<I>
+where
+    I: Iterator<Item = &'a SpriteData>,
+{
+    type Item = &'a SpriteData;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            SpritesInRange::None => None,
+            SpritesInRange::Sprites(iter) => iter.next(),
         }
     }
 }
@@ -139,62 +151,56 @@ pub(super) struct SpritePipeline {
     // The sprite data to render on the current scanline
     output_units: OutputUnits,
 
-    secondary_oam: Cell<[u8; 32]>,
-    secondary_oam_index: Cell<u8>,
+    secondary_oam: [u8; 32],
+    secondary_oam_index: u8,
 
     // This is a different representation of PpuCtrl::OamAddr so we can increment different parts of it independently.
-    oam_addr: Cell<OamAddr>,
+    oam_addr: OamAddr,
     // Value read from main OAM on odd cycles
-    oam_entry: Cell<u8>,
+    oam_entry: u8,
     // Whether we've completed the evaluation
-    oam_done: Cell<bool>,
+    oam_done: bool,
     // Whether the current sprite was in range when we looked at its y coordinate
-    sprite_in_range: Cell<bool>,
+    sprite_in_range: bool,
     // Whether sprite0 was copied to secondary OAM during evaluation
-    sprite0_in_range: Cell<bool>,
+    sprite0_in_range: bool,
 }
 
 impl SpritePipeline {
-    fn write_u8(&self, value: u8) {
-        self.secondary_oam.update(|mut oam| {
-            oam[self.secondary_oam_index.get() as usize] = value;
-            oam
-        });
+    fn write_u8(&mut self, value: u8) {
+        self.secondary_oam[self.secondary_oam_index as usize] = value;
     }
 
-    fn clear(&self, index: usize) {
-        self.secondary_oam.update(|mut oam| {
-            oam[index] = 0xFF;
-            oam
-        });
+    fn clear(&mut self, index: usize) {
+        self.secondary_oam[index] = 0xFF;
     }
 
     fn is_full(&self) -> bool {
-        self.secondary_oam_index.get() >= 32
+        self.secondary_oam_index >= 32
     }
 
     fn sprite_count(&self) -> u8 {
         // the index points to the 0th byte of the next sprite, so we divide by 4 to get the number of sprites.
-        self.secondary_oam_index.get() >> 2
+        self.secondary_oam_index >> 2
     }
 
-    pub fn reset_output_units(&self) {
+    pub fn reset_output_units(&mut self) {
         // NOTE: we assume this is invoked after evaluation.
         // TODO: We should probably control this more explicitely, e.g.: by doing this within cycle()
-        self.output_units.reset(self.sprite0_in_range.get());
+        self.output_units.reset(self.sprite0_in_range);
     }
 
     pub fn sprite0_in_output(&self) -> bool {
-        self.output_units.has_sprite0.get()
+        self.output_units.has_sprite0
     }
 
     // returns the sprites that overlap with the provided dot (x coordinate)
-    pub fn sprite_output_at(&self, dot: u16) -> Vec<SpriteData> {
+    pub fn sprite_output_at(&self, dot: u16) -> impl Iterator<Item = &SpriteData> {
         self.output_units.sprites_at(dot)
     }
 
     pub fn cycle(
-        &self,
+        &mut self,
         scanline: u16,
         dot: u16,
         registers: &Registers,
@@ -209,47 +215,46 @@ impl SpritePipeline {
             }
             65..=256 => {
                 if dot == 65 {
-                    self.oam_addr.set(OamAddr::new(registers.oam_addr.get()));
-                    self.secondary_oam_index.set(0);
-                    self.sprite_in_range.set(false);
-                    self.sprite0_in_range.set(false);
-                    self.oam_done.set(false);
+                    self.oam_addr = OamAddr::new(registers.oam_addr.get());
+                    self.secondary_oam_index = 0;
+                    self.sprite_in_range = false;
+                    self.sprite0_in_range = false;
+                    self.oam_done = false;
                 }
 
                 if dot & 0x01 != 0 {
                     // "On odd cycles, data is read from (primary) OAM"
-                    self.oam_entry
-                        .set(oam_ram.read_u8(registers.oam_addr.get() as u16));
-                } else if !self.oam_done.get() {
+                    self.oam_entry = oam_ram.read_u8(registers.oam_addr.get() as u16);
+                } else if !self.oam_done {
                     // "On even cycles, data is written to secondary OAM (unless secondary OAM is full, in which case it will read the value in secondary OAM instead)"
 
-                    let entry = self.oam_entry.get();
-                    let mut oam_addr = self.oam_addr.get();
+                    let entry = self.oam_entry;
+                    let mut oam_addr = self.oam_addr;
                     let prev_oam_high = oam_addr.high();
 
-                    let in_range = if self.sprite_in_range.get() {
+                    let in_range = if self.sprite_in_range {
                         true
                     } else {
                         let sprite_y = entry as u16;
                         let sprite_y_end = sprite_y + registers.ctrl.get().sprite_height() as u16;
+                        self.sprite_in_range = scanline >= sprite_y && scanline < sprite_y_end;
                         self.sprite_in_range
-                            .update(|_| scanline >= sprite_y && scanline < sprite_y_end)
                     };
 
                     if !self.is_full() {
                         self.write_u8(entry);
 
                         if in_range {
-                            self.secondary_oam_index.update(|s| s + 1);
+                            self.secondary_oam_index += 1;
 
                             if oam_addr.high() == 0 {
-                                self.sprite0_in_range.set(true);
+                                self.sprite0_in_range = true;
                             }
 
                             // NOTE: Mesen tests against the index in secondary oam apparently to replicate some obscure corner case.
                             if oam_addr.incr_low() {
                                 // finished copying this sprite's data, move to the next one.
-                                self.sprite_in_range.set(false);
+                                self.sprite_in_range = false;
                                 oam_addr.incr_high();
                             }
                         } else {
@@ -272,9 +277,9 @@ impl SpritePipeline {
                     }
                     // if we've wrapped around, we're done.
                     if prev_oam_high != 0 && oam_addr.high() == 0 {
-                        self.oam_done.set(true);
+                        self.oam_done = true;
                     }
-                    self.oam_addr.set(oam_addr);
+                    self.oam_addr = oam_addr;
                     registers.oam_addr.set(oam_addr.raw());
                 }
             }
@@ -286,7 +291,7 @@ impl SpritePipeline {
                 let sprite_index = ((dot - 257) / 8) as usize;
                 if cycle == 0 && sprite_index < self.sprite_count() as usize {
                     let ctrl = registers.ctrl.get();
-                    let oam = self.secondary_oam.get();
+                    let oam = self.secondary_oam;
                     let base = sprite_index * 4;
                     let sprite = Sprite::new(&oam[base..base + 4]);
 
@@ -336,15 +341,14 @@ pub mod debug {
             let mut output = [None; 8];
             p.output_units
                 .units
-                .borrow()
                 .iter()
                 .enumerate()
                 .for_each(|(idx, sprite_data)| output[idx] = Some(*sprite_data));
             SpritePipelineState {
-                oam_addr: p.oam_addr.get(),
-                oam_entry: p.oam_entry.get(),
-                secondary_oam_index: p.secondary_oam_index.get(),
-                secondary_oam: p.secondary_oam.get(),
+                oam_addr: p.oam_addr,
+                oam_entry: p.oam_entry,
+                secondary_oam_index: p.secondary_oam_index,
+                secondary_oam: p.secondary_oam,
                 output_units: output,
             }
         }
@@ -382,64 +386,64 @@ mod test {
 
     #[test]
     fn test_sprite_pipeline_clear() {
-        let pipeline = SpritePipeline::default();
+        let mut pipeline = SpritePipeline::default();
 
         let mut oam = [0u8; 32];
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
 
         pipeline.clear(0);
 
         oam[0] = 0xFF;
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
 
         pipeline.clear(2);
         oam[2] = 0xFF;
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
     }
 
     #[test]
     fn test_sprite_pipeline_write() {
-        let pipeline = SpritePipeline::default();
+        let mut pipeline = SpritePipeline::default();
 
         let mut oam = [0u8; 32];
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
 
         pipeline.write_u8(0xEE);
         oam[0] = 0xEE;
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
 
-        pipeline.secondary_oam_index.set(24);
+        pipeline.secondary_oam_index = 24;
         pipeline.write_u8(0xAB);
         oam[24] = 0xAB;
-        assert_eq!(oam, pipeline.secondary_oam.get());
+        assert_eq!(oam, pipeline.secondary_oam);
     }
 
     #[test]
     fn test_sprite_pipeline_is_full() {
-        let pipeline = SpritePipeline::default();
+        let mut pipeline = SpritePipeline::default();
         assert!(!pipeline.is_full());
-        pipeline.secondary_oam_index.set(31);
+        pipeline.secondary_oam_index = 31;
         assert!(!pipeline.is_full());
-        pipeline.secondary_oam_index.set(32);
+        pipeline.secondary_oam_index = 32;
         assert!(pipeline.is_full());
-        pipeline.secondary_oam_index.set(64);
+        pipeline.secondary_oam_index = 64;
         assert!(pipeline.is_full());
     }
 
     #[test]
     fn test_sprite_pipeline_sprite_count() {
-        let pipeline = SpritePipeline::default();
+        let mut pipeline = SpritePipeline::default();
         assert_eq!(0, pipeline.sprite_count());
-        pipeline.secondary_oam_index.set(1);
+        pipeline.secondary_oam_index = 1;
         assert_eq!(0, pipeline.sprite_count());
-        pipeline.secondary_oam_index.set(2);
+        pipeline.secondary_oam_index = 2;
         assert_eq!(0, pipeline.sprite_count());
-        pipeline.secondary_oam_index.set(3);
+        pipeline.secondary_oam_index = 3;
         assert_eq!(0, pipeline.sprite_count());
 
-        pipeline.secondary_oam_index.set(4);
+        pipeline.secondary_oam_index = 4;
         assert_eq!(1, pipeline.sprite_count());
-        pipeline.secondary_oam_index.set(32);
+        pipeline.secondary_oam_index = 32;
         assert_eq!(8, pipeline.sprite_count());
     }
 }
