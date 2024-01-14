@@ -61,12 +61,9 @@ fn cpu_dummy_reads() {
 }
 
 #[test_case("cpu_dummy_writes_oam")]
-#[test_case("cpu_dummy_writes_ppumem")] // flaky
+#[test_case("cpu_dummy_writes_ppumem")]
 fn cpu_dummy_writes(case: &str) {
-    blargg_test(
-        format!("roms/nes-test-roms/cpu_dummy_writes/{}.nes", case),
-        false,
-    );
+    run_blargg_test(format!("roms/nes-test-roms/cpu_dummy_writes/{}.nes", case));
 }
 
 #[test_case("1.Branch_Basics")]

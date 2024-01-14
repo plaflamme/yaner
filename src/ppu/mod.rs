@@ -3,7 +3,6 @@
 use crate::cartridge::{Mapper, NametableMirroring};
 use crate::memory::Ram256;
 use crate::memory::{AddressSpace, Mirrored, Ram2KB, Ram32};
-use rand::{thread_rng, Rng};
 use std::cell::{Cell, RefCell};
 use std::ops::Coroutine;
 use std::rc::Rc;
@@ -178,34 +177,64 @@ impl PpuRegisters {
     }
 
     pub fn decay_open_bus(&self) {
-        let mut rng = thread_rng();
-        for i in 0..8 {
-            if rng.gen_bool(0.25) {
-                self.open_bus.set(self.open_bus.get() & !(1 << i));
-            }
-        }
+        // TODO: remember when a bit was last set to 1 and only decay it after 600ms have past.
+        // for i in 0..8 {
+        //     self.open_bus.update(|b| b & !(1 << i));
+        // }
+        self.open_bus.set(0);
     }
 }
 
+// From ppu_open_bus/readme.txt:
+//
+// Writing to any PPU register sets the decay register to the value
+// written. Reading from a PPU register is more complex. The following
+// shows the effect of a read from each register:
+
+// 	Addr    Open-bus bits
+// 			7654 3210
+// 	- - - - - - - - - - - - - - - -
+// 	$2000   DDDD DDDD
+// 	$2001   DDDD DDDD
+// 	$2002   ---D DDDD
+// 	$2003   DDDD DDDD
+// 	$2004   ---- ----
+// 	$2005   DDDD DDDD
+// 	$2006   DDDD DDDD
+// 	$2007   ---- ----   non-palette
+// 			DD-- ----   palette
+
+// A D means that this bit reads back as whatever is in the decay register
+// at that bit, and doesn't refresh the decay register at that bit. A -
+// means that this bit reads back as defined by the PPU, and refreshes the
+// decay register at the corresponding bit.
 impl AddressSpace for PpuRegisters {
     fn read_u8(&self, addr: u16) -> u8 {
-        let result = match addr {
+        match addr {
             0x2000 => self.open_bus.get(),
             0x2001 => self.open_bus.get(),
-            0x2002 => self.ppu.read_status() | (self.open_bus.get() & 0b0001_1111),
+            0x2002 => {
+                let result = self.ppu.read_status();
+                let ob = self
+                    .open_bus
+                    .update(|b| b & 0b0001_1111 | result & 0b1110_0000);
+                result | (ob & 0b0001_1111)
+            }
             0x2003 => self.open_bus.get(),
             0x2004 => {
                 // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_2
                 // bits 2-4 of byte 2 are "unimplemented" and thus, should be cleared
                 let addr = self.ppu.registers.oam_addr.get() as u16;
                 let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
-                self.ppu.oam_data.read_u8(addr) & mask
+                let result = self.ppu.oam_data.read_u8(addr) & mask;
+                self.open_bus.set(result);
+                result
             }
             0x2005 => self.open_bus.get(),
             0x2006 => self.open_bus.get(),
             0x2007 => {
                 let (vram_addr, value) = self.ppu.vram_read_u8();
-                match vram_addr {
+                let result = match vram_addr {
                     0..=0x3EFF => self.read_buffer.replace(value),
                     0x3F00..=0x3FFF => {
                         // "The palette data is placed immediately on the data bus, and hence no dummy read is required.
@@ -218,12 +247,12 @@ impl AddressSpace for PpuRegisters {
                         value | self.open_bus.get() & 0b1100_0000
                     }
                     _ => 0x00,
-                }
+                };
+                self.open_bus.set(result);
+                result
             }
             _ => invalid_address!(addr),
-        };
-        self.open_bus.set(result);
-        result
+        }
     }
 
     fn write_u8(&self, addr: u16, value: u8) {

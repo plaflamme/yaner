@@ -136,8 +136,15 @@ impl Nes {
                     yield NesCycle::PpuCycle(ppu_step());
                 }
 
-                if self.clocks.ppu_cycles.get() % 10_000 == 0 {
-                    // TODO: this should be ~100ms
+                // According to ppu_open_bus/readme.txt, the open bus register should decay
+                //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
+                //
+                // The PPU runs at 21.477272 MHz / 4 (5.369318 Mhz)
+                //   5_369_318 cycles/s
+                //   0.6 * 5_369_318 = 3_221_590.8
+                //   So 600ms on the NES is approximately 3_221_590 PPU ticks
+                if self.clocks.ppu_cycles.get() % 3_221_590 == 0 {
+                    // TODO: this should remember when each bit was last set to 1
                     // TODO: this should just happen as a side effect of ticking the ppu
                     self.cpu.bus.ppu_registers.decay_open_bus()
                 }
