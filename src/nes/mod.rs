@@ -62,7 +62,7 @@ impl Nes {
     pub fn new_with_pc(cartridge: Cartridge, start_at: Option<u16>) -> Self {
         let input1 = Rc::new(crate::input::Joypad::default());
         let input2 = Rc::new(crate::input::Joypad::default());
-        let mapper = Rc::new(RefCell::new(cartridge.mapper));
+        let mapper = Rc::new(RefCell::new(cartridge.mapper()));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
         let ppu_mem_registers = PpuRegisters::new(ppu.clone());
         let io_registers = IoRegisters::new(input1.clone(), input2.clone());

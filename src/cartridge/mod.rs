@@ -22,10 +22,6 @@ pub trait Mapper: AddressSpace {
     fn name(&self) -> &'static str;
 
     fn nametable_mirroring(&self) -> NametableMirroring;
-
-    fn override_start_pc(&self, pc: u16) {
-        self.write_u16(0xFFFC, pc);
-    }
 }
 
 pub struct Cartridge {

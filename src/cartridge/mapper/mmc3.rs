@@ -1,3 +1,5 @@
+/// https://www.nesdev.org/wiki/MMC3
+///
 use crate::cartridge::mapper::{BankSelect, Switched};
 use crate::cartridge::rom::RomData;
 use crate::cartridge::NametableMirroring;
@@ -7,7 +9,16 @@ use std::cell::Cell;
 
 bitregions! {
     Select u8 {
-        REGISTER: 0b0000_0111, // Specify which bank register to update on next write to Bank Data register
+        // Specify which bank register to update on next write to Bank Data register
+        //   000: R0: Select 2 KB CHR bank at PPU $0000-$07FF (or $1000-$17FF)
+        //   001: R1: Select 2 KB CHR bank at PPU $0800-$0FFF (or $1800-$1FFF)
+        //   010: R2: Select 1 KB CHR bank at PPU $1000-$13FF (or $0000-$03FF)
+        //   011: R3: Select 1 KB CHR bank at PPU $1400-$17FF (or $0400-$07FF)
+        //   100: R4: Select 1 KB CHR bank at PPU $1800-$1BFF (or $0800-$0BFF)
+        //   101: R5: Select 1 KB CHR bank at PPU $1C00-$1FFF (or $0C00-$0FFF)
+        //   110: R6: Select 8 KB PRG ROM bank at $8000-$9FFF (or $C000-$DFFF)
+        //   111: R7: Select 8 KB PRG ROM bank at $A000-$BFFF
+        REGISTER: 0b0000_0111,
         // PRG ROM bank mode (0: $8000-$9FFF swappable,
         //                       $C000-$DFFF fixed to second-last bank;
         //                    1: $C000-$DFFF swappable,
@@ -22,7 +33,7 @@ bitregions! {
 }
 
 pub(super) struct MMC3 {
-    mirroring: Cell<NametableMirroring>,
+    mirroring: NametableMirroring,
     prg_rom: Switched<Dyn>,
     registers: Cell<[u8; 8]>,
     bank_select: Cell<Select>,
@@ -45,7 +56,7 @@ impl super::Mapper for MMC3 {
     }
 
     fn nametable_mirroring(&self) -> NametableMirroring {
-        self.mirroring.get()
+        self.mirroring
     }
 }
 
@@ -53,8 +64,8 @@ impl From<&super::Rom> for MMC3 {
     fn from(rom: &super::Rom) -> Self {
         let rom_data = RomData::new(rom);
         MMC3 {
-            mirroring: Cell::new(rom.nametable_mirroring),
-            prg_rom: Switched::new(rom_data.prg_rom.clone(), rom_data.prg_rom.len(), 8_192),
+            mirroring: rom.nametable_mirroring,
+            prg_rom: Switched::new(rom_data.prg_rom.clone(), rom_data.prg_rom.size(), 8_192),
             registers: Cell::default(),
             bank_select: Cell::default(),
         }

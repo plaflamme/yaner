@@ -115,14 +115,15 @@ impl PpuBus {
         }
     }
 
+    // https://www.nesdev.org/wiki/Mirroring#Nametable_Mirroring
     fn nametable_mirroring(&self, addr: u16) -> u16 {
         match self.mapper.borrow().nametable_mirroring() {
             NametableMirroring::Vertical => {
-                // 0x2000 is mirrored at 0x2800
+                // 0x2000 is mirrored every 0x0800
                 ((addr - 0x2000) % 0x800) + 0x2000
             }
             NametableMirroring::Horizontal => {
-                // 0x2000 is mirrored at 0x2400
+                // 0x2000 is mirrored every 0x0400
                 ((addr - 0x2000) % 0x400) + 0x2000
             }
             NametableMirroring::FourScreen => unimplemented!(),

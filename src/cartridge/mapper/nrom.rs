@@ -16,7 +16,8 @@ pub struct NROM {
 impl From<&Rom> for NROM {
     fn from(rom: &Rom) -> Self {
         let data = RomData::new(rom);
-        let prg_rom = Switched::new(data.prg_rom.clone(), data.prg_rom.len(), 16_384);
+        let prg_rom_size = data.prg_rom.size();
+        let prg_rom = Switched::new(data.prg_rom, prg_rom_size, 16_384);
         NROM {
             mirroring: rom.nametable_mirroring,
             prg_ram: data.prg_ram,
@@ -54,7 +55,12 @@ impl AddressSpace for NROM {
         match addr {
             0x0000..=0x1FFF => self.chr.write_u8(addr, value),
             0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
-            0x8000..=0xFFFF => invalid_address!(addr, "read-only location"),
+            0x8000..=0xBFFF => self
+                .prg_rom
+                .write_u8(BankSelect::First, addr - 0x8000, value),
+            0xC000..=0xFFFF => self
+                .prg_rom
+                .write_u8(BankSelect::Last, addr - 0xC000, value),
             _ => invalid_address!(addr),
         }
     }

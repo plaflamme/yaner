@@ -140,7 +140,7 @@ impl From<&Rom> for SxROM {
     fn from(rom: &Rom) -> Self {
         let data = RomData::new(rom);
 
-        let prg_rom = Switched::new(data.prg_rom.clone(), data.prg_rom.len(), 16_384);
+        let prg_rom = Switched::new(data.prg_rom.clone(), data.prg_rom.size(), 16_384);
 
         let size = data.chr.addr_space_size();
         let chr = Switched::new(data.chr, size, 4_096);
