@@ -63,11 +63,7 @@ fn parse_log() -> Result<Vec<LogLine>, std::io::Error> {
     let log = std::fs::read_to_string("roms/nes-test-roms/other/nestest.log")?;
     let lines = log
         .lines()
-        .map(|line| {
-            let log_line =
-                parse_logline(line).expect(format!("invalid log line {}", line).as_str());
-            log_line
-        })
+        .map(|line| parse_logline(line).unwrap_or_else(|_| panic!("invalid log line {}", line)))
         .collect::<Vec<LogLine>>();
 
     Ok(lines)
