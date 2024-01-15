@@ -4,7 +4,7 @@ use crate::memory::{AddressSpace, Ram2KB};
 use bitflags::bitflags;
 use std::cell::{Cell, RefCell};
 use std::fmt::{Display, Error, Formatter};
-use std::ops::Generator;
+use std::ops::Coroutine;
 
 mod mode;
 use mode::*;
@@ -346,7 +346,7 @@ impl Cpu {
         self.set_flags_from(self.acc.get())
     }
 
-    pub fn run(&self) -> impl Generator<Yield = CpuCycle, Return = ()> + '_ {
+    pub fn run(&self) -> impl Coroutine<Yield = CpuCycle, Return = ()> + '_ {
         // used to delay interrupts by one op
         // TODO: this probably requires more granular timing.
         let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);

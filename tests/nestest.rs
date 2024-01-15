@@ -1,8 +1,8 @@
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-use std::ops::{Generator, GeneratorState};
+use std::ops::{Coroutine, CoroutineState};
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -112,18 +112,18 @@ fn assert_log(nes: &Nes, line: &LogLine) {
 // Steps the same way nintendulator does, which is:
 //   (cpu_step + 3 * ppu_step)
 //   if cpu_step == OpComplete { yield () }
-fn nintendulator_steps(nes: &Nes) -> impl Generator<Yield = (), Return = ()> + '_ {
+fn nintendulator_steps(nes: &Nes) -> impl Coroutine<Yield = (), Return = ()> + '_ {
     let mut ppu_steps = nes.ppu_steps();
     move || {
         let mut yield_on_next = false;
         loop {
-            match Generator::resume(Pin::new(&mut ppu_steps), ()) {
-                GeneratorState::Yielded(NesCycle::PowerUp) => (),
-                GeneratorState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
+            match Coroutine::resume(Pin::new(&mut ppu_steps), ()) {
+                CoroutineState::Yielded(NesCycle::PowerUp) => (),
+                CoroutineState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
                     yield_on_next = true;
                 }
-                GeneratorState::Yielded(_) => (),
-                GeneratorState::Complete(_) => break,
+                CoroutineState::Yielded(_) => (),
+                CoroutineState::Complete(_) => break,
             }
 
             if yield_on_next && nes.clocks.ppu_cycles.get() % 3 == 0 {
@@ -146,7 +146,7 @@ fn test_nestest() {
 
     let mut log_iter = log.iter();
 
-    while let GeneratorState::Yielded(_) = Generator::resume(Pin::new(&mut steps), ()) {
+    while let CoroutineState::Yielded(_) = Coroutine::resume(Pin::new(&mut steps), ()) {
         if let Some(line) = log_iter.next() {
             assert_log(&nes, line)
         }

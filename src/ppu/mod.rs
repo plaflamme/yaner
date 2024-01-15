@@ -5,7 +5,7 @@ use crate::memory::Ram256;
 use crate::memory::{AddressSpace, Mirrored, Ram2KB, Ram32};
 use rand::{thread_rng, Rng};
 use std::cell::{Cell, RefCell};
-use std::ops::Generator;
+use std::ops::Coroutine;
 use std::rc::Rc;
 
 pub mod debug;
@@ -87,7 +87,7 @@ impl Ppu {
         self.bus.write_u8(self.registers.rw_vram_addr(), value);
     }
 
-    pub fn run(&self) -> impl Generator<Yield = PpuCycle, Return = ()> + '_ {
+    pub fn run(&self) -> impl Coroutine<Yield = PpuCycle, Return = ()> + '_ {
         self.renderer
             .run(&self.registers, &self.bus, &self.oam_data)
     }

@@ -1,4 +1,4 @@
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::convert::TryFrom;

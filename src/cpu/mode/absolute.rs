@@ -1,7 +1,7 @@
 use super::*;
 use crate::memory::AddressSpace;
 
-fn abs_addr(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '_ {
+fn abs_addr(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
     move || {
         let addr_lo = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
@@ -17,7 +17,7 @@ fn abs_addr(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = u16> + '_ {
 //  2    PC     R  fetch low address byte, increment PC
 //  3    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
-pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + '_ {
+pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         cpu.pc.set(addr);
@@ -35,7 +35,7 @@ pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Generator<Yield = CpuCycle, Return 
 pub(in crate::cpu) fn read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;
@@ -59,7 +59,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(
 pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;
@@ -86,7 +86,7 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
 pub(in crate::cpu) fn write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(abs_addr(cpu));
         yield CpuCycle::Tick;

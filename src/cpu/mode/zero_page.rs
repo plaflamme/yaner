@@ -9,7 +9,7 @@ use crate::memory::AddressSpace;
 pub(in crate::cpu) fn read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
@@ -31,7 +31,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(
 pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;
@@ -56,7 +56,7 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
 pub(in crate::cpu) fn write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = cpu.next_pc_read_u8() as u16;
         yield CpuCycle::Tick;

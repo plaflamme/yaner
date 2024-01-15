@@ -1,6 +1,6 @@
 use crate::memory::AddressSpace;
 use std::cell::Cell;
-use std::ops::Generator;
+use std::ops::Coroutine;
 
 pub enum DmaCycle {
     Tick,
@@ -42,7 +42,7 @@ impl Dma {
     pub fn run<'a>(
         &'a self,
         cpu: &'a dyn AddressSpace,
-    ) -> impl Generator<Yield = DmaCycle, Return = ()> + 'a {
+    ) -> impl Coroutine<Yield = DmaCycle, Return = ()> + 'a {
         move || {
             loop {
                 match self.state.get() {

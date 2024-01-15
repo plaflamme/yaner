@@ -1,4 +1,4 @@
-#![feature(cell_update, generators, generator_trait)]
+#![feature(cell_update, coroutines, coroutine_trait)]
 
 #[macro_use]
 pub mod helper;

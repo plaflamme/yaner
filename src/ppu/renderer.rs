@@ -1,6 +1,6 @@
 use bitregions::bitregions;
 use std::cell::Cell;
-use std::ops::Generator;
+use std::ops::Coroutine;
 
 use super::rgb;
 use crate::memory::AddressSpace;
@@ -426,7 +426,7 @@ impl Renderer {
         registers: &'a Registers,
         bus: &'a dyn AddressSpace,
         oam_ram: &'a dyn AddressSpace,
-    ) -> impl Generator<Yield = PpuCycle, Return = ()> + 'a {
+    ) -> impl Coroutine<Yield = PpuCycle, Return = ()> + 'a {
         let mut generate_nmi = false;
         let mut odd_frame = false;
         move || loop {

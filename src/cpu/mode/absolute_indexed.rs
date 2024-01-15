@@ -4,7 +4,7 @@ use crate::memory::AddressSpace;
 fn abs_indexed(
     index: u8,
     cpu: &Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
+) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
     move || {
         let addr_lo = cpu.next_pc_read_u8();
         yield CpuCycle::Tick;
@@ -43,7 +43,7 @@ fn read<'a, O: ReadOperation>(
     operation: &'a O,
     index: u8,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, unfixed, mut value, oops) = yield_complete!(abs_indexed(index, cpu));
         if oops {
@@ -63,14 +63,14 @@ fn read<'a, O: ReadOperation>(
 pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     read(operation, cpu.x.get(), cpu)
 }
 
 pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     read(operation, cpu.y.get(), cpu)
 }
 
@@ -94,7 +94,7 @@ fn modify<'a, O: ModifyOperation>(
     operation: &'a O,
     index: u8,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, unfixed, _, _) = yield_complete!(abs_indexed(index, cpu));
 
@@ -121,7 +121,7 @@ fn modify<'a, O: ModifyOperation>(
 pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     modify(operation, cpu.x.get(), cpu)
 }
 
@@ -129,7 +129,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(
 pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     modify(operation, cpu.y.get(), cpu)
 }
 
@@ -154,7 +154,7 @@ fn write<'a, O: WriteOperation>(
     operation: &'a O,
     index: u8,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, unfixed, _, _) = yield_complete!(abs_indexed(index, cpu));
         yield CpuCycle::Tick;
@@ -173,13 +173,13 @@ fn write<'a, O: WriteOperation>(
 pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     write(operation, cpu.x.get(), cpu)
 }
 
 pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
-) -> impl Generator<Yield = CpuCycle, Return = OpTrace> + 'a {
+) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     write(operation, cpu.y.get(), cpu)
 }

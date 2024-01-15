@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::fmt::{Display, Formatter};
-use std::ops::{Generator, GeneratorState};
+use std::ops::{Coroutine, CoroutineState};
 use std::pin::Pin;
 use std::rc::Rc;
 
@@ -83,7 +83,7 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps(&self) -> impl Generator<Yield = NesCycle, Return = ()> + '_ {
+    pub fn ppu_steps(&self) -> impl Coroutine<Yield = NesCycle, Return = ()> + '_ {
         let mut cpu_suspended = false;
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
@@ -93,7 +93,7 @@ impl Nes {
             yield NesCycle::PowerUp;
             loop {
                 let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
-                    GeneratorState::Yielded(cycle) => {
+                    CoroutineState::Yielded(cycle) => {
                         match cycle {
                             PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
                             PpuCycle::Frame => self.clocks.tick_frame(),
@@ -101,14 +101,14 @@ impl Nes {
                         }
                         cycle
                     }
-                    GeneratorState::Complete(_) => panic!("ppu stopped"),
+                    CoroutineState::Complete(_) => panic!("ppu stopped"),
                 };
 
                 let mut dma_step = || match Pin::new(&mut dma).resume(()) {
-                    GeneratorState::Yielded(DmaCycle::NoDma) => false,
-                    GeneratorState::Yielded(DmaCycle::Tick) => true,
-                    GeneratorState::Yielded(DmaCycle::Done) => false,
-                    GeneratorState::Complete(_) => panic!("dma stopped"),
+                    CoroutineState::Yielded(DmaCycle::NoDma) => false,
+                    CoroutineState::Yielded(DmaCycle::Tick) => true,
+                    CoroutineState::Yielded(DmaCycle::Done) => false,
+                    CoroutineState::Complete(_) => panic!("dma stopped"),
                 };
 
                 if let Some(addr) = self.cpu.bus.io_regsiters.dma_latch() {
@@ -119,12 +119,12 @@ impl Nes {
                 if self.clocks.ppu_cycles.get() % 3 == 0 {
                     if !cpu_suspended {
                         match Pin::new(&mut cpu).resume(()) {
-                            GeneratorState::Yielded(CpuCycle::Halt) => break,
-                            GeneratorState::Yielded(cpu_cycle) => {
+                            CoroutineState::Yielded(CpuCycle::Halt) => break,
+                            CoroutineState::Yielded(cpu_cycle) => {
                                 self.clocks.tick(true);
                                 yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
                             }
-                            GeneratorState::Complete(_) => panic!("cpu stopped"),
+                            CoroutineState::Complete(_) => panic!("cpu stopped"),
                         }
                     } else {
                         cpu_suspended = dma_step();
@@ -181,7 +181,7 @@ impl Error for StepperError {}
 
 pub struct Stepper {
     nes: Nes,
-    steps: Option<Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>>,
+    steps: Option<Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'static>>,
     halted: bool,
 }
 
@@ -202,8 +202,8 @@ impl Stepper {
             //   This is necessary because I can't figure out how to tell / convince Rust that the reference to `boxed.nes` has a lifetime that is >= the generator's lifetime
             //   I have no idea how to avoid this and transmute is the most unsafe thing you can do...
             let generator = std::mem::transmute::<
-                Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + '_>,
-                Box<dyn Generator<Yield = NesCycle, Return = ()> + Unpin + 'static>,
+                Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + '_>,
+                Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'static>,
             >(Box::new(pinned.nes.ppu_steps()));
 
             // Here we do the typical self-referential struct trick described in Pin
@@ -226,15 +226,15 @@ impl Stepper {
             Err(StepperError::Halted)
         } else {
             // NOTE: we have to help the compiler here by using type ascription
-            let gen: &mut (dyn Generator<Yield = NesCycle, Return = ()> + Unpin) =
+            let gen: &mut (dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin) =
                 self.steps.as_mut().unwrap().borrow_mut();
             match Pin::new(gen).resume(()) {
-                GeneratorState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
+                CoroutineState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
                     self.halted = true;
                     Ok(cycle)
                 }
-                GeneratorState::Yielded(cycle) => Ok(cycle),
-                GeneratorState::Complete(_) => Err(StepperError::Halted),
+                CoroutineState::Yielded(cycle) => Ok(cycle),
+                CoroutineState::Complete(_) => Err(StepperError::Halted),
             }
         }
     }
