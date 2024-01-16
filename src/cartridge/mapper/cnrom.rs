@@ -51,10 +51,9 @@ impl Mapper for CNROM {
 impl AddressSpace for CNROM {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x1FFF => {
-                let idx = BankSelect::Index(self.chr_select.get());
-                self.chr.read_u8(idx, addr)
-            }
+            0x0000..=0x1FFF => self
+                .chr
+                .read_u8(BankSelect::Index(self.chr_select.get()), addr),
 
             // PRG RAM => None
             0x6000..=0x7FFF => self.prg_ram.read_u8(addr - 0x6000),
@@ -74,12 +73,7 @@ impl AddressSpace for CNROM {
                     .write_u8(BankSelect::Index(self.chr_select.get()), addr, value)
             }
             0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
-            0x8000..=0xBFFF => self
-                .prg_rom
-                .write_u8(BankSelect::First, addr - 0x8000, value),
-            0xC000..=0xFFFF => self
-                .prg_rom
-                .write_u8(BankSelect::Last, addr - 0xC000, value),
+            0x8000..=0xFFFF => self.chr_select.set(value),
             _ => invalid_address!(addr),
         }
     }
