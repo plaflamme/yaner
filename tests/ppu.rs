@@ -12,7 +12,6 @@ fn ppu_open_bus() {
 }
 
 #[test]
-#[should_panic] // needs APU? not sure.
 fn ppu_read_buffer() {
     run_blargg_test("roms/nes-test-roms/ppu_read_buffer/test_ppu_read_buffer.nes");
 }

@@ -140,6 +140,13 @@ impl PpuBus {
 
 impl AddressSpace for PpuBus {
     fn read_u8(&self, addr: u16) -> u8 {
+        // According to https://www.nesdev.org/wiki/PPU_registers#PPUADDR
+        // The PPU address space is mirrored beyond 0x3FFF
+        // Furthermore, according to https://www.nesdev.org/wiki/PPU_memory_map
+        // The address space is 14bits wide.
+        //
+        // So we truncate the address
+        let addr = addr & 0x3FFF;
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().read_u8(addr),
             0x2000..=0x3EFF => self.vram.read_u8(self.nametable_mirroring(addr)),
@@ -149,6 +156,7 @@ impl AddressSpace for PpuBus {
     }
 
     fn write_u8(&self, addr: u16, value: u8) {
+        let addr = addr & 0x3FFF;
         match addr {
             0x0000..=0x1FFF => self.mapper.borrow().write_u8(addr, value),
             0x2000..=0x3EFF => self.vram.write_u8(self.nametable_mirroring(addr), value),
