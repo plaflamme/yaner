@@ -8,6 +8,7 @@ use std::cell::Cell;
 pub struct CNROM {
     mirroring: NametableMirroring,
     prg_rom: Switched<Dyn>,
+    prg_ram: Dyn,
     chr: Switched<Dyn>,
     chr_select: Cell<u8>,
 }
@@ -22,6 +23,7 @@ impl From<&Rom> for CNROM {
         CNROM {
             mirroring: rom.nametable_mirroring,
             prg_rom: Switched::new(data.prg_rom.clone(), data.prg_rom.len(), 16_384),
+            prg_ram: data.prg_ram,
             chr: Switched::new(chr_rom, 32_768, 8_192),
             chr_select: Cell::default(),
         }
@@ -55,7 +57,7 @@ impl AddressSpace for CNROM {
             }
 
             // PRG RAM => None
-            0x6000..=0x7FFF => 0x00,
+            0x6000..=0x7FFF => self.prg_ram.read_u8(addr - 0x6000),
 
             // 0x8000..=0xBFFF - First 16 KB of ROM.
             0x8000..=0xBFFF => self.prg_rom.read_u8(BankSelect::First, addr - 0x8000),
@@ -71,8 +73,13 @@ impl AddressSpace for CNROM {
                 self.chr
                     .write_u8(BankSelect::Index(self.chr_select.get()), addr, value)
             }
-            0x6000..=0x7FFF => panic!("cartridge has no prg_ram to write at 0x{:X?}", addr),
-            0x8000..=0xFFFF => panic!("tried writing to a read only location 0x{:X?}", addr),
+            0x6000..=0x7FFF => self.prg_ram.write_u8(addr - 0x6000, value),
+            0x8000..=0xBFFF => self
+                .prg_rom
+                .write_u8(BankSelect::First, addr - 0x8000, value),
+            0xC000..=0xFFFF => self
+                .prg_rom
+                .write_u8(BankSelect::Last, addr - 0xC000, value),
             _ => invalid_address!(addr),
         }
     }
