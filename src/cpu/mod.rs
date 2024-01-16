@@ -712,7 +712,7 @@ impl crate::memory::AddressSpace for CpuBus {
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
             0x0000..=0x07FF => self.ram.write_u8(addr, value),
-            0x0800..=0x1FFF => self.ram.write_u8(addr % 0x8000, value),
+            0x0800..=0x1FFF => self.ram.write_u8(addr % 0x0800, value),
 
             0x2000..=0x2007 => self.ppu_registers.write_u8(addr, value), // PPU
             0x2008..=0x3FFF => self.ppu_registers.write_u8(0x2000 + (addr % 8), value), // PPU mirror
