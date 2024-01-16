@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::blargg::{blargg_test, run_blargg_test};
+use common::blargg::run_blargg_test;
 use common::run_test_frames;
 use test_case::test_case;
 
