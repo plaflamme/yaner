@@ -107,12 +107,22 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 format!("{:02X} {}", nes.ppu.status, format_bitflags(nes.ppu.status)),
                 value_style,
             ),
+            Span::from(" Sup: "),
+            Span::styled(
+                format!(
+                    "{}{}",
+                    if nes.ppu.suppress_vbl { "V" } else { "-" },
+                    if nes.ppu.suppress_nmi { "N" } else { "-" }
+                ),
+                value_style,
+            ),
         ]),
         Line::from(vec![
             Span::from(" T: "),
             Span::styled(
                 format!(
-                    "FY:{} NT:{}",
+                    "{:04X} FY:{} NT:{}",
+                    nes.ppu.t_addr.raw(),
                     nes.ppu.t_addr.fine_y(),
                     nes.ppu.t_addr.nametable()
                 ),
@@ -134,7 +144,8 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
             Span::from(" V: "),
             Span::styled(
                 format!(
-                    "FY:{} NT:{}",
+                    "{:04X} FY:{} NT:{}",
+                    nes.ppu.v_addr.raw(),
                     nes.ppu.v_addr.fine_y(),
                     nes.ppu.v_addr.nametable()
                 ),

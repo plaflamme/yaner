@@ -127,8 +127,8 @@ pub struct Renderer {
     pub(super) frame_pixels: Cell<[Pixel; 256 * 240]>,
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
-    suppress_vbl: Cell<bool>,
-    suppress_nmi: Cell<bool>,
+    pub(super) suppress_vbl: Cell<bool>,
+    pub(super) suppress_nmi: Cell<bool>,
 
     pub(super) sprite_pipeline: std::cell::RefCell<SpritePipeline>,
 }
@@ -486,8 +486,7 @@ impl Renderer {
                 _ => (),
             }
 
-            self.dot.update(|dot| (dot + 1) % 341);
-            if self.dot.get() == 0 {
+            if self.dot.update(|dot| (dot + 1) % 341) == 0 {
                 self.scanline.update(|sc| (sc + 1) % 262);
             }
 
