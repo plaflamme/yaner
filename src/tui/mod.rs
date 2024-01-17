@@ -1,4 +1,3 @@
-use std::fmt::{Display, Formatter};
 use std::io;
 
 use ratatui::backend::{Backend, TermionBackend};
@@ -12,94 +11,24 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 use crate::cpu::opcode::OpCode;
-use crate::cpu::{Cpu, Flags, Interrupt};
+use crate::cpu::{Cpu, Interrupt};
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, Stepper};
-use crate::ppu::reg::{PpuCtrl, PpuMask, PpuStatus};
+use crate::ppu::reg::PpuStatus;
 use std::pin::Pin;
 
-impl Display for Flags {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![
-            Flags::N,
-            Flags::V,
-            Flags::B,
-            Flags::D,
-            Flags::I,
-            Flags::Z,
-            Flags::C,
-        ]
-        .into_iter()
-        {
-            if *self & flag == flag {
-                write!(f, "{:?}", flag)?;
-            } else {
-                write!(f, "-")?;
-            }
+fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
+    use std::fmt::Write;
+    let mut s = String::new();
+    for (n, flag) in F::all().iter_names() {
+        if f.contains(flag) {
+            write!(s, "{n}").expect("could not format to string");
+        } else {
+            write!(s, "-").expect("could not format to string");
         }
-        Ok(())
     }
-}
-
-impl Display for PpuCtrl {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![
-            PpuCtrl::N_LO,
-            PpuCtrl::N_HI,
-            PpuCtrl::I,
-            PpuCtrl::S,
-            PpuCtrl::B,
-            PpuCtrl::H,
-            PpuCtrl::P,
-            PpuCtrl::V,
-        ]
-        .into_iter()
-        {
-            if *self & flag == flag {
-                write!(f, "{:?}", flag)?;
-            } else {
-                write!(f, "-")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for PpuMask {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![
-            PpuMask::M,
-            PpuMask::m,
-            PpuMask::b,
-            PpuMask::s,
-            PpuMask::R,
-            PpuMask::G,
-            PpuMask::B,
-        ]
-        .into_iter()
-        {
-            if *self & flag == flag {
-                write!(f, "{:?}", flag)?;
-            } else {
-                write!(f, "-")?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for PpuStatus {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for flag in vec![PpuStatus::O, PpuStatus::S, PpuStatus::V].into_iter() {
-            if *self & flag == flag {
-                write!(f, "{:?}", flag)?;
-            } else {
-                write!(f, "-")?;
-            }
-        }
-        Ok(())
-    }
+    s.chars().rev().collect()
 }
 
 fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
@@ -130,7 +59,11 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
         Line::from(vec![
             Span::from(" P: "),
             Span::styled(
-                format!("{:02X} {}", state.cpu.flags, state.cpu.flags),
+                format!(
+                    "{:02X} {}",
+                    state.cpu.flags,
+                    format_bitflags(state.cpu.flags)
+                ),
                 value_style,
             ),
         ]),
@@ -157,21 +90,21 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
         Line::from(vec![
             Span::from(" C: "),
             Span::styled(
-                format!("{:02X} {}", nes.ppu.ctrl, nes.ppu.ctrl),
+                format!("{:02X} {}", nes.ppu.ctrl, format_bitflags(nes.ppu.ctrl)),
                 value_style,
             ),
         ]),
         Line::from(vec![
             Span::from(" M: "),
             Span::styled(
-                format!("{:02X} {}", nes.ppu.mask, nes.ppu.mask),
+                format!("{:02X} {}", nes.ppu.mask, format_bitflags(nes.ppu.mask)),
                 value_style,
             ),
         ]),
         Line::from(vec![
             Span::from(" S: "),
             Span::styled(
-                format!("{:02X} {}", nes.ppu.status, nes.ppu.status),
+                format!("{:02X} {}", nes.ppu.status, format_bitflags(nes.ppu.status)),
                 value_style,
             ),
         ]),
