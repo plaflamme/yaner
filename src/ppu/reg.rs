@@ -30,6 +30,12 @@ impl Default for PpuCtrl {
 }
 
 impl PpuCtrl {
+    pub fn base_nametable_address(&self) -> u16 {
+        let idx = (self.bits() & PpuCtrl::N.bits()) as u16;
+        // (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+        0x2000 | (idx << 10)
+    }
+
     pub fn vram_inc_step(&self) -> u16 {
         // (0: add 1, going across; 1: add 32, going down)
         if self.contains(PpuCtrl::I) {

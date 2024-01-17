@@ -18,9 +18,8 @@ impl VramAddress {
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the nametable
-    pub fn nametable_addr(&self) -> u16 {
-        // TODO: don't we need to factor in base address in PPUCTRL?
-        0x2000 | (self.0 & 0x0FFF)
+    pub fn nametable_addr(&self, base_addr: u16) -> u16 {
+        base_addr | (self.0 & 0x0FFF)
     }
 
     // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
@@ -90,11 +89,11 @@ mod test {
     #[test]
     fn test_vram_address_nametable_addr() {
         let addr = VramAddress::default();
-        assert_eq!(addr.nametable_addr(), 0x2000);
-        let addr = VramAddress::new(0xFFABu16);
-        assert_eq!(addr.nametable_addr(), 0x2FAB);
-        let addr = VramAddress::new(0x0030u16);
-        assert_eq!(addr.nametable_addr(), 0x2030);
+        assert_eq!(addr.nametable_addr(0x2000), 0x2000);
+        let addr = VramAddress::new(0xFFAB_u16);
+        assert_eq!(addr.nametable_addr(0x2000), 0x2FAB);
+        let addr = VramAddress::new(0x0030_u16);
+        assert_eq!(addr.nametable_addr(0x2C00), 0x2C30);
     }
 
     #[test]

@@ -353,7 +353,12 @@ impl Renderer {
             dot @ 2..=256 | dot @ 322..=337 => {
                 match dot % 8 {
                     1 => {
-                        self.fetch_addr.set(registers.v_addr.get().nametable_addr());
+                        self.fetch_addr.set(
+                            registers
+                                .v_addr
+                                .get()
+                                .nametable_addr(registers.ctrl.get().base_nametable_address()),
+                        );
                         // The shifters are reloaded during ticks 9, 17, 25, ..., 257 and ticks 329 and 337.
                         self.latch();
                     }
@@ -421,7 +426,12 @@ impl Renderer {
                 }
             }
             // same as % 8 == 1, exctept without the latch
-            1 | 321 | 339 => self.fetch_addr.set(registers.v_addr.get().nametable_addr()),
+            1 | 321 | 339 => self.fetch_addr.set(
+                registers
+                    .v_addr
+                    .get()
+                    .nametable_addr(registers.ctrl.get().base_nametable_address()),
+            ),
             338 => {
                 let entry = bus.read_u8(self.fetch_addr.get());
                 self.nametable_entry.set(entry);
