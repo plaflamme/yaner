@@ -95,7 +95,13 @@ impl Nes {
                 let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
                     CoroutineState::Yielded(cycle) => {
                         match cycle {
-                            PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
+                            PpuCycle::Tick { nmi } => {
+                                if nmi {
+                                    self.cpu.bus.set_nmi();
+                                } else {
+                                    self.cpu.bus.clear_nmi();
+                                }
+                            }
                             PpuCycle::Frame => self.clocks.tick_frame(),
                             _ => (),
                         }

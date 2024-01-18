@@ -15,7 +15,7 @@ use crate::cpu::{Cpu, Interrupt};
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, Stepper};
-use crate::ppu::reg::PpuStatus;
+use crate::ppu::reg::{PpuCtrl, PpuStatus};
 use std::pin::Pin;
 
 fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
@@ -568,6 +568,10 @@ impl Debugger {
                     Key::Char('v') => {
                         self.stepper
                             .step_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                    }
+                    Key::Char('c') => {
+                        self.stepper
+                            .step_until(|nes| nes.debug().ppu.ctrl.contains(PpuCtrl::V))?;
                     }
                     Key::Char('n') => {
                         self.stepper.step_until(|nes| {

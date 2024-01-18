@@ -464,8 +464,7 @@ impl Renderer {
                     if !self.suppress_vbl.get() {
                         // enable vblank
                         registers.status.update(|s| s | PpuStatus::V);
-
-                        if !self.suppress_nmi.get() && registers.ctrl.get().contains(PpuCtrl::V) {
+                        if !self.suppress_nmi.get() {
                             generate_nmi = true;
                         }
                     }
@@ -473,6 +472,7 @@ impl Renderer {
                 (261, dot) => {
                     if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
+                        generate_nmi = false;
                     }
                     self.cycle_sprites(registers, oam_ram, bus, true);
                     self.cycle_pixel(registers, bus);
@@ -491,9 +491,6 @@ impl Renderer {
             }
 
             let previous_ctrl = registers.ctrl.get();
-            let nmi_tick = !self.suppress_nmi.get()
-                && generate_nmi
-                && registers.status.get().contains(PpuStatus::V);
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
                 self.suppress_vbl.set(false);
@@ -501,18 +498,23 @@ impl Renderer {
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
-            } else if nmi_tick {
-                yield PpuCycle::Nmi
             } else {
-                yield PpuCycle::Tick
+                let nmi_tick = generate_nmi
+                    && registers.status.get().contains(PpuStatus::V)
+                    && registers.ctrl.get().contains(PpuCtrl::V);
+                yield PpuCycle::Tick { nmi: nmi_tick };
             }
 
-            if registers.status.get().contains(PpuStatus::V) {
-                // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
-                generate_nmi = !self.suppress_nmi.get()
-                    && registers.ctrl.get().contains(PpuCtrl::V)
-                    && !previous_ctrl.contains(PpuCtrl::V);
-            }
+            // if generate_nmi && !previous_ctrl.contains(PpuCtrl::V) && registers.ctrl.get().contains(PpuCtr::V) {
+
+            // }
+
+            // if registers.status.get().contains(PpuStatus::V) {
+            //     // generate an nmi if PpuCtrl::V was enabled in the last cpu cycle.
+            //     generate_nmi = !self.suppress_nmi.get()
+            //         && registers.ctrl.get().contains(PpuCtrl::V)
+            //         && !previous_ctrl.contains(PpuCtrl::V);
+            // }
         }
     }
 }

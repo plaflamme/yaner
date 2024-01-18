@@ -352,13 +352,16 @@ impl Cpu {
         let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
 
         move || loop {
-            if let Some(intr) = interrupt {
+            if let Some(intr) = interrupt.take() {
                 let trace = yield_complete!(stack::interrupt(self, intr));
                 yield CpuCycle::OpComplete(OPCODES[0x00], trace);
             }
 
             let opcode = self.next_pc_read_u8();
             yield CpuCycle::Tick;
+            if interrupt.is_none() {
+                interrupt = self.bus.intr_latch();
+            }
 
             let trace = match opcode {
                 0x00 => yield_complete!(stack::brk(self)),
@@ -624,7 +627,10 @@ impl Cpu {
 
             // poll the nmi line
             // TODO: this doesn't seem to be quite at the right spot...
-            interrupt = self.bus.intr_latch();
+            if interrupt.is_none() {
+                interrupt = self.bus.intr_latch();
+            }
+            // interrupt = self.bus.intr_latch();
 
             let opcode = &OPCODES[opcode as usize];
             match opcode.0 {
@@ -672,6 +678,9 @@ pub struct CpuBus {
     pub ppu_registers: PpuRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
     pub intr: Cell<Option<Interrupt>>,
+
+    // the NMI line is pulled low whenever
+    nmi_line: Cell<bool>,
 }
 
 impl CpuBus {
@@ -686,11 +695,24 @@ impl CpuBus {
             ppu_registers,
             mapper,
             intr: Cell::default(),
+            nmi_line: Cell::default(),
         }
     }
 
     pub fn intr_latch(&self) -> Option<Interrupt> {
         self.intr.take()
+    }
+
+    pub fn set_nmi(&self) {
+        let prev_mni = self.nmi_line.get();
+        if !prev_mni {
+            self.nmi_line.set(true);
+            self.intr.set(Some(Interrupt::Nmi));
+        }
+    }
+
+    pub fn clear_nmi(&self) {
+        self.nmi_line.set(false);
     }
 }
 

@@ -94,8 +94,7 @@ impl Ppu {
 
 #[derive(Debug)]
 pub enum PpuCycle {
-    Tick,
-    Nmi, // same as tick, but nmi should be triggered in the cpu
+    Tick { nmi: bool },
     Frame,
 }
 
