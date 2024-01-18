@@ -64,8 +64,8 @@ impl Ppu {
         status.bits()
     }
 
-    // write to PPUSTATUS with side effects
-    fn write_status(&self, value: u8) {
+    // write to PPUCTRL with side effects
+    fn write_ctrl(&self, value: u8) {
         self.registers.ctrl.set(PpuCtrl::from_bits_truncate(value));
         // writing to the control register also sets the resulting nametable bits in t_addr
         self.registers.t_addr.update(|mut t| {
@@ -266,7 +266,7 @@ impl AddressSpace for PpuRegisters {
     fn write_u8(&self, addr: u16, value: u8) {
         self.open_bus.set(value);
         match addr {
-            0x2000 => self.ppu.write_status(value),
+            0x2000 => self.ppu.write_ctrl(value),
             0x2001 => self
                 .ppu
                 .registers
