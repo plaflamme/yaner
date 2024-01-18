@@ -11,11 +11,12 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 use crate::cpu::opcode::OpCode;
-use crate::cpu::{Cpu, Interrupt};
+use crate::cpu::Cpu;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
-use crate::nes::{Nes, Stepper};
+use crate::nes::{Nes, NesCycle, Stepper};
 use crate::ppu::reg::PpuStatus;
+use crate::ppu::PpuCycle;
 use std::pin::Pin;
 
 fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
@@ -563,15 +564,15 @@ impl Debugger {
                     Key::Char('l') => {
                         let current_sl = self.stepper.nes().debug().ppu.scanline;
                         self.stepper
-                            .step_until(|nes| nes.debug().ppu.scanline != current_sl)?;
+                            .step_until(|nes, _| nes.debug().ppu.scanline != current_sl)?;
                     }
                     Key::Char('v') => {
                         self.stepper
-                            .step_until(|nes| nes.debug().ppu.status.contains(PpuStatus::V))?;
+                            .step_until(|nes, _| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
-                        self.stepper.step_until(|nes| {
-                            matches!(nes.debug().cpu.intr, Some(Interrupt::Nmi))
+                        self.stepper.step_until(|_, cycle| {
+                            matches!(cycle, NesCycle::PpuCycle(PpuCycle::Tick { nmi: true }))
                         })?;
                     }
                     Key::Down => app_state.shift.down(),

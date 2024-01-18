@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt, IoRegisters};
+use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use crate::Reset;
@@ -113,9 +113,9 @@ impl Nes {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
                             match cycle {
-                                PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
+                                PpuCycle::Tick { nmi: true } => self.cpu.bus.set_nmi(),
+                                PpuCycle::Tick { nmi: false } => self.cpu.bus.clear_nmi(),
                                 PpuCycle::Frame => self.clocks.tick_frame(),
-                                _ => (),
                             }
                             self.clocks.tick_ppu();
                             yield NesCycle::PpuCycle(cycle)
@@ -235,10 +235,13 @@ impl Stepper {
         }
     }
 
-    pub fn step_until(&mut self, mut stop: impl FnMut(&Nes) -> bool) -> Result<(), StepperError> {
+    pub fn step_until(
+        &mut self,
+        mut stop: impl FnMut(&Nes, NesCycle) -> bool,
+    ) -> Result<(), StepperError> {
         loop {
-            self.step()?;
-            if stop(&self.nes) {
+            let cycle = self.step()?;
+            if stop(&self.nes, cycle) {
                 break Ok(());
             }
         }
