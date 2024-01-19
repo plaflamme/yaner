@@ -84,7 +84,7 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
-        let ppu_offset = 1;
+        let ppu_offset = 0;
         let mut ppu_clock = 0;
         let mut master_clock = 0_usize;
 
@@ -109,7 +109,7 @@ impl Nes {
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
 
-                while ppu_clock + ppu_stride + ppu_offset < master_clock {
+                while ppu_clock + ppu_stride + ppu_offset <= master_clock {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
                             match cycle {
