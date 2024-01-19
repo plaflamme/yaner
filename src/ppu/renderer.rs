@@ -474,12 +474,13 @@ impl Renderer {
                         registers.status.update(|s| s - PpuStatus::V);
                         generate_nmi = false;
                     }
+
                     self.cycle_sprites(registers, oam_ram, bus, true);
                     self.cycle_pixel(registers, bus);
                     self.cycle_bg(registers, bus, true);
 
-                    if odd_frame && registers.mask.get().is_rendering() && dot == 339 {
-                        self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
+                    if odd_frame && registers.mask.get().is_rendering() && self.dot.get() == 339 {
+                        self.dot.set(340); // even/odd frame, skip to 0,0
                     }
                 }
 
