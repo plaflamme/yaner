@@ -89,6 +89,8 @@ impl Nes {
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
 
+        let mut start = true;
+
         move || {
             yield NesCycle::PowerUp;
             loop {
@@ -109,6 +111,13 @@ impl Nes {
                     }
                     CoroutineState::Complete(_) => panic!("ppu stopped"),
                 };
+                if start {
+                    for _ in 0..6 {
+                        ppu_step();
+                        self.clocks.tick(false);
+                    }
+                    start = false;
+                }
 
                 let mut dma_step = || match Pin::new(&mut dma).resume(()) {
                     CoroutineState::Yielded(DmaCycle::NoDma) => false,
