@@ -799,7 +799,7 @@ impl AddressSpace for IoRegisters {
                 self.input1.strobe(out0);
                 self.input2.strobe(out0);
             }
-            0x4017 => (),
+            0x4017 => (), // APU frame counter https://www.nesdev.org/wiki/APU_Frame_Counter
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => (),
         }
