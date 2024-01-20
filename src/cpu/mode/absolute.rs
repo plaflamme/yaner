@@ -1,13 +1,10 @@
 use super::*;
-use crate::memory::AddressSpace;
+use crate::{memory::AddressSpace, memory_read, memory_write};
 
 fn abs_addr(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
     move || {
-        let addr_lo = cpu.next_pc_read_u8() as u16;
-        yield CpuCycle::Tick;
-
-        let addr_hi = cpu.next_pc_read_u8() as u16;
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.next_pc_read_u8() as u16 };
+        let addr_hi = memory_read! { cpu.next_pc_read_u8() as u16 };
         addr_hi << 8 | addr_lo
     }
 }
@@ -20,8 +17,8 @@ fn abs_addr(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
 //                 byte to PCH
 pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
-        let addr_lo = cpu.next_pc_read_u8() as u16;
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.next_pc_read_u8() as u16 };
+
         let addr = (cpu.pc_read_u8() as u16) << 8 | addr_lo;
         cpu.pc.set(addr);
 
@@ -65,12 +62,11 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
     move || {
         let addr = yield_complete!(abs_addr(cpu));
 
-        let value = cpu.bus.read_u8(addr);
-        yield CpuCycle::Tick;
+        let value = memory_read! { cpu.bus.read_u8(addr) };
 
-        cpu.bus.write_u8(addr, value);
+        memory_write! { cpu.bus.write_u8(addr, value) };
+
         let (_, result) = operation.modify(cpu, addr, value);
-        yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, result);
 

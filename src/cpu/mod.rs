@@ -260,9 +260,28 @@ pub enum OpTrace {
 
 #[derive(Debug)]
 pub enum CpuCycle {
-    Tick,
+    Tick(usize),
     OpComplete(OpCode, OpTrace),
     Halt,
+}
+
+#[macro_export]
+macro_rules! memory_read {
+    ($read:expr) => {{
+        yield CpuCycle::Tick(5);
+        let result = $read;
+        yield CpuCycle::Tick(7);
+        result
+    }};
+}
+
+#[macro_export]
+macro_rules! memory_write {
+    ($write:expr) => {{
+        yield CpuCycle::Tick(7);
+        $write;
+        yield CpuCycle::Tick(5);
+    }};
 }
 
 impl Cpu {
@@ -357,8 +376,9 @@ impl Cpu {
                 yield CpuCycle::OpComplete(OPCODES[0x00], trace);
             }
 
-            let opcode = self.next_pc_read_u8();
-            yield CpuCycle::Tick;
+            let opcode = memory_read! {
+                self.next_pc_read_u8()
+            };
 
             let trace = match opcode {
                 0x00 => yield_complete!(stack::brk(self)),

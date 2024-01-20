@@ -1,16 +1,13 @@
 use super::*;
 use crate::memory::AddressSpace;
+use crate::{memory_read, memory_write};
 
 fn zp_indexed(index: u8, cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
     move || {
-        let addr = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let addr = memory_read! { cpu.next_pc_read_u8() };
 
-        let _ = cpu.bus.read_u8(addr as u16);
-        let addr = addr.wrapping_add(index) as u16;
-        yield CpuCycle::Tick;
-
-        addr
+        let _ = memory_read! { cpu.bus.read_u8(addr as u16) };
+        addr.wrapping_add(index) as u16
     }
 }
 
@@ -70,12 +67,10 @@ fn modify<'a, O: ModifyOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
-        let value = cpu.bus.read_u8(addr);
-        yield CpuCycle::Tick;
+        let value = memory_read! { cpu.bus.read_u8(addr) };
 
-        cpu.bus.write_u8(addr, value);
+        memory_write! { cpu.bus.write_u8(addr, value) };
         let (_, value) = operation.modify(cpu, addr, value);
-        yield CpuCycle::Tick;
 
         cpu.bus.write_u8(addr, value);
         OpTrace::Addr(addr)

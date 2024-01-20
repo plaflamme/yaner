@@ -115,7 +115,7 @@ fn nintendulator_steps(nes: &Nes) -> impl Coroutine<Yield = (), Return = ()> + '
         loop {
             match Coroutine::resume(Pin::new(&mut ppu_steps), ()) {
                 CoroutineState::Yielded(NesCycle::PowerUp) => (),
-                CoroutineState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _), _)) => {
+                CoroutineState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _))) => {
                     yield_on_next = true;
                 }
                 CoroutineState::Yielded(_) => (),

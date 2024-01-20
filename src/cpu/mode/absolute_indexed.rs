@@ -1,17 +1,15 @@
 use super::*;
-use crate::memory::AddressSpace;
+use crate::{memory::AddressSpace, memory_read, memory_write};
 
 fn abs_indexed(
     index: u8,
     cpu: &Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
     move || {
-        let addr_lo = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.next_pc_read_u8() };
 
-        let addr_hi = (cpu.next_pc_read_u8() as u16) << 8;
+        let addr_hi = memory_read! { (cpu.next_pc_read_u8() as u16) << 8 };
         let addr_pre = addr_hi | (addr_lo.wrapping_add(index) as u16);
-        yield CpuCycle::Tick;
 
         let value = cpu.bus.read_u8(addr_pre);
         let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
@@ -47,8 +45,7 @@ fn read<'a, O: ReadOperation>(
     move || {
         let (addr, unfixed, mut value, oops) = yield_complete!(abs_indexed(index, cpu));
         if oops {
-            value = cpu.bus.read_u8(addr);
-            yield CpuCycle::Tick;
+            value = memory_read! {cpu.bus.read_u8(addr)};
         }
         operation.operate(cpu, value);
 
@@ -98,17 +95,14 @@ fn modify<'a, O: ModifyOperation>(
     move || {
         let (addr, unfixed, _, _) = yield_complete!(abs_indexed(index, cpu));
 
-        let value = cpu.bus.read_u8(addr);
-        yield CpuCycle::Tick;
+        let value = memory_read! {cpu.bus.read_u8(addr)};
 
-        cpu.bus.write_u8(addr, value);
-        yield CpuCycle::Tick;
+        memory_write! { cpu.bus.write_u8(addr, value) };
 
         // SHX and SHY may override the address to write to.
         let (addr, value) = operation.modify(cpu, addr, value);
-        yield CpuCycle::Tick;
 
-        cpu.bus.write_u8(addr, value);
+        memory_write! { cpu.bus.write_u8(addr, value) };
 
         OpTrace::AddrIndexed {
             addr,
@@ -157,10 +151,10 @@ fn write<'a, O: WriteOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, unfixed, _, _) = yield_complete!(abs_indexed(index, cpu));
-        yield CpuCycle::Tick;
+        // TODO: the tick used to be here.
 
         let value = operation.operate(cpu);
-        cpu.bus.write_u8(addr, value);
+        memory_write! { cpu.bus.write_u8(addr, value) };
 
         OpTrace::AddrIndexed {
             addr,
