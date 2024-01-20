@@ -1,5 +1,5 @@
 use super::*;
-use crate::memory::AddressSpace;
+use crate::{memory::AddressSpace, memory_read};
 
 //  #   address  R/W description
 // --- --------- --- ------------------------------------------
@@ -13,18 +13,15 @@ use crate::memory::AddressSpace;
 //         than PCL, i.e. page boundary crossing is not handled.
 pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
     move || {
-        let addr_lo = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.next_pc_read_u8() };
 
-        let addr_hi = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let addr_hi = memory_read! { cpu.next_pc_read_u8() };
 
         let addr = (addr_hi as u16) << 8 | addr_lo as u16;
-        let pc_lo = cpu.bus.read_u8(addr);
-        yield CpuCycle::Tick;
+        let pc_lo = memory_read! { cpu.bus.read_u8(addr) };
 
         let addr = (addr_hi as u16) << 8 | addr_lo.wrapping_add(1) as u16;
-        let pc_hi = cpu.bus.read_u8(addr);
+        let pc_hi = memory_read! { cpu.bus.read_u8(addr) };
         cpu.pc.set((pc_hi as u16) << 8 | pc_lo as u16);
 
         OpTrace::Addr(addr)

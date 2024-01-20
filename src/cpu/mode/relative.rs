@@ -1,4 +1,6 @@
 use super::*;
+use crate::memory_read;
+
 //  #   address  R/W description
 // --- --------- --- ---------------------------------------------
 //  1     PC      R  fetch opcode, increment PC
@@ -28,18 +30,19 @@ pub(in crate::cpu) fn branch<'a, O: BranchOperation>(
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let operand = cpu.next_pc_read_u8() as i8;
+        let operand = memory_read! { cpu.next_pc_read_u8() as i8 };
 
         if !operation.branch(cpu) {
             OpTrace::Implicit
         } else {
-            let pc = cpu.pc.get() as i16;
-            let addr = pc.wrapping_add(operand as i16) as u16;
-            yield CpuCycle::Tick;
+            let pc = cpu.pc.get();
+            let addr = (pc as i16).wrapping_add(operand as i16) as u16;
 
-            if ((pc as u16) & 0xFF00) != (addr & 0xFF00) {
+            memory_read! { cpu.bus.read_u8(pc) };
+
+            if (pc & 0xFF00) != (addr & 0xFF00) {
                 // crossing page boundary incurs an additional cycle
-                yield CpuCycle::Tick;
+                memory_read! { cpu.bus.read_u8(pc) };
             }
 
             cpu.pc.set(addr);

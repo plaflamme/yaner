@@ -1,18 +1,15 @@
 use super::*;
-use crate::memory::AddressSpace;
+use crate::{memory::AddressSpace, memory_read, memory_write};
 
 fn ind_x(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
     move || {
-        let pointer = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let pointer = memory_read! { cpu.next_pc_read_u8() };
+
+        memory_read! { cpu.bus.read_u8(pointer as u16) as u16 };
 
         let pointer = pointer.wrapping_add(cpu.x.get());
-        yield CpuCycle::Tick;
-
-        let addr_lo = cpu.bus.read_u8(pointer as u16) as u16;
-        yield CpuCycle::Tick;
-        let addr_hi = cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16;
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.bus.read_u8(pointer as u16) as u16 };
+        let addr_hi = memory_read! { cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16 };
 
         (addr_hi << 8) | addr_lo
     }
@@ -35,7 +32,7 @@ pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
-        let value = cpu.bus.read_u8(addr);
+        let value = memory_read! { cpu.bus.read_u8(addr) };
         operation.operate(cpu, value);
         OpTrace::Addr(addr)
     }
@@ -62,14 +59,14 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
-        let value = cpu.bus.read_u8(addr);
-        yield CpuCycle::Tick;
 
-        cpu.bus.write_u8(addr, value);
+        let value = memory_read! { cpu.bus.read_u8(addr) };
+
+        memory_write! { cpu.bus.write_u8(addr, value) };
         let (_, result) = operation.modify(cpu, addr, value);
-        yield CpuCycle::Tick;
 
-        cpu.bus.write_u8(addr, result);
+        memory_write! { cpu.bus.write_u8(addr, result) };
+
         OpTrace::Addr(addr)
     }
 }
@@ -91,7 +88,7 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let addr = yield_complete!(ind_x(cpu));
-        cpu.bus.write_u8(addr, operation.operate(cpu));
+        memory_write! { cpu.bus.write_u8(addr, operation.operate(cpu)) };
         OpTrace::Addr(addr)
     }
 }
@@ -99,29 +96,23 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
 fn ind_y(
     eager: bool,
     cpu: &Cpu,
-) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, u8, bool)> + '_ {
+) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, bool)> + '_ {
     move || {
-        let pointer = cpu.next_pc_read_u8();
-        yield CpuCycle::Tick;
+        let pointer = memory_read! { cpu.next_pc_read_u8() };
 
-        let addr_lo = cpu.bus.read_u8(pointer as u16);
-        yield CpuCycle::Tick;
+        let addr_lo = memory_read! { cpu.bus.read_u8(pointer as u16) };
+        let addr_hi = memory_read! { cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16 } << 8;
 
-        let addr_hi = cpu.bus.read_u8(pointer.wrapping_add(1) as u16) as u16;
-        let addr_hi = addr_hi << 8;
-        let addr_pre = addr_hi | addr_lo.wrapping_add(cpu.y.get()) as u16;
-        yield CpuCycle::Tick;
+        let addr_pre = addr_hi | (addr_lo.wrapping_add(cpu.y.get()) as u16);
+        let addr_fixed = (addr_hi | (addr_lo as u16)).wrapping_add(cpu.y.get() as u16);
 
-        let mut value = cpu.bus.read_u8(addr_pre);
-
-        let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(cpu.y.get() as u16);
         let oops = addr_pre != addr_fixed;
+
         if eager || oops {
-            value = cpu.bus.read_u8(addr_fixed);
-            yield CpuCycle::Tick;
+            memory_read! { cpu.bus.read_u8(addr_pre) };
         }
 
-        (addr_fixed, addr_pre, value, oops)
+        (addr_fixed, addr_pre, oops)
     }
 }
 
@@ -149,7 +140,8 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (addr, unfixed, value, oops) = yield_complete!(ind_y(false, cpu));
+        let (addr, unfixed, oops) = yield_complete!(ind_y(false, cpu));
+        let value = memory_read! { cpu.bus.read_u8(addr) };
         operation.operate(cpu, value);
         OpTrace::AddrIndexed {
             addr,
@@ -184,14 +176,14 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (addr, unfixed, value, _) = yield_complete!(ind_y(true, cpu));
-        yield CpuCycle::Tick;
+        let (addr, unfixed, _) = yield_complete!(ind_y(true, cpu));
 
-        cpu.bus.write_u8(addr, value);
+        let value = memory_read! { cpu.bus.read_u8(addr) };
+
+        memory_write! { cpu.bus.write_u8(addr, value) };
         let (_, result) = operation.modify(cpu, addr, value);
-        yield CpuCycle::Tick;
 
-        cpu.bus.write_u8(addr, result);
+        memory_write! { cpu.bus.write_u8(addr, result) };
 
         OpTrace::AddrIndexed {
             addr,
@@ -222,8 +214,9 @@ pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
-        let (addr, unfixed, _, _) = yield_complete!(ind_y(true, cpu));
-        cpu.bus.write_u8(addr, operation.operate(cpu));
+        let (addr, unfixed, _) = yield_complete!(ind_y(true, cpu));
+
+        memory_write! { cpu.bus.write_u8(addr, operation.operate(cpu)) };
 
         OpTrace::AddrIndexed {
             addr,

@@ -42,7 +42,7 @@ impl Clocks {
 pub enum NesCycle {
     PowerUp,
     PpuCycle(PpuCycle),
-    CpuCycle(CpuCycle, PpuCycle),
+    CpuCycle(CpuCycle),
 }
 
 pub struct Nes {
@@ -88,53 +88,93 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let mut dma = self.dma.run(&self.cpu.bus);
+        let ppu_stride = 4;
+        let ppu_offset = 1;
+        let mut ppu_clock = 0;
+        let mut master_clock = 0_usize;
 
         move || {
             yield NesCycle::PowerUp;
             loop {
-                let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
-                    CoroutineState::Yielded(cycle) => {
-                        match cycle {
-                            PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
-                            PpuCycle::Frame => self.clocks.tick_frame(),
-                            _ => (),
+                match Pin::new(&mut cpu).resume(()) {
+                    CoroutineState::Yielded(cycle) => match cycle {
+                        CpuCycle::Phi1(clock_ticks) => {
+                            master_clock += clock_ticks;
                         }
-                        cycle
-                    }
-                    CoroutineState::Complete(_) => panic!("ppu stopped"),
-                };
+                        CpuCycle::Tick(clock_ticks) => {
+                            master_clock += clock_ticks;
+                            self.clocks.cpu_cycles.update(|c| c + 1);
+                            yield NesCycle::CpuCycle(cycle)
+                        }
+                        CpuCycle::OpComplete(_, _) => {
+                            yield NesCycle::CpuCycle(cycle);
+                            continue;
+                        }
+                        CpuCycle::Halt => break,
+                    },
+                    CoroutineState::Complete(_) => panic!("cpu stopped"),
+                }
 
-                let mut dma_step = || match Pin::new(&mut dma).resume(()) {
-                    CoroutineState::Yielded(DmaCycle::NoDma) => false,
-                    CoroutineState::Yielded(DmaCycle::Tick) => true,
-                    CoroutineState::Yielded(DmaCycle::Done) => false,
-                    CoroutineState::Complete(_) => panic!("dma stopped"),
-                };
+                while ppu_clock + ppu_stride + ppu_offset < master_clock {
+                    match Pin::new(&mut ppu).resume(()) {
+                        CoroutineState::Yielded(cycle) => {
+                            match cycle {
+                                PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
+                                PpuCycle::Frame => self.clocks.tick_frame(),
+                                _ => (),
+                            }
+                            self.clocks.ppu_cycles.update(|c| c + 1);
+                            yield NesCycle::PpuCycle(cycle)
+                        }
+                        CoroutineState::Complete(_) => panic!("ppu stopped"),
+                    };
+                    ppu_clock += ppu_stride;
+                }
+
+                // let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
+                //     CoroutineState::Yielded(cycle) => {
+                //         match cycle {
+                //             PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
+                //             PpuCycle::Frame => self.clocks.tick_frame(),
+                //             _ => (),
+                //         }
+                //         cycle
+                //     }
+                //     CoroutineState::Complete(_) => panic!("ppu stopped"),
+                // };
+
+                // let mut dma_step = || match Pin::new(&mut dma).resume(()) {
+                //     CoroutineState::Yielded(DmaCycle::NoDma) => false,
+                //     CoroutineState::Yielded(DmaCycle::Tick) => true,
+                //     CoroutineState::Yielded(DmaCycle::Done) => false,
+                //     CoroutineState::Complete(_) => panic!("dma stopped"),
+                // };
 
                 if let Some(addr) = self.cpu.bus.io_regsiters.dma_latch() {
                     self.dma.start(addr, self.clocks.cpu_cycles.get());
                     cpu_suspended = true;
+                    unimplemented!()
                 }
 
-                if self.clocks.ppu_cycles.get() % 3 == 0 {
-                    if !cpu_suspended {
-                        match Pin::new(&mut cpu).resume(()) {
-                            CoroutineState::Yielded(CpuCycle::Halt) => break,
-                            CoroutineState::Yielded(cpu_cycle) => {
-                                self.clocks.tick(true);
-                                yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
-                            }
-                            CoroutineState::Complete(_) => panic!("cpu stopped"),
-                        }
-                    } else {
-                        cpu_suspended = dma_step();
-                        self.clocks.tick(false);
-                        yield NesCycle::PpuCycle(ppu_step())
-                    }
-                } else {
-                    self.clocks.tick(false);
-                    yield NesCycle::PpuCycle(ppu_step());
-                }
+                // if self.clocks.ppu_cycles.get() % 3 == 0 {
+                //     if !cpu_suspended {
+                //         match Pin::new(&mut cpu).resume(()) {
+                //             CoroutineState::Yielded(CpuCycle::Halt) => break,
+                //             CoroutineState::Yielded(cpu_cycle) => {
+                //                 self.clocks.tick(true);
+                //                 yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
+                //             }
+                //             CoroutineState::Complete(_) => panic!("cpu stopped"),
+                //         }
+                //     } else {
+                //         cpu_suspended = dma_step();
+                //         self.clocks.tick(false);
+                //         yield NesCycle::PpuCycle(ppu_step())
+                //     }
+                // } else {
+                //     self.clocks.tick(false);
+                //     yield NesCycle::PpuCycle(ppu_step());
+                // }
 
                 // According to ppu_open_bus/readme.txt, the open bus register should decay
                 //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
@@ -236,7 +276,7 @@ impl Stepper {
             let gen: &mut (dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin) =
                 self.steps.as_mut().unwrap().borrow_mut();
             match Pin::new(gen).resume(()) {
-                CoroutineState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt, _)) => {
+                CoroutineState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt)) => {
                     self.halted = true;
                     Ok(cycle)
                 }
@@ -258,7 +298,6 @@ impl Stepper {
     pub fn step_frame(&mut self) -> Result<PpuCycle, StepperError> {
         loop {
             match self.step()? {
-                NesCycle::CpuCycle(_, PpuCycle::Frame) => break Ok(PpuCycle::Frame),
                 NesCycle::PpuCycle(PpuCycle::Frame) => break Ok(PpuCycle::Frame),
                 _ => (),
             }
@@ -268,8 +307,8 @@ impl Stepper {
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
             match self.step()? {
-                NesCycle::CpuCycle(cycle @ CpuCycle::OpComplete(_, _), _) => break Ok(cycle),
-                NesCycle::CpuCycle(CpuCycle::Halt, _) => break Ok(CpuCycle::Halt),
+                NesCycle::CpuCycle(cycle @ CpuCycle::OpComplete(_, _)) => break Ok(cycle),
+                NesCycle::CpuCycle(CpuCycle::Halt) => break Ok(CpuCycle::Halt),
                 _ => (),
             }
         }
