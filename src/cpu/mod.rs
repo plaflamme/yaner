@@ -269,20 +269,22 @@ pub enum CpuCycle {
 
 #[macro_export]
 macro_rules! memory_read {
-    ($read:expr) => {{
+    ($cpu:expr, $read:expr) => {{
         yield CpuCycle::Phi1(5);
         let result = $read;
         yield CpuCycle::Tick(7);
+        $cpu.poll_nmi();
         result
     }};
 }
 
 #[macro_export]
 macro_rules! memory_write {
-    ($write:expr) => {{
+    ($cpu:expr, $write:expr) => {{
         yield CpuCycle::Phi1(7);
         $write;
         yield CpuCycle::Tick(5);
+        $cpu.poll_nmi();
     }};
 }
 
@@ -386,14 +388,12 @@ impl Cpu {
 
             // TODO: we need to do this in every memory_read!();
             if let Some(addr) = self.bus.io_regsiters.dma_latch() {
-                yield_complete!(dma::run(&self.bus, (addr as u16) << 8, false));
+                yield_complete!(dma::run(self, (addr as u16) << 8, false));
             }
 
             let opcode = memory_read! {
-                self.next_pc_read_u8()
+                self, self.next_pc_read_u8()
             };
-
-            self.poll_nmi();
 
             if interrupt.is_none() {
                 interrupt = self.bus.intr_latch();
@@ -719,8 +719,7 @@ impl NmiLine {
 
     pub fn clear_nmi(&self) {
         self.line.set(false);
-        // TODO: what should happen here?
-        // self.state.set(false);
+        self.state.set(false);
     }
 
     // polling the nmi state clears it

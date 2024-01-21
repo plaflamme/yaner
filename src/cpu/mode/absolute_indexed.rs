@@ -7,16 +7,16 @@ fn abs_indexed(
     cpu: &Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, bool)> + '_ {
     move || {
-        let addr_lo = memory_read! { cpu.next_pc_read_u8() };
+        let addr_lo = memory_read! { cpu, cpu.next_pc_read_u8() };
 
-        let addr_hi = memory_read! { (cpu.next_pc_read_u8() as u16) << 8 };
+        let addr_hi = memory_read! { cpu, (cpu.next_pc_read_u8() as u16) << 8 };
         let addr_pre = addr_hi | (addr_lo.wrapping_add(index) as u16);
 
         let addr_fixed = (addr_hi | addr_lo as u16).wrapping_add(index as u16);
 
         let oops = addr_pre != addr_fixed;
         if eager || oops {
-            memory_read! { cpu.bus.read_u8(addr_pre) };
+            memory_read! { cpu, cpu.bus.read_u8(addr_pre) };
         }
         (addr_fixed, addr_pre, oops)
     }
@@ -47,7 +47,7 @@ fn read<'a, O: ReadOperation>(
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
     move || {
         let (addr, unfixed, oops) = yield_complete!(abs_indexed(false, index, cpu));
-        let value = memory_read! { cpu.bus.read_u8(addr) };
+        let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
 
         operation.operate(cpu, value);
 
@@ -97,14 +97,14 @@ fn modify<'a, O: ModifyOperation>(
     move || {
         let (addr, unfixed, _) = yield_complete!(abs_indexed(true, index, cpu));
 
-        let value = memory_read! { cpu.bus.read_u8(addr) };
+        let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
 
-        memory_write! { cpu.bus.write_u8(addr, value) };
+        memory_write! { cpu, cpu.bus.write_u8(addr, value) };
 
         // SHX and SHY may override the address to write to.
         let (addr, value) = operation.modify(cpu, addr, value);
 
-        memory_write! { cpu.bus.write_u8(addr, value) };
+        memory_write! { cpu, cpu.bus.write_u8(addr, value) };
 
         OpTrace::AddrIndexed {
             addr,
@@ -155,7 +155,7 @@ fn write<'a, O: WriteOperation>(
         let (addr, unfixed, _) = yield_complete!(abs_indexed(true, index, cpu));
 
         let value = operation.operate(cpu);
-        memory_write! { cpu.bus.write_u8(addr, value) };
+        memory_write! { cpu, cpu.bus.write_u8(addr, value) };
 
         OpTrace::AddrIndexed {
             addr,
