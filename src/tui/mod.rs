@@ -551,6 +551,9 @@ impl Debugger {
                     Key::Char('o') => {
                         self.stepper.step_cpu()?;
                     }
+                    Key::Char('p') => {
+                        self.stepper.step_ppu()?;
+                    }
                     Key::Char(' ') | Key::Char('s') => {
                         self.stepper.step()?;
                     }

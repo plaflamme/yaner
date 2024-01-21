@@ -261,6 +261,16 @@ impl Stepper {
         }
     }
 
+    pub fn step_ppu(&mut self) -> Result<PpuCycle, StepperError> {
+        loop {
+            match self.step()? {
+                NesCycle::Ppu(cycle) => break Ok(cycle),
+                NesCycle::Cpu(CpuCycle::Halt) => break Err(StepperError::Halted),
+                _ => (),
+            }
+        }
+    }
+
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
             match self.step()? {
