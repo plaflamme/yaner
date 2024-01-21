@@ -111,7 +111,7 @@ fn assert_log(nes: &Nes, line: &LogLine) {
 //   (cpu_step + 3 * ppu_step)
 //   if cpu_step == OpComplete { yield () }
 fn nintendulator_steps(nes: &Nes) -> impl Coroutine<Yield = (), Return = ()> + '_ {
-    let mut ppu_steps = nes.ppu_steps();
+    let mut ppu_steps = nes.steps();
     move || loop {
         match Coroutine::resume(Pin::new(&mut ppu_steps), ()) {
             CoroutineState::Yielded(NesCycle::PowerUp) => (),

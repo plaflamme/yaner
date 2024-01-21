@@ -79,8 +79,7 @@ impl Nes {
         debug::NesState::new(self)
     }
 
-    // yields on every nes ppu tick
-    pub fn ppu_steps(&self) -> impl Coroutine<Yield = NesCycle, Return = ()> + '_ {
+    pub fn steps(&self) -> impl Coroutine<Yield = NesCycle, Return = ()> + '_ {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
@@ -206,7 +205,7 @@ impl Stepper {
             let generator = std::mem::transmute::<
                 Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + '_>,
                 Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'static>,
-            >(Box::new(pinned.nes.ppu_steps()));
+            >(Box::new(pinned.nes.steps()));
 
             // Here we do the typical self-referential struct trick described in Pin
             let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);
