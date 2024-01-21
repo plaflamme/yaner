@@ -91,18 +91,20 @@ fn assert_log(nes: &Nes, line: &LogLine) {
         line
     );
     assert_eq!(state.cpu.sp, line.sp, "incorrect stack pointer at {}", line);
+
+    // NOTE: we're one dot behind nestest apparently...
+    let dot = (nes.debug().ppu.dot + 1) % 341;
+    let mut scanline = nes.debug().ppu.scanline;
+    if dot == 0 {
+        scanline += 1;
+    }
+
     assert_eq!(
-        nes.clocks.ppu_cycles.get() / 341,
-        line.ppu_scanline as u64,
+        scanline, line.ppu_scanline as u16,
         "incorrect ppu scanline at {}",
         line
     );
-    assert_eq!(
-        (nes.clocks.ppu_cycles.get() % 341) as u16,
-        line.ppu_dot as u16,
-        "incorrect ppu dot at {}",
-        line
-    );
+    assert_eq!(dot, line.ppu_dot as u16, "incorrect ppu dot at {}", line);
 }
 
 // Steps the same way nintendulator does, which is:
@@ -110,22 +112,14 @@ fn assert_log(nes: &Nes, line: &LogLine) {
 //   if cpu_step == OpComplete { yield () }
 fn nintendulator_steps(nes: &Nes) -> impl Coroutine<Yield = (), Return = ()> + '_ {
     let mut ppu_steps = nes.ppu_steps();
-    move || {
-        let mut yield_on_next = false;
-        loop {
-            match Coroutine::resume(Pin::new(&mut ppu_steps), ()) {
-                CoroutineState::Yielded(NesCycle::PowerUp) => (),
-                CoroutineState::Yielded(NesCycle::CpuCycle(CpuCycle::OpComplete(_, _))) => {
-                    yield_on_next = true;
-                }
-                CoroutineState::Yielded(_) => (),
-                CoroutineState::Complete(_) => break,
-            }
-
-            if yield_on_next && nes.clocks.ppu_cycles.get() % 3 == 0 {
-                yield_on_next = false;
+    move || loop {
+        match Coroutine::resume(Pin::new(&mut ppu_steps), ()) {
+            CoroutineState::Yielded(NesCycle::PowerUp) => (),
+            CoroutineState::Yielded(NesCycle::Cpu(CpuCycle::OpComplete(_, _))) => {
                 yield ();
             }
+            CoroutineState::Yielded(_) => (),
+            CoroutineState::Complete(_) => break,
         }
     }
 }

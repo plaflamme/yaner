@@ -572,7 +572,7 @@ impl Debugger {
                     }
                     Key::Char('n') => {
                         self.stepper.step_until(|_, cycle| {
-                            matches!(cycle, NesCycle::PpuCycle(PpuCycle::Tick { nmi: true }))
+                            matches!(cycle, NesCycle::Ppu(PpuCycle::Tick { nmi: true }))
                         })?;
                     }
                     Key::Down => app_state.shift.down(),

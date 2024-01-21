@@ -39,8 +39,9 @@ impl Clocks {
 #[derive(Debug)]
 pub enum NesCycle {
     PowerUp,
-    PpuCycle(PpuCycle),
-    CpuCycle(CpuCycle),
+    // NOTE: CpuCycle::OpComplete is yielded once the CPU/PPU are aligned
+    Cpu(CpuCycle),
+    Ppu(PpuCycle),
 }
 
 pub struct Nes {
@@ -90,24 +91,23 @@ impl Nes {
         move || {
             yield NesCycle::PowerUp;
             loop {
-                match Pin::new(&mut cpu).resume(()) {
+                let cpu_tick = match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(cycle) => match cycle {
                         CpuCycle::Phi1(clock_ticks) => {
                             master_clock += clock_ticks;
+                            None
                         }
                         CpuCycle::Tick(clock_ticks) => {
                             master_clock += clock_ticks;
                             self.clocks.tick_cpu();
-                            yield NesCycle::CpuCycle(cycle)
+                            yield NesCycle::Cpu(cycle);
+                            None
                         }
-                        CpuCycle::OpComplete(_, _) => {
-                            yield NesCycle::CpuCycle(cycle);
-                            continue;
-                        }
+                        CpuCycle::OpComplete(_, _) => Some(cycle),
                         CpuCycle::Halt => break,
                     },
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
-                }
+                };
 
                 while ppu_clock + ppu_stride + ppu_offset < master_clock {
                     match Pin::new(&mut ppu).resume(()) {
@@ -118,7 +118,7 @@ impl Nes {
                                 PpuCycle::Frame => self.clocks.tick_frame(),
                             }
                             self.clocks.tick_ppu();
-                            yield NesCycle::PpuCycle(cycle)
+                            yield NesCycle::Ppu(cycle)
                         }
                         CoroutineState::Complete(_) => panic!("ppu stopped"),
                     };
@@ -136,6 +136,13 @@ impl Nes {
                         // TODO: this should just happen as a side effect of ticking the ppu
                         self.cpu.bus.ppu_registers.decay_open_bus()
                     }
+                }
+
+                // When we tick the CPU, the PPU hasn't caught up yet.
+                // So in order for the consumer to know when this alignment occurs, we yield OpComplete
+                //   after the ppu has caught up. OpComplete, isn't a "real" CPU tick.
+                if let Some(op @ CpuCycle::OpComplete(_, _)) = cpu_tick {
+                    yield NesCycle::Cpu(op)
                 }
             }
         }
@@ -225,7 +232,7 @@ impl Stepper {
             let gen: &mut (dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin) =
                 self.steps.as_mut().unwrap().borrow_mut();
             match Pin::new(gen).resume(()) {
-                CoroutineState::Yielded(cycle @ NesCycle::CpuCycle(CpuCycle::Halt)) => {
+                CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
                     self.halted = true;
                     Ok(cycle)
                 }
@@ -249,7 +256,7 @@ impl Stepper {
 
     pub fn step_frame(&mut self) -> Result<PpuCycle, StepperError> {
         loop {
-            if let NesCycle::PpuCycle(PpuCycle::Frame) = self.step()? {
+            if let NesCycle::Ppu(PpuCycle::Frame) = self.step()? {
                 break Ok(PpuCycle::Frame);
             }
         }
@@ -258,8 +265,8 @@ impl Stepper {
     pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
         loop {
             match self.step()? {
-                NesCycle::CpuCycle(cycle @ CpuCycle::OpComplete(_, _)) => break Ok(cycle),
-                NesCycle::CpuCycle(CpuCycle::Halt) => break Ok(CpuCycle::Halt),
+                NesCycle::Cpu(cycle @ CpuCycle::OpComplete(_, _)) => break Ok(cycle),
+                NesCycle::Cpu(CpuCycle::Halt) => break Ok(CpuCycle::Halt),
                 _ => (),
             }
         }
