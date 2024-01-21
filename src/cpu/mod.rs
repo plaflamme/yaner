@@ -268,22 +268,42 @@ pub enum CpuCycle {
 }
 
 #[macro_export]
-macro_rules! memory_read {
-    ($cpu:expr, $read:expr) => {{
+macro_rules! cpu_read_cycle {
+    ($read:expr) => {{
         yield CpuCycle::Phi1(5);
         let result = $read;
         yield CpuCycle::Tick(7);
-        $cpu.poll_nmi();
         result
+    }};
+}
+
+#[macro_export]
+macro_rules! cpu_write_cycle {
+    ($write:expr) => {{
+        yield CpuCycle::Phi1(7);
+        $write;
+        yield CpuCycle::Tick(5);
+    }};
+}
+
+#[macro_export]
+macro_rules! memory_read {
+    ($cpu:expr, $read:expr) => {{
+        if let Some(addr) = $cpu.bus.io_regsiters.dma_latch() {
+            let c = $crate::cpu::dma::run($cpu, (addr as u16) << 8, false);
+            yield_complete!(c)
+        }
+
+        let read = $crate::cpu_read_cycle!($read);
+        $cpu.poll_nmi();
+        read
     }};
 }
 
 #[macro_export]
 macro_rules! memory_write {
     ($cpu:expr, $write:expr) => {{
-        yield CpuCycle::Phi1(7);
-        $write;
-        yield CpuCycle::Tick(5);
+        $crate::cpu_write_cycle!($write);
         $cpu.poll_nmi();
     }};
 }
@@ -384,11 +404,6 @@ impl Cpu {
             if let Some(intr) = interrupt.take() {
                 let trace = yield_complete!(stack::interrupt(self, intr));
                 yield CpuCycle::OpComplete(OPCODES[0x00], trace);
-            }
-
-            // TODO: we need to do this in every memory_read!();
-            if let Some(addr) = self.bus.io_regsiters.dma_latch() {
-                yield_complete!(dma::run(self, (addr as u16) << 8, false));
             }
 
             let opcode = memory_read! {

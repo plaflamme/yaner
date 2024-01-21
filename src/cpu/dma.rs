@@ -1,6 +1,6 @@
 use crate::cpu::Cpu;
 use crate::memory::AddressSpace;
-use crate::{memory_read, memory_write};
+use crate::{cpu_read_cycle, cpu_write_cycle};
 use std::ops::Coroutine;
 
 use super::CpuCycle;
@@ -14,18 +14,18 @@ pub fn run(
         // http://wiki.nesdev.com/w/index.php/PPU_OAM#DMA
 
         // dummy read cycle
-        memory_read!(cpu, ());
+        cpu_read_cycle!(());
+
         if require_alignment {
             // extra cycle on odd cpu cycles
-            memory_read!(cpu, ());
+            cpu_read_cycle!(());
         }
 
-        for addr_lo in 0u16..=0xFF {
-            let cpu_addr = addr | addr_lo;
-            let value = memory_read! { cpu, cpu.bus.read_u8(cpu_addr) };
+        for addr_lo in 0x00..=0xFF {
+            let value = cpu_read_cycle!(cpu.bus.read_u8(addr | addr_lo));
 
             // 0x2004 is OAMDATA
-            memory_write! { cpu, cpu.bus.write_u8(0x2004, value) }
+            cpu_write_cycle!(cpu.bus.write_u8(0x2004, value));
             if addr_lo == 0xFF {
                 break;
             }
