@@ -45,25 +45,9 @@ impl Display for Code {
             Code(AddressingMode::Implicit, ModeOp::read, op) => {
                 write!(f, "implicit::run(&{}, self)", op)
             }
-            Code(mode, _, Op::JMP) => write!(f, "yield_complete!({}jmp(self))", mode),
-            Code(_, ModeOp::stack, op) => write!(f, "yield_complete!(stack::{}(self))", op),
-            Code(addr, mode, op) => {
-                let is_generator = !matches!(
-                    addr,
-                    AddressingMode::Immediate | AddressingMode::Accumulator
-                );
-                if is_generator {
-                    write!(f, "yield_complete!(")?;
-                }
-
-                write!(f, "{}{:?}(&{}, self)", addr, mode, op)?;
-
-                if is_generator {
-                    write!(f, ")")?;
-                }
-
-                Ok(())
-            }
+            Code(mode, _, Op::JMP) => write!(f, "{mode}jmp(self)"),
+            Code(_, ModeOp::stack, op) => write!(f, "stack::{op}(self)"),
+            Code(addr, mode, op) => write!(f, "{addr}{mode:?}(&{op}, self)"),
         }
     }
 }
@@ -345,7 +329,7 @@ pub fn generate_opcode_table() {
                             println!("\t0x{:02X?} => OpTrace::Implicit,", code)
                         }
                         Code(_, ModeOp::unimplemented, _) => (),
-                        _ => println!("\t0x{:02X?} => {},", code, kind),
+                        _ => println!("\t0x{:02X?} => yield_complete!({}),", code, kind),
                     }
                 });
         });
