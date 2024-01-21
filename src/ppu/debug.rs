@@ -19,7 +19,6 @@ pub struct PpuState {
     pub scanline: u16,
     pub dot: u16,
     pub suppress_vbl: bool,
-    pub suppress_nmi: bool,
 }
 
 impl PpuState {
@@ -39,7 +38,6 @@ impl PpuState {
             scanline: ppu.renderer.scanline.get(),
             dot: ppu.renderer.dot.get(),
             suppress_vbl: ppu.renderer.suppress_vbl.get(),
-            suppress_nmi: ppu.renderer.suppress_nmi.get(),
         }
     }
 }

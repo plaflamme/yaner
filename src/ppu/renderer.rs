@@ -128,7 +128,6 @@ pub struct Renderer {
 
     // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     pub(super) suppress_vbl: Cell<bool>,
-    pub(super) suppress_nmi: Cell<bool>,
 
     pub(super) sprite_pipeline: std::cell::RefCell<SpritePipeline>,
 }
@@ -145,7 +144,6 @@ impl Default for Renderer {
             nametable_entry: Cell::default(),
             attribute_entry: Cell::default(),
             suppress_vbl: Cell::default(),
-            suppress_nmi: Cell::default(),
             sprite_pipeline: std::cell::RefCell::new(SpritePipeline::default()),
         }
     }
@@ -161,15 +159,12 @@ impl Renderer {
         match (self.scanline.get(), self.dot.get()) {
             (241, 0) => {
                 self.suppress_vbl.set(true);
-                self.suppress_nmi.set(true);
             }
-            (241, 1) => {
+            (241, 1..=2) => {
                 // the ppu would have set it on this clock tick
                 status.insert(PpuStatus::V);
                 self.suppress_vbl.set(true); // so we don't set it
-                self.suppress_nmi.set(true);
             }
-            (241, 2..=3) => self.suppress_nmi.set(true),
             // the ppu will clear it on this tick
             (261, 1) => status.remove(PpuStatus::V),
             _ => (),
@@ -464,9 +459,7 @@ impl Renderer {
                     if !self.suppress_vbl.get() {
                         // enable vblank
                         registers.status.update(|s| s | PpuStatus::V);
-                        if !self.suppress_nmi.get() {
-                            generate_nmi = true;
-                        }
+                        generate_nmi = true;
                     }
                 }
                 (261, dot) => {
@@ -492,7 +485,6 @@ impl Renderer {
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
                 self.suppress_vbl.set(false);
-                self.suppress_nmi.set(false);
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;

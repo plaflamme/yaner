@@ -109,14 +109,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
             Span::from(" Sup: "),
-            Span::styled(
-                format!(
-                    "{}{}",
-                    if nes.ppu.suppress_vbl { "V" } else { "-" },
-                    if nes.ppu.suppress_nmi { "N" } else { "-" }
-                ),
-                value_style,
-            ),
+            Span::styled(if nes.ppu.suppress_vbl { "V" } else { "-" }, value_style),
         ]),
         Line::from(vec![
             Span::from(" T: "),
