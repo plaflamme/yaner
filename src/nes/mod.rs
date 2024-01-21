@@ -249,9 +249,8 @@ impl Stepper {
 
     pub fn step_frame(&mut self) -> Result<PpuCycle, StepperError> {
         loop {
-            match self.step()? {
-                NesCycle::PpuCycle(PpuCycle::Frame) => break Ok(PpuCycle::Frame),
-                _ => (),
+            if let NesCycle::PpuCycle(PpuCycle::Frame) = self.step()? {
+                break Ok(PpuCycle::Frame);
             }
         }
     }
