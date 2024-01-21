@@ -4,19 +4,15 @@ use std::ops::{Coroutine, CoroutineState};
 use std::pin::Pin;
 use std::rc::Rc;
 
-use dma::DmaCycle;
-
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, Interrupt, IoRegisters};
 use crate::input::Joypad;
-use crate::nes::dma::Dma;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use crate::Reset;
 use std::borrow::BorrowMut;
 use std::error::Error;
 
 pub mod debug;
-mod dma;
 
 #[derive(Default)]
 pub struct Clocks {
@@ -26,11 +22,13 @@ pub struct Clocks {
 }
 
 impl Clocks {
-    fn tick(&self, with_cpu_cycle: bool) {
+    fn tick_cpu(&self) {
+        self.cpu_cycles.update(|c| c.wrapping_add(1));
         self.ppu_cycles.update(|c| c.wrapping_add(1));
-        if with_cpu_cycle {
-            self.cpu_cycles.update(|c| c.wrapping_add(1));
-        }
+    }
+
+    fn tick_ppu(&self) {
+        self.ppu_cycles.update(|c| c.wrapping_add(1));
     }
 
     fn tick_frame(&self) {
@@ -48,7 +46,6 @@ pub enum NesCycle {
 pub struct Nes {
     pub cpu: Cpu,
     pub ppu: Rc<Ppu>,
-    dma: Dma,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
     pub input2: Rc<Joypad>,
@@ -71,7 +68,6 @@ impl Nes {
         Nes {
             cpu: Cpu::new(cpu_bus, start_at),
             ppu,
-            dma: Dma::new(),
             clocks: Clocks::default(),
             input1,
             input2,
@@ -84,10 +80,8 @@ impl Nes {
 
     // yields on every nes ppu tick
     pub fn ppu_steps(&self) -> impl Coroutine<Yield = NesCycle, Return = ()> + '_ {
-        let mut cpu_suspended = false;
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
-        let mut dma = self.dma.run(&self.cpu.bus);
         let ppu_stride = 4;
         let ppu_offset = 1;
         let mut ppu_clock = 0;
@@ -103,7 +97,7 @@ impl Nes {
                         }
                         CpuCycle::Tick(clock_ticks) => {
                             master_clock += clock_ticks;
-                            self.clocks.cpu_cycles.update(|c| c + 1);
+                            self.clocks.tick_cpu();
                             yield NesCycle::CpuCycle(cycle)
                         }
                         CpuCycle::OpComplete(_, _) => {
@@ -123,70 +117,25 @@ impl Nes {
                                 PpuCycle::Frame => self.clocks.tick_frame(),
                                 _ => (),
                             }
-                            self.clocks.ppu_cycles.update(|c| c + 1);
+                            self.clocks.tick_ppu();
                             yield NesCycle::PpuCycle(cycle)
                         }
                         CoroutineState::Complete(_) => panic!("ppu stopped"),
                     };
                     ppu_clock += ppu_stride;
-                }
 
-                // let mut ppu_step = || match Pin::new(&mut ppu).resume(()) {
-                //     CoroutineState::Yielded(cycle) => {
-                //         match cycle {
-                //             PpuCycle::Nmi => self.cpu.bus.intr.set(Some(Interrupt::Nmi)),
-                //             PpuCycle::Frame => self.clocks.tick_frame(),
-                //             _ => (),
-                //         }
-                //         cycle
-                //     }
-                //     CoroutineState::Complete(_) => panic!("ppu stopped"),
-                // };
-
-                // let mut dma_step = || match Pin::new(&mut dma).resume(()) {
-                //     CoroutineState::Yielded(DmaCycle::NoDma) => false,
-                //     CoroutineState::Yielded(DmaCycle::Tick) => true,
-                //     CoroutineState::Yielded(DmaCycle::Done) => false,
-                //     CoroutineState::Complete(_) => panic!("dma stopped"),
-                // };
-
-                if let Some(addr) = self.cpu.bus.io_regsiters.dma_latch() {
-                    self.dma.start(addr, self.clocks.cpu_cycles.get());
-                    cpu_suspended = true;
-                    unimplemented!()
-                }
-
-                // if self.clocks.ppu_cycles.get() % 3 == 0 {
-                //     if !cpu_suspended {
-                //         match Pin::new(&mut cpu).resume(()) {
-                //             CoroutineState::Yielded(CpuCycle::Halt) => break,
-                //             CoroutineState::Yielded(cpu_cycle) => {
-                //                 self.clocks.tick(true);
-                //                 yield NesCycle::CpuCycle(cpu_cycle, ppu_step())
-                //             }
-                //             CoroutineState::Complete(_) => panic!("cpu stopped"),
-                //         }
-                //     } else {
-                //         cpu_suspended = dma_step();
-                //         self.clocks.tick(false);
-                //         yield NesCycle::PpuCycle(ppu_step())
-                //     }
-                // } else {
-                //     self.clocks.tick(false);
-                //     yield NesCycle::PpuCycle(ppu_step());
-                // }
-
-                // According to ppu_open_bus/readme.txt, the open bus register should decay
-                //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
-                //
-                // The PPU runs at 21.477272 MHz / 4 (5.369318 Mhz)
-                //   5_369_318 cycles/s
-                //   0.6 * 5_369_318 = 3_221_590.8
-                //   So 600ms on the NES is approximately 3_221_590 PPU ticks
-                if self.clocks.ppu_cycles.get() % 3_221_590 == 0 {
-                    // TODO: this should remember when each bit was last set to 1
-                    // TODO: this should just happen as a side effect of ticking the ppu
-                    self.cpu.bus.ppu_registers.decay_open_bus()
+                    // According to ppu_open_bus/readme.txt, the open bus register should decay
+                    //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
+                    //
+                    // The PPU runs at 21.477272 MHz / 4 (5.369318 Mhz)
+                    //   5_369_318 cycles/s
+                    //   0.6 * 5_369_318 = 3_221_590.8
+                    //   So 600ms on the NES is approximately 3_221_590 PPU ticks
+                    if self.clocks.ppu_cycles.get() % 3_221_590 == 0 {
+                        // TODO: this should remember when each bit was last set to 1
+                        // TODO: this should just happen as a side effect of ticking the ppu
+                        self.cpu.bus.ppu_registers.decay_open_bus()
+                    }
                 }
             }
         }

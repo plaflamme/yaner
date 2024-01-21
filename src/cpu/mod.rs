@@ -9,6 +9,7 @@ use std::ops::Coroutine;
 mod mode;
 use mode::*;
 pub mod debug;
+mod dma;
 mod instr;
 pub mod opcode;
 
@@ -375,6 +376,11 @@ impl Cpu {
             if let Some(intr) = interrupt {
                 let trace = yield_complete!(stack::interrupt(self, intr));
                 yield CpuCycle::OpComplete(OPCODES[0x00], trace);
+            }
+
+            // TODO: we need to do this in every memory_read!();
+            if let Some(addr) = self.bus.io_regsiters.dma_latch() {
+                yield_complete!(dma::run(&self.bus, (addr as u16) << 8, false));
             }
 
             let opcode = memory_read! {
