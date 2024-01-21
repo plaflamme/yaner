@@ -161,8 +161,10 @@ impl Renderer {
                 self.suppress_vbl.set(true);
             }
             (241, 1..=2) => {
-                // the ppu would have set it on this clock tick
-                status.insert(PpuStatus::V);
+                if !self.suppress_vbl.get() {
+                    // the ppu would have set it on this clock tick
+                    status.insert(PpuStatus::V);
+                }
                 self.suppress_vbl.set(true); // so we don't set it
             }
             // the ppu will clear it on this tick
@@ -446,7 +448,6 @@ impl Renderer {
         bus: &'a dyn AddressSpace,
         oam_ram: &'a dyn AddressSpace,
     ) -> impl Coroutine<Yield = PpuCycle, Return = ()> + 'a {
-        let mut generate_nmi = false;
         let mut odd_frame = false;
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
@@ -459,13 +460,11 @@ impl Renderer {
                     if !self.suppress_vbl.get() {
                         // enable vblank
                         registers.status.update(|s| s | PpuStatus::V);
-                        generate_nmi = true;
                     }
                 }
                 (261, dot) => {
                     if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
-                        generate_nmi = false;
                     }
                     self.cycle_sprites(registers, oam_ram, bus, true);
                     self.cycle_pixel(registers, bus);
@@ -489,10 +488,10 @@ impl Renderer {
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
             } else {
-                let nmi_tick = generate_nmi
-                    && registers.status.get().contains(PpuStatus::V)
-                    && registers.ctrl.get().contains(PpuCtrl::V);
-                yield PpuCycle::Tick { nmi: nmi_tick };
+                yield PpuCycle::Tick {
+                    nmi: registers.status.get().contains(PpuStatus::V)
+                        && registers.ctrl.get().contains(PpuCtrl::V),
+                };
             }
         }
     }
