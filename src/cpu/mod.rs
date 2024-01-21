@@ -652,12 +652,6 @@ impl Cpu {
                 }
             };
 
-            // poll the nmi line
-            // TODO: this doesn't seem to be quite at the right spot...
-            if interrupt.is_none() {
-                interrupt = self.bus.intr_latch();
-            }
-
             let opcode = &OPCODES[opcode as usize];
             match opcode.0 {
                 Op::KIL => yield CpuCycle::Halt,
