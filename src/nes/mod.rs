@@ -113,8 +113,7 @@ impl Nes {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
                             match cycle {
-                                PpuCycle::Tick { nmi: true } => self.cpu.bus.set_nmi(),
-                                PpuCycle::Tick { nmi: false } => self.cpu.bus.clear_nmi(),
+                                PpuCycle::Tick { nmi } => self.cpu.bus.set_nmi_line(nmi),
                                 PpuCycle::Frame => self.clocks.tick_frame(),
                             }
                             self.clocks.tick_ppu();

@@ -367,6 +367,12 @@ impl Cpu {
         self.set_flags_from(self.acc.get())
     }
 
+    fn poll_nmi(&self) {
+        if self.bus.nmi_line.poll_nmi() {
+            self.bus.intr.set(Some(Interrupt::Nmi));
+        }
+    }
+
     pub fn run(&self) -> impl Coroutine<Yield = CpuCycle, Return = ()> + '_ {
         // used to delay interrupts by one op
         // TODO: this probably requires more granular timing.
@@ -386,6 +392,9 @@ impl Cpu {
             let opcode = memory_read! {
                 self.next_pc_read_u8()
             };
+
+            self.poll_nmi();
+
             if interrupt.is_none() {
                 interrupt = self.bus.intr_latch();
             }
@@ -692,6 +701,36 @@ trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
 }
 
+#[derive(Default)]
+struct NmiLine {
+    line: Cell<bool>,
+    state: Cell<bool>,
+}
+
+impl NmiLine {
+    pub fn set_nmi(&self) {
+        let prev_mni = self.line.get();
+        if !prev_mni {
+            // the nmi unit is an edge-detector
+            self.state.set(true);
+        }
+        self.line.set(true);
+    }
+
+    pub fn clear_nmi(&self) {
+        self.line.set(false);
+        // TODO: what should happen here?
+        // self.state.set(false);
+    }
+
+    // polling the nmi state clears it
+    pub fn poll_nmi(&self) -> bool {
+        let state = self.state.get();
+        self.state.set(false);
+        state
+    }
+}
+
 pub struct CpuBus {
     pub ram: Ram2KB,
     pub io_regsiters: IoRegisters,
@@ -699,8 +738,7 @@ pub struct CpuBus {
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
     pub intr: Cell<Option<Interrupt>>,
 
-    // the NMI line is pulled low whenever
-    nmi_line: Cell<bool>,
+    nmi_line: NmiLine,
 }
 
 impl CpuBus {
@@ -715,24 +753,20 @@ impl CpuBus {
             ppu_registers,
             mapper,
             intr: Cell::default(),
-            nmi_line: Cell::default(),
+            nmi_line: NmiLine::default(),
         }
     }
 
-    pub fn intr_latch(&self) -> Option<Interrupt> {
+    fn intr_latch(&self) -> Option<Interrupt> {
         self.intr.take()
     }
 
-    pub fn set_nmi(&self) {
-        let prev_mni = self.nmi_line.get();
-        if !prev_mni {
-            self.nmi_line.set(true);
-            self.intr.set(Some(Interrupt::Nmi));
+    pub fn set_nmi_line(&self, state: bool) {
+        if state {
+            self.nmi_line.set_nmi();
+        } else {
+            self.nmi_line.clear_nmi();
         }
-    }
-
-    pub fn clear_nmi(&self) {
-        self.nmi_line.set(false);
     }
 }
 
