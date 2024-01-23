@@ -15,7 +15,7 @@ use crate::cpu::Cpu;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, NesCycle, Stepper};
-use crate::ppu::reg::PpuStatus;
+use crate::ppu::reg::{PpuMask, PpuStatus};
 use crate::ppu::PpuCycle;
 use std::pin::Pin;
 
@@ -79,6 +79,10 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
         Line::from(vec![
             Span::from(" CYC: "),
             Span::styled(format!("{}", state.clocks.cpu_cycles), value_style),
+        ]),
+        Line::from(vec![
+            Span::from(" CLK: "),
+            Span::styled(state.clocks.cpu_master_clock.to_string(), value_style),
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
@@ -201,6 +205,10 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
                 value_style,
             ),
         ]),
+        Line::from(vec![
+            Span::from(" CLK: "),
+            Span::styled(nes.clocks.ppu_master_clock.to_string(), value_style),
+        ]),
     ]);
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
 }
@@ -302,14 +310,36 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     Paragraph::new(Text::from(s_line)).block(Block::default().title("OAM").borders(Borders::ALL))
 }
 
-fn statusbar(f: &mut Frame<'_>, nes: &NesState, addr_space: &dyn AddressSpace, size: Rect) {
+fn cycles(f: &mut Frame<'_>, app_state: &AppState, chunk: Rect) {
+    let mut items = Vec::new();
+    for cycle in app_state.cycles.iter() {
+        items.push(ListItem::new(format!("{cycle:?}")));
+    }
+
+    let mut state = ListState::default();
+    state.select(Some(app_state.cycles.len() - 1));
+    let list = List::new(items)
+        .block(Block::default().title("CYC").borders(Borders::ALL))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol(">");
+
+    f.render_stateful_widget(list, chunk, &mut state);
+}
+fn statusbar(
+    f: &mut Frame<'_>,
+    app_state: &AppState,
+    nes: &NesState,
+    addr_space: &dyn AddressSpace,
+    size: Rect,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(10),
-                Constraint::Length(14),
+                Constraint::Length(11),
+                Constraint::Length(15),
                 Constraint::Length(21),
+                Constraint::Length(10),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -319,7 +349,8 @@ fn statusbar(f: &mut Frame<'_>, nes: &NesState, addr_space: &dyn AddressSpace, s
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
     f.render_widget(sprite_block(nes), chunks[2]);
-    prg_rom(f, nes, addr_space, chunks[3]);
+    cycles(f, app_state, chunks[3]);
+    prg_rom(f, nes, addr_space, chunks[4]);
 }
 
 struct MemoryBlock<'a> {
@@ -413,11 +444,12 @@ fn rams(f: &mut Frame<'_>, nes: &NesState<'_>, shift: u16, size: Rect) {
 
 fn frame(f: &mut Frame<'_>, nes: &NesState<'_>, shift: Shift, size: Rect) {
     // read the value of the bg color
+    let nes_frame = nes.ppu.frame.get();
     let mut frame = Vec::new();
     for sl in shift.down..240 {
         let mut line = Vec::new();
         for dot in shift.right..256 {
-            let pixel = nes.ppu.frame[(sl * 256 + dot) as usize];
+            let pixel = nes_frame[(sl * 256 + dot) as usize];
             let (r, g, b) = pixel.rgb();
             let style = Style::default().fg(Color::Rgb(r, g, b));
             line.push(Span::styled(
@@ -436,7 +468,7 @@ fn frame(f: &mut Frame<'_>, nes: &NesState<'_>, shift: Shift, size: Rect) {
 fn draw<'a, B: Backend>(
     terminal: &'a mut Terminal<B>,
     state: &NesState<'_>,
-    app_state: AppState,
+    app_state: &AppState,
 ) -> Result<ratatui::terminal::CompletedFrame<'a>, io::Error> {
     terminal.draw(|f| {
         let size = f.size();
@@ -445,7 +477,7 @@ fn draw<'a, B: Backend>(
             .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
             .split(size);
 
-        statusbar(f, state, state.prg_rom, chunks[0]);
+        statusbar(f, app_state, state, state.prg_rom, chunks[0]);
         match app_state.main_view {
             View::Memory => rams(f, state, app_state.shift.down, chunks[1]),
             View::Frame => frame(f, state, app_state.shift, chunks[1]),
@@ -492,10 +524,10 @@ enum View {
     Frame,
 }
 
-#[derive(Clone, Copy)]
 struct AppState {
     main_view: View,
     shift: Shift,
+    cycles: Vec<NesCycle>,
 }
 
 impl AppState {
@@ -503,6 +535,7 @@ impl AppState {
         AppState {
             main_view: View::Memory,
             shift: Shift::default(),
+            cycles: vec![],
         }
     }
 
@@ -511,6 +544,14 @@ impl AppState {
             View::Memory => self.main_view = View::Frame,
             View::Frame => self.main_view = View::Memory,
         }
+    }
+
+    fn push(&mut self, cycle: NesCycle) {
+        self.cycles.push(cycle);
+    }
+
+    fn shift(&mut self) -> &mut Shift {
+        &mut self.shift
     }
 }
 
@@ -540,7 +581,7 @@ impl Debugger {
             if self.stepper.halted() {
                 break;
             }
-            draw(&mut terminal, &self.stepper.nes().debug(), app_state)?;
+            draw(&mut terminal, &self.stepper.nes().debug(), &app_state)?;
             if let Some(input_result) = input.next() {
                 match input_result? {
                     Key::Char('[') | Key::Char(']') => app_state.cycle_view(),
@@ -555,7 +596,7 @@ impl Debugger {
                         self.stepper.step_ppu()?;
                     }
                     Key::Char(' ') | Key::Char('s') => {
-                        self.stepper.step()?;
+                        app_state.push(self.stepper.step()?);
                     }
                     Key::Char('l') => {
                         let current_sl = self.stepper.nes().debug().ppu.scanline;
@@ -571,12 +612,32 @@ impl Debugger {
                             matches!(cycle, NesCycle::Ppu(PpuCycle::Tick { nmi: true }))
                         })?;
                     }
-                    Key::Down => app_state.shift.down(),
-                    Key::PageDown => app_state.shift.down_by(16),
-                    Key::Up => app_state.shift.up(),
-                    Key::PageUp => app_state.shift.up_by(16),
-                    Key::Right => app_state.shift.right(),
-                    Key::Left => app_state.shift.left(),
+                    Key::Char('b') => {
+                        self.stepper
+                            .step_until(|nes, _| nes.debug().ppu.mask.contains(PpuMask::b))?;
+                    }
+                    Key::Char('B') => {
+                        self.stepper
+                            .step_until(|nes, _| !nes.debug().ppu.mask.contains(PpuMask::b))?;
+                    }
+                    Key::Char('P') => {
+                        loop {
+                            self.stepper.step_cpu()?;
+                            let d = self.stepper.nes().debug();
+                            let opcode = d.cpu_bus.read_u8(d.cpu.pc);
+                            if (opcode == 0x8C || opcode == 0x8D || opcode == 0x8E) // STY, STA, STX
+                                && d.cpu_bus.read_u16(d.cpu.pc + 1) == 0x2001
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Key::Down => app_state.shift().down(),
+                    Key::PageDown => app_state.shift().down_by(16),
+                    Key::Up => app_state.shift().up(),
+                    Key::PageUp => app_state.shift().up_by(16),
+                    Key::Right => app_state.shift().right(),
+                    Key::Left => app_state.shift().left(),
                     _ => (),
                 }
             }
