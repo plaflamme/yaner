@@ -35,7 +35,7 @@ fn oam_stress() {
 #[test_case("07-nmi_on_timing", true)]
 #[test_case("08-nmi_off_timing", true)]
 #[test_case("09-even_odd_frames", true)]
-#[test_case("10-even_odd_timing", false)]
+#[test_case("10-even_odd_timing", true)]
 fn ppu_vbl_nmi(case: &str, success: bool) {
     blargg_test(
         format!("roms/nes-test-roms/ppu_vbl_nmi/rom_singles/{}.nes", case),

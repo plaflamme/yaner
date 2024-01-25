@@ -85,9 +85,9 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
-        let ppu_offset = 0; // TODO: mesen sets this to 1. If I set this to 1, the vbl / nmi tests fail
+        let ppu_offset = 1; // TODO: mesen sets this to 1. If I set this to 1, the vbl / nmi tests fail
 
-        self.clocks.cpu_master_clock.set(0); // TODO: mesen sets this to 12
+        self.clocks.cpu_master_clock.set(12); // TODO: mesen sets this to 12
 
         move || {
             yield NesCycle::PowerUp;
