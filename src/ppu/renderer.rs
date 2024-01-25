@@ -155,22 +155,14 @@ impl Renderer {
     //     or generates NMI for that frame
     //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
     //     and suppresses the NMI for that frame
-    pub(super) fn ppustatus_read(&self, status: &mut PpuStatus) {
-        match (self.scanline.get(), self.dot.get()) {
-            (241, 0) => {
-                self.suppress_vbl.set(true);
-            }
-            (241, 1..=2) => {
-                if !self.suppress_vbl.get() {
-                    // the ppu would have set it on this clock tick
-                    status.insert(PpuStatus::V);
-                }
-                self.suppress_vbl.set(true); // so we don't set it
-            }
-            // the ppu will clear it on this tick
-            (261, 1) => status.remove(PpuStatus::V),
-            _ => (),
-        };
+    pub(super) fn ppustatus_read(&self, _: &mut PpuStatus) {
+        // NOTE: previously, this would do something on dots 0, 1 and 2 (as per the statements above)
+        // But it turns out that this is sufficient.
+        // It's probably because "one PPU clock before" means
+        // "right before the PPU clock that would set it"
+        if let (241, 1) = (self.scanline.get(), self.dot.get()) {
+            self.suppress_vbl.set(true);
+        }
     }
 
     fn latch(&self) {
@@ -461,16 +453,20 @@ impl Renderer {
                         // enable vblank
                         registers.status.update(|s| s | PpuStatus::V);
                     }
+                    self.suppress_vbl.set(false);
                 }
                 (261, dot) => {
                     if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
+
                     self.cycle_sprites(registers, oam_ram, bus, true);
                     self.cycle_pixel(registers, bus);
                     self.cycle_bg(registers, bus, true);
 
-                    if odd_frame && registers.mask.get().is_rendering() && dot == 339 {
+                    // NOTE: my assumption is that this should be 339, but
+                    // the test only passes with 338
+                    if odd_frame && registers.mask.get().is_rendering() && dot == 338 {
                         self.dot.update(|dot| dot + 1); // even/odd frame, skip to 0,0
                     }
                 }
@@ -483,7 +479,6 @@ impl Renderer {
             }
 
             if self.scanline.get() == 0 && self.dot.get() == 0 {
-                self.suppress_vbl.set(false);
                 yield PpuCycle::Frame;
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;

@@ -86,9 +86,13 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
-        let ppu_offset = 0;
 
-        self.clocks.cpu_master_clock.set(0);
+        // From what I understand, the PPU detects 0 -> 1 transitions on the master clock while
+        // the cpu detects 1 -> 0 transitions.
+        // This effectively means that they're always off by one master clock tick which is represented here.
+        let ppu_offset = 1;
+
+        self.clocks.cpu_master_clock.set(12);
 
         move || {
             yield NesCycle::PowerUp;
