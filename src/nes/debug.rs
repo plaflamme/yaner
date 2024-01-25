@@ -3,6 +3,8 @@ use crate::memory::AddressSpace;
 use crate::ppu::debug::PpuState;
 
 pub struct ClockState {
+    pub cpu_master_clock: usize,
+    pub ppu_master_clock: usize,
     pub cpu_cycles: u64,
     pub ppu_cycles: u64,
     pub ppu_frames: u64,
@@ -10,7 +12,7 @@ pub struct ClockState {
 // TODO: expose address spaces (read only?)
 pub struct NesState<'a> {
     pub cpu: CpuState,
-    pub ppu: PpuState,
+    pub ppu: PpuState<'a>,
     pub clocks: ClockState,
 
     pub cpu_bus: &'a dyn AddressSpace,
@@ -27,6 +29,8 @@ impl<'a> NesState<'a> {
             cpu: CpuState::new(&nes.cpu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
+                cpu_master_clock: nes.clocks.cpu_master_clock.get(),
+                ppu_master_clock: nes.clocks.ppu_master_clock.get(),
                 cpu_cycles: nes.clocks.cpu_cycles.get(),
                 ppu_cycles: nes.clocks.ppu_cycles.get(),
                 ppu_frames: nes.clocks.ppu_frames.get(),

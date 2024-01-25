@@ -4,7 +4,7 @@ use crate::ppu::sprite::debug::SpritePipelineState;
 use crate::ppu::vram_address::VramAddress;
 use crate::ppu::{Ppu, PpuCtrl, PpuMask};
 
-pub struct PpuState {
+pub struct PpuState<'a> {
     pub ctrl: PpuCtrl,
     pub mask: PpuMask,
     pub status: PpuStatus,
@@ -15,14 +15,14 @@ pub struct PpuState {
     pub sprite_pipeline: SpritePipelineState,
     pub pattern_data: PatternData,
     pub attribute_data: AttributeData,
-    pub frame: [Pixel; 256 * 240],
+    pub frame: &'a std::cell::Cell<[Pixel; 256 * 240]>,
     pub scanline: u16,
     pub dot: u16,
     pub suppress_vbl: bool,
 }
 
-impl PpuState {
-    pub fn new(ppu: &Ppu) -> Self {
+impl<'a> PpuState<'a> {
+    pub fn new(ppu: &'a Ppu) -> Self {
         PpuState {
             ctrl: ppu.registers.ctrl.get(),
             mask: ppu.registers.mask.get(),
@@ -34,7 +34,7 @@ impl PpuState {
             sprite_pipeline: SpritePipelineState::new(&ppu.renderer.sprite_pipeline.borrow()),
             pattern_data: ppu.renderer.pattern_data.clone(),
             attribute_data: ppu.renderer.attribute_data.clone(),
-            frame: ppu.renderer.frame_pixels.get(),
+            frame: &ppu.renderer.frame_pixels,
             scanline: ppu.renderer.scanline.get(),
             dot: ppu.renderer.dot.get(),
             suppress_vbl: ppu.renderer.suppress_vbl.get(),

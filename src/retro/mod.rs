@@ -76,6 +76,7 @@ impl Core for YanerCore {
                     let frame = state
                         .ppu
                         .frame
+                        .get()
                         .iter()
                         .flat_map(|pixel| {
                             let (r, g, b) = pixel.rgb();

@@ -16,6 +16,8 @@ pub mod debug;
 
 #[derive(Default)]
 pub struct Clocks {
+    pub cpu_master_clock: Cell<usize>,
+    pub ppu_master_clock: Cell<usize>,
     pub cpu_cycles: Cell<u64>,
     pub ppu_cycles: Cell<u64>,
     pub ppu_frames: Cell<u64>,
@@ -84,9 +86,9 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
-        let ppu_offset = 1;
-        let mut ppu_clock = 0;
-        let mut master_clock = 0_usize;
+        let ppu_offset = 0;
+
+        self.clocks.cpu_master_clock.set(0);
 
         move || {
             yield NesCycle::PowerUp;
@@ -94,11 +96,12 @@ impl Nes {
                 let cpu_tick = match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(cycle) => match cycle {
                         CpuCycle::Phi1(clock_ticks) => {
-                            master_clock += clock_ticks;
+                            self.clocks.cpu_master_clock.update(|c| c + clock_ticks);
+                            yield NesCycle::Cpu(cycle);
                             None
                         }
                         CpuCycle::Tick(clock_ticks) => {
-                            master_clock += clock_ticks;
+                            self.clocks.cpu_master_clock.update(|c| c + clock_ticks);
                             self.clocks.tick_cpu();
                             yield NesCycle::Cpu(cycle);
                             None
@@ -109,7 +112,9 @@ impl Nes {
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
 
-                while ppu_clock + ppu_stride + ppu_offset < master_clock {
+                while self.clocks.ppu_master_clock.get() + ppu_stride
+                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
+                {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
                             match cycle {
@@ -117,11 +122,11 @@ impl Nes {
                                 PpuCycle::Frame => self.clocks.tick_frame(),
                             }
                             self.clocks.tick_ppu();
+                            self.clocks.ppu_master_clock.update(|c| c + ppu_stride);
                             yield NesCycle::Ppu(cycle)
                         }
                         CoroutineState::Complete(_) => panic!("ppu stopped"),
                     };
-                    ppu_clock += ppu_stride;
 
                     // According to ppu_open_bus/readme.txt, the open bus register should decay
                     //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
