@@ -5,8 +5,8 @@ use eframe::{
     epaint::{ColorImage, ImageData, TextureHandle},
     run_native, App,
 };
+use fast_image_resize as fr;
 use yaner::{cartridge::Cartridge, nes::Stepper};
-
 struct Yaner {
     stepper: Pin<Box<Stepper>>,
     texture_handle: TextureHandle,
@@ -44,9 +44,31 @@ impl App for Yaner {
                     vec![r, g, b]
                 })
                 .collect::<Vec<_>>();
+            let mut resizer =
+                fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
 
+            let factor = 2_usize;
+            let src = fr::Image::from_vec_u8(
+                std::num::NonZeroU32::new(256).unwrap(),
+                std::num::NonZeroU32::new(240).unwrap(),
+                frame,
+                fr::PixelType::U8x3,
+            )
+            .unwrap();
+            let mut dest = fr::Image::new(
+                std::num::NonZeroU32::new(256 * factor as u32).unwrap(),
+                std::num::NonZeroU32::new(240 * factor as u32).unwrap(),
+                fr::PixelType::U8x3,
+            );
+            resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
+
+            // let src = fr::Image::from_rgb();
+            // resizer.resize();
             self.texture_handle.set(
-                ImageData::from(ColorImage::from_rgb([256, 240], &frame)),
+                ImageData::from(ColorImage::from_rgb(
+                    [256 * factor, 240 * factor],
+                    dest.buffer(),
+                )),
                 TextureOptions::default(),
             );
 
