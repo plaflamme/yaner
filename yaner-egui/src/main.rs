@@ -7,8 +7,10 @@ use eframe::{
 };
 use fast_image_resize as fr;
 use yaner::{cartridge::Cartridge, nes::Stepper};
+
 struct Yaner {
     stepper: Pin<Box<Stepper>>,
+
     texture_handle: TextureHandle,
 
     frames: VecDeque<SystemTime>,
@@ -25,67 +27,71 @@ impl Yaner {
             frames: VecDeque::with_capacity(1000),
         }
     }
+
+    fn update_ppu_frame(&mut self) {
+        let frame = self
+            .stepper
+            .nes()
+            .debug()
+            .ppu
+            .frame
+            .get()
+            .iter()
+            .flat_map(|pixel| {
+                let (r, g, b) = pixel.rgb();
+                [r, g, b]
+            })
+            .collect::<Vec<_>>();
+        let mut resizer = fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
+
+        let factor = 2_usize;
+        let src = fr::Image::from_vec_u8(
+            std::num::NonZeroU32::new(256).unwrap(),
+            std::num::NonZeroU32::new(240).unwrap(),
+            frame,
+            fr::PixelType::U8x3,
+        )
+        .unwrap();
+        let mut dest = fr::Image::new(
+            std::num::NonZeroU32::new(256 * factor as u32).unwrap(),
+            std::num::NonZeroU32::new(240 * factor as u32).unwrap(),
+            fr::PixelType::U8x3,
+        );
+        resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
+        self.texture_handle.set(
+            ImageData::from(ColorImage::from_rgb(
+                [256 * factor, 240 * factor],
+                dest.buffer(),
+            )),
+            TextureOptions::default(),
+        );
+    }
+
+    fn update_frame_rate(&mut self) -> f32 {
+        if self.frames.len() == self.frames.capacity() {
+            self.frames.pop_front();
+        }
+        self.frames.push_back(SystemTime::now());
+
+        use itertools::Itertools;
+        let frame_rate = self
+            .frames
+            .iter()
+            .tuple_windows()
+            .map(|(a, b)| b.duration_since(*a).expect("oops").as_secs_f32())
+            .sum::<f32>();
+
+        self.frames.len() as f32 / frame_rate
+    }
 }
 
 impl App for Yaner {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             self.stepper.step_frame().expect("oops");
-            let frame = self
-                .stepper
-                .nes()
-                .debug()
-                .ppu
-                .frame
-                .get()
-                .iter()
-                .flat_map(|pixel| {
-                    let (r, g, b) = pixel.rgb();
-                    vec![r, g, b]
-                })
-                .collect::<Vec<_>>();
-            let mut resizer =
-                fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
 
-            let factor = 2_usize;
-            let src = fr::Image::from_vec_u8(
-                std::num::NonZeroU32::new(256).unwrap(),
-                std::num::NonZeroU32::new(240).unwrap(),
-                frame,
-                fr::PixelType::U8x3,
-            )
-            .unwrap();
-            let mut dest = fr::Image::new(
-                std::num::NonZeroU32::new(256 * factor as u32).unwrap(),
-                std::num::NonZeroU32::new(240 * factor as u32).unwrap(),
-                fr::PixelType::U8x3,
-            );
-            resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
-
-            // let src = fr::Image::from_rgb();
-            // resizer.resize();
-            self.texture_handle.set(
-                ImageData::from(ColorImage::from_rgb(
-                    [256 * factor, 240 * factor],
-                    dest.buffer(),
-                )),
-                TextureOptions::default(),
-            );
-
-            if self.frames.len() == self.frames.capacity() {
-                self.frames.pop_front();
-            }
-            self.frames.push_back(SystemTime::now());
-
-            use itertools::Itertools;
-            let frame_rate = self
-                .frames
-                .iter()
-                .tuple_windows()
-                .map(|(a, b)| b.duration_since(*a).expect("oops").as_secs_f32())
-                .sum::<f32>();
-
-            let frame_rate = self.frames.len() as f32 / frame_rate;
+            self.update_ppu_frame();
+            let frame_rate = self.update_frame_rate();
 
             ctx.request_repaint();
             ui.image(SizedTexture::from_handle(&self.texture_handle));
