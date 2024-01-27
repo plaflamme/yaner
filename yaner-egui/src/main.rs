@@ -119,6 +119,10 @@ impl App for Yaner {
                         }
                         ui.close_menu();
                     }
+                    if ui.button("Exit").clicked() {
+                        ui.close_menu();
+                        std::process::exit(0);
+                    }
                 });
                 ui.menu_button("Edit", |ui| {
                     let a = ui
