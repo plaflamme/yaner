@@ -1,9 +1,11 @@
 use std::{collections::VecDeque, pin::Pin, time::SystemTime};
 
 use eframe::{
-    egui::{load::SizedTexture, TextureOptions},
-    epaint::{ColorImage, ImageData, TextureHandle},
-    run_native, App,
+    egui::{
+        load::SizedTexture, Button, FontDefinitions, KeyboardShortcut, Modifiers, TextureOptions,
+    },
+    epaint::{ColorImage, FontFamily, ImageData, TextureHandle},
+    run_native, App, CreationContext,
 };
 use fast_image_resize as fr;
 use yaner::{cartridge::Cartridge, nes::Stepper};
@@ -18,7 +20,7 @@ struct Settings {
 struct Yaner {
     stepper: Option<Pin<Box<Stepper>>>,
 
-    texture_handle: TextureHandle,
+    ppu_frame_handle: TextureHandle,
 
     frames: VecDeque<SystemTime>,
 
@@ -26,10 +28,17 @@ struct Yaner {
 }
 
 impl Yaner {
-    fn new(texture_handle: TextureHandle) -> Self {
+    fn new(cc: &CreationContext) -> Self {
         Self {
             stepper: None,
-            texture_handle,
+            ppu_frame_handle: cc.egui_ctx.load_texture(
+                "frame",
+                eframe::egui::ColorImage::from_rgb(
+                    [NTSC_HEIGHT as usize, NTSC_WIDTH as usize],
+                    &[0; (NTSC_HEIGHT * NTSC_WIDTH * 3) as usize],
+                ),
+                TextureOptions::default(),
+            ),
             frames: VecDeque::with_capacity(1000),
             settings: Settings {
                 image_size_factor: 1,
@@ -51,8 +60,7 @@ impl Yaner {
                     [r, g, b]
                 })
                 .collect::<Vec<_>>();
-            let mut resizer =
-                fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
+            let mut resizer = fr::Resizer::new(fr::ResizeAlg::Nearest);
 
             let factor = self.settings.image_size_factor;
             let src = fr::Image::from_vec_u8(
@@ -64,11 +72,11 @@ impl Yaner {
             .unwrap();
             let mut dest = fr::Image::new(
                 std::num::NonZeroU32::new(NTSC_HEIGHT * factor).unwrap(),
-                std::num::NonZeroU32::new(NTSC_WIDTH * factor as u32).unwrap(),
+                std::num::NonZeroU32::new(NTSC_WIDTH * factor).unwrap(),
                 fr::PixelType::U8x3,
             );
             resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
-            self.texture_handle.set(
+            self.ppu_frame_handle.set(
                 ImageData::from(ColorImage::from_rgb(
                     [
                         (NTSC_HEIGHT * factor) as usize,
@@ -106,83 +114,125 @@ impl Yaner {
     }
 }
 
+struct Shortcuts {
+    open_file: KeyboardShortcut,
+    close: KeyboardShortcut,
+}
+
+#[cfg(not(target_os = "macos"))]
+fn shortcuts() -> Shortcuts {
+    Shortcuts {
+        open_file: KeyboardShortcut::new(Modifiers::CTRL, eframe::egui::Key::O),
+        close: KeyboardShortcut::new(Modifiers::ALT, eframe::egui::Key::F4),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn shortcuts() -> Shortcuts {
+    Shortcuts {
+        open_file: KeyboardShortcut::new(Modifiers::MAC_CMD, eframe::egui::Key::O),
+        close: KeyboardShortcut::new(Modifiers::MAC_CMD, eframe::egui::Key::W),
+    }
+}
+
 impl App for Yaner {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        let mut font = FontDefinitions::default();
+        font.families.get_mut(&FontFamily::Monospace).unwrap();
+        ctx.set_fonts(font);
+
+        let shortcuts = shortcuts();
+
         eframe::egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
+            let mut open_file = || {
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
+                    let stepper = yaner::nes::Stepper::new(nes);
+                    self.stepper = Some(stepper);
+                }
+            };
+
+            let close = || std::process::exit(0);
+
+            if ui.input_mut(|i| i.consume_shortcut(&shortcuts.open_file)) {
+                open_file();
+            } else if ui.input_mut(|i| i.consume_shortcut(&shortcuts.close)) {
+                close();
+            }
+
             eframe::egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open").clicked() {
-                        if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
-                            let stepper = yaner::nes::Stepper::new(nes);
-                            self.stepper = Some(stepper);
-                        }
+                    if ui
+                        .add(
+                            Button::new("\u{1F5C1}  Open...")
+                                .shortcut_text(ui.ctx().format_shortcut(&shortcuts.open_file)),
+                        )
+                        .clicked()
+                    {
+                        open_file();
                         ui.close_menu();
                     }
-                    if ui.button("Exit").clicked() {
-                        ui.close_menu();
-                        std::process::exit(0);
+
+                    if ui
+                        .add(
+                            Button::new("\u{2386}  Exit")
+                                .shortcut_text(ui.ctx().format_shortcut(&shortcuts.close)),
+                        )
+                        .clicked()
+                    {
+                        close();
                     }
                 });
                 ui.menu_button("Edit", |ui| {
-                    let a = ui
+                    let mut close_menu = false;
+                    close_menu |= ui
                         .radio_value(&mut self.settings.image_size_factor, 1, "1x")
                         .clicked();
-                    let b = ui
+                    close_menu |= ui
                         .radio_value(&mut self.settings.image_size_factor, 2, "2x")
                         .clicked();
-                    let c = ui
+                    close_menu |= ui
                         .radio_value(&mut self.settings.image_size_factor, 3, "3x")
                         .clicked();
-                    if a || b || c {
+
+                    if close_menu {
                         ui.close_menu();
                     }
                 });
             })
         });
 
-        eframe::egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(stepper) = &mut self.stepper {
-                stepper.step_frame().expect("oops");
-
-                ui.horizontal(|ui| {});
-
-                let (height, width) = self.update_ppu_frame().unwrap();
-
-                ctx.request_repaint();
-                ui.image(SizedTexture::from_handle(&self.texture_handle));
-            }
-        });
-
         eframe::egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
             eframe::egui::menu::bar(ui, |ui| {
-                if let Some(_) = &mut self.stepper {
+                if self.stepper.is_some() {
                     let frame_rate = self.update_frame_rate();
                     ui.label(format!("{frame_rate:0.2}fps"));
                 }
             })
         });
+
+        eframe::egui::CentralPanel::default().show(ctx, |ui| {
+            ui.centered_and_justified(|ui| {
+                if let Some(stepper) = &mut self.stepper {
+                    stepper.step_frame().expect("oops");
+                    let (_height, _width) = self.update_ppu_frame().unwrap();
+                    ui.image(SizedTexture::from_handle(&self.ppu_frame_handle));
+                }
+            })
+        });
+
+        if self.stepper.is_some() {
+            ctx.request_repaint();
+        }
     }
 }
 
 fn main() -> Result<(), eframe::Error> {
-    if let Some(filename) = std::env::args().nth(1) {
-        println!("Loading {filename}");
-        let native_options = eframe::NativeOptions::default();
-        run_native(
-            "Yaner",
-            native_options,
-            Box::new(move |cc| {
-                let texture_handle = cc.egui_ctx.load_texture(
-                    "frame",
-                    eframe::egui::ColorImage::from_rgb([256, 240], &[0; 256 * 240 * 3]),
-                    TextureOptions::default(),
-                );
-                Box::new(Yaner::new(texture_handle))
-            }),
-        )?;
-        Ok(())
-    } else {
-        panic!("expected filename argument");
-    }
+    let native_options = eframe::NativeOptions::default();
+    run_native(
+        "Yaner",
+        native_options,
+        Box::new(move |cc| Box::new(Yaner::new(cc))),
+    )?;
+    Ok(())
 }
