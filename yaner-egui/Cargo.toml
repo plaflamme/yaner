@@ -11,4 +11,5 @@ egui_extras = { version = "0.25.0", features = ["image"] }
 fast_image_resize = "2.7.3"
 image = { version = "0.24.8", default-features = false }
 itertools = "0.12.0"
+rfd = "0.13.0"
 yaner = { path = ".." }

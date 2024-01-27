@@ -9,7 +9,7 @@ use fast_image_resize as fr;
 use yaner::{cartridge::Cartridge, nes::Stepper};
 
 struct Yaner {
-    stepper: Pin<Box<Stepper>>,
+    stepper: Option<Pin<Box<Stepper>>>,
 
     texture_handle: TextureHandle,
 
@@ -17,54 +17,53 @@ struct Yaner {
 }
 
 impl Yaner {
-    fn new(filename: &str, texture_handle: TextureHandle) -> Self {
-        let nes =
-            yaner::nes::Nes::new(Cartridge::try_from(std::path::PathBuf::from(filename)).unwrap());
-        let stepper = yaner::nes::Stepper::new(nes);
+    fn new(texture_handle: TextureHandle) -> Self {
         Self {
-            stepper,
+            stepper: None,
             texture_handle,
             frames: VecDeque::with_capacity(1000),
         }
     }
 
     fn update_ppu_frame(&mut self) {
-        let frame = self
-            .stepper
-            .nes()
-            .debug()
-            .ppu
-            .frame
-            .get()
-            .iter()
-            .flat_map(|pixel| {
-                let (r, g, b) = pixel.rgb();
-                [r, g, b]
-            })
-            .collect::<Vec<_>>();
-        let mut resizer = fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
+        if let Some(stepper) = &self.stepper {
+            let frame = stepper
+                .nes()
+                .debug()
+                .ppu
+                .frame
+                .get()
+                .iter()
+                .flat_map(|pixel| {
+                    let (r, g, b) = pixel.rgb();
+                    [r, g, b]
+                })
+                .collect::<Vec<_>>();
+            let mut resizer =
+                fr::Resizer::new(fr::ResizeAlg::Convolution(fr::FilterType::Lanczos3));
 
-        let factor = 2_usize;
-        let src = fr::Image::from_vec_u8(
-            std::num::NonZeroU32::new(256).unwrap(),
-            std::num::NonZeroU32::new(240).unwrap(),
-            frame,
-            fr::PixelType::U8x3,
-        )
-        .unwrap();
-        let mut dest = fr::Image::new(
-            std::num::NonZeroU32::new(256 * factor as u32).unwrap(),
-            std::num::NonZeroU32::new(240 * factor as u32).unwrap(),
-            fr::PixelType::U8x3,
-        );
-        resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
-        self.texture_handle.set(
-            ImageData::from(ColorImage::from_rgb(
-                [256 * factor, 240 * factor],
-                dest.buffer(),
-            )),
-            TextureOptions::default(),
-        );
+            let factor = 2_usize;
+            let src = fr::Image::from_vec_u8(
+                std::num::NonZeroU32::new(256).unwrap(),
+                std::num::NonZeroU32::new(240).unwrap(),
+                frame,
+                fr::PixelType::U8x3,
+            )
+            .unwrap();
+            let mut dest = fr::Image::new(
+                std::num::NonZeroU32::new(256 * factor as u32).unwrap(),
+                std::num::NonZeroU32::new(240 * factor as u32).unwrap(),
+                fr::PixelType::U8x3,
+            );
+            resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
+            self.texture_handle.set(
+                ImageData::from(ColorImage::from_rgb(
+                    [256 * factor, 240 * factor],
+                    dest.buffer(),
+                )),
+                TextureOptions::default(),
+            );
+        }
     }
 
     fn update_frame_rate(&mut self) -> f32 {
@@ -88,14 +87,22 @@ impl Yaner {
 impl App for Yaner {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
-            self.stepper.step_frame().expect("oops");
+            if ui.button("Open file…").clicked() {
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
+                    let stepper = yaner::nes::Stepper::new(nes);
+                    self.stepper = Some(stepper);
+                }
+            } else if let Some(stepper) = &mut self.stepper {
+                stepper.step_frame().expect("oops");
 
-            self.update_ppu_frame();
-            let frame_rate = self.update_frame_rate();
+                self.update_ppu_frame();
+                let frame_rate = self.update_frame_rate();
 
-            ctx.request_repaint();
-            ui.image(SizedTexture::from_handle(&self.texture_handle));
-            ui.label(format!("{frame_rate}fps"));
+                ctx.request_repaint();
+                ui.image(SizedTexture::from_handle(&self.texture_handle));
+                ui.label(format!("{frame_rate}fps"));
+            }
         });
     }
 }
@@ -113,7 +120,7 @@ fn main() -> Result<(), eframe::Error> {
                     eframe::egui::ColorImage::from_rgb([256, 240], &[0; 256 * 240 * 3]),
                     TextureOptions::default(),
                 );
-                Box::new(Yaner::new(&filename, texture_handle))
+                Box::new(Yaner::new(texture_handle))
             }),
         )?;
         Ok(())
