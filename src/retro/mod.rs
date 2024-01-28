@@ -2,7 +2,7 @@
 
 use crate::cartridge::Cartridge;
 use crate::input::JoypadButtons;
-use crate::nes::{Nes, Stepper};
+use crate::nes::{Nes, Steps};
 use crate::ppu::PpuCycle;
 use crate::Reset;
 use libretro_backend::{
@@ -11,11 +11,10 @@ use libretro_backend::{
 };
 use std::convert::TryFrom;
 use std::path::PathBuf;
-use std::pin::Pin;
 
 #[derive(Default)]
 struct YanerCore {
-    stepper: Option<Pin<Box<Stepper>>>,
+    stepper: Option<Steps>,
     game_data: Option<GameData>,
 }
 
@@ -34,7 +33,7 @@ impl Core for YanerCore {
         match cartridge {
             Err(_) => LoadGameResult::Failed(game_data),
             Ok(cartridge) => {
-                self.stepper = Some(Stepper::new(Nes::new(cartridge)));
+                self.stepper = Some(Nes::new(cartridge).steps());
                 self.game_data = Some(game_data);
                 let av_info = AudioVideoInfo::new()
                     .video(256, 240, 60.0, PixelFormat::ARGB8888)

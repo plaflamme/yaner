@@ -12,6 +12,7 @@ nom = "7"
 log = "0.4.8"
 stderrlog = "0.5.4"
 rand = "0.8.5"
+ouroboros = "0"
 
 # terminal ui
 ratatui = { version = "0.25", features = ["termion"], default-features = false }

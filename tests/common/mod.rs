@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::debug::NesState;
-use yaner::nes::{Nes, Stepper};
+use yaner::nes::Nes;
 use yaner::Reset;
 
 pub mod blargg;
@@ -24,7 +24,7 @@ pub fn run_test(
 ) {
     let cart = Cartridge::try_from(rom_path.into()).unwrap();
     {
-        let mut stepper = Stepper::new(Nes::new_with_pc(cart, start_at));
+        let mut stepper = Nes::new_with_pc(cart, start_at).steps();
         loop {
             stepper.step_frame().unwrap();
             match eval(&stepper.nes().debug()) {

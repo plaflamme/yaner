@@ -1,18 +1,19 @@
 use std::cell::{Cell, RefCell};
-use std::fmt::{Display, Formatter};
 use std::ops::{Coroutine, CoroutineState};
 use std::pin::Pin;
 use std::rc::Rc;
+
+use ouroboros::self_referencing;
 
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use crate::Reset;
-use std::borrow::BorrowMut;
-use std::error::Error;
 
 pub mod debug;
+
+type NesCoroutine<'a> = impl Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'a;
 
 #[derive(Default)]
 pub struct Clocks {
@@ -59,6 +60,7 @@ impl Nes {
     pub fn new(cartridge: Cartridge) -> Self {
         Nes::new_with_pc(cartridge, None)
     }
+
     pub fn new_with_pc(cartridge: Cartridge, start_at: Option<u16>) -> Self {
         let input1 = Rc::new(crate::input::Joypad::default());
         let input2 = Rc::new(crate::input::Joypad::default());
@@ -82,7 +84,7 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
-    pub fn ppu_steps(&self) -> impl Coroutine<Yield = NesCycle, Return = ()> + '_ {
+    fn ppu_steps(&self) -> NesCoroutine {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
@@ -156,16 +158,13 @@ impl Nes {
         }
     }
 
-    // runs the program until the CPU halts
-    pub fn run(self) {
-        let mut stepper = Stepper::new(self);
-        while stepper.step_frame().is_ok() {}
-    }
-}
-
-impl Display for Nes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.cpu)
+    pub fn steps(self) -> Steps {
+        StepsBuilder {
+            nes: self,
+            halted: false,
+            steps_builder: |nes: &Nes| nes.ppu_steps(),
+        }
+        .build()
     }
 }
 
@@ -175,77 +174,46 @@ impl Reset for Nes {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum StepperError {
-    Halted,
-}
-
-impl Display for StepperError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StepperError::Halted => write!(f, "NES has already halted, cannot step"),
-        }
-    }
-}
-
-impl Error for StepperError {}
-
-pub struct Stepper {
+#[self_referencing]
+pub struct Steps {
     nes: Nes,
-    steps: Option<Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'static>>,
+    #[borrows(nes)]
+    #[not_covariant]
+    steps: NesCoroutine<'this>,
     halted: bool,
 }
 
-impl Stepper {
-    pub fn new(nes: Nes) -> Pin<Box<Stepper>> {
-        let s = Stepper {
-            nes,
-            steps: None,
-            halted: false,
-        };
-
-        // NOTE: we use pin to fix the address of `s.nes`
-        let mut pinned = Box::pin(s);
-
-        // here be dragons...
-        unsafe {
-            // NOTE: we extend the lifetime of the generator.
-            //   This is necessary because I can't figure out how to tell / convince Rust that the reference to `boxed.nes` has a lifetime that is >= the generator's lifetime
-            //   I have no idea how to avoid this and transmute is the most unsafe thing you can do...
-            let generator = std::mem::transmute::<
-                Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + '_>,
-                Box<dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'static>,
-            >(Box::new(pinned.nes.ppu_steps()));
-
-            // Here we do the typical self-referential struct trick described in Pin
-            let mut_ref: Pin<&mut Self> = Pin::as_mut(&mut pinned);
-            Pin::get_unchecked_mut(mut_ref).steps = Some(generator);
-        };
-        pinned
-    }
-
+impl Steps {
     pub fn nes(&self) -> &Nes {
-        &self.nes
+        self.borrow_nes()
     }
 
     pub fn halted(&self) -> bool {
-        self.halted
+        *self.borrow_halted()
     }
 
     pub fn step(&mut self) -> Result<NesCycle, StepperError> {
-        if self.halted {
+        if self.halted() {
             Err(StepperError::Halted)
         } else {
-            // NOTE: we have to help the compiler here by using type ascription
-            let gen: &mut (dyn Coroutine<Yield = NesCycle, Return = ()> + Unpin) =
-                self.steps.as_mut().unwrap().borrow_mut();
-            match Pin::new(gen).resume(()) {
-                CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
-                    self.halted = true;
-                    Ok(cycle)
+            self.with_steps_mut(|s| {
+                match Pin::new(s).resume(()) {
+                    CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
+                        // self.halted = true;
+                        Ok(cycle)
+                    }
+                    CoroutineState::Yielded(cycle) => Ok(cycle),
+                    CoroutineState::Complete(_) => Err(StepperError::Halted),
                 }
-                CoroutineState::Yielded(cycle) => Ok(cycle),
-                CoroutineState::Complete(_) => Err(StepperError::Halted),
+            })
+        }
+    }
+
+    pub fn run(&mut self) -> Result<(), StepperError> {
+        loop {
+            self.step()?;
+            if self.halted() {
+                break Ok(());
             }
         }
     }
@@ -256,7 +224,7 @@ impl Stepper {
     ) -> Result<(), StepperError> {
         loop {
             let cycle = self.step()?;
-            if stop(&self.nes, cycle) {
+            if stop(self.nes(), cycle) {
                 break Ok(());
             }
         }
@@ -291,8 +259,23 @@ impl Stepper {
     }
 }
 
-impl Reset for Stepper {
+impl Reset for Steps {
     fn reset(&self) {
-        self.nes.reset();
+        self.nes().reset()
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum StepperError {
+    Halted,
+}
+
+impl std::fmt::Display for StepperError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StepperError::Halted => write!(f, "NES has already halted, cannot step"),
+        }
+    }
+}
+
+impl std::error::Error for StepperError {}

@@ -14,10 +14,9 @@ use crate::cpu::opcode::OpCode;
 use crate::cpu::Cpu;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
-use crate::nes::{Nes, NesCycle, Stepper};
+use crate::nes::{Nes, NesCycle};
 use crate::ppu::reg::{PpuMask, PpuStatus};
 use crate::ppu::PpuCycle;
-use std::pin::Pin;
 
 fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
     use std::fmt::Write;
@@ -559,13 +558,13 @@ impl AppState {
 
 // TODO: implement debugger state here.
 pub struct Debugger {
-    stepper: Pin<Box<Stepper>>,
+    stepper: crate::nes::Steps,
 }
 
 impl Debugger {
     pub fn new(nes: Nes) -> Self {
         Debugger {
-            stepper: Stepper::new(nes),
+            stepper: nes.steps(),
         }
     }
 

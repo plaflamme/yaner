@@ -65,7 +65,7 @@ fn main() {
         Run { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
             let nes = Nes::new_with_pc(cartridge, pc);
-            nes.run();
+            nes.steps().run().unwrap();
         }
         Debug { pc, rom } => {
             let cartridge = Cartridge::try_from(rom).unwrap();
