@@ -10,8 +10,8 @@ use yaner::nes::Stepper;
 
 mod menubar;
 
-const NTSC_HEIGHT: u32 = 256;
-const NTSC_WIDTH: u32 = 240;
+const NES_FRAME_HEIGHT: u32 = 256;
+const NES_FRAME_WIDTH: u32 = 240;
 
 struct Settings {
     image_size_factor: u32,
@@ -34,8 +34,8 @@ impl Yaner {
             ppu_frame_handle: cc.egui_ctx.load_texture(
                 "frame",
                 eframe::egui::ColorImage::from_rgb(
-                    [NTSC_HEIGHT as usize, NTSC_WIDTH as usize],
-                    &[0; (NTSC_HEIGHT * NTSC_WIDTH * 3) as usize],
+                    [NES_FRAME_HEIGHT as usize, NES_FRAME_WIDTH as usize],
+                    &[0; (NES_FRAME_HEIGHT * NES_FRAME_WIDTH * 3) as usize],
                 ),
                 TextureOptions::default(),
             ),
@@ -64,29 +64,29 @@ impl Yaner {
 
             let factor = self.settings.image_size_factor;
             let src = fr::Image::from_vec_u8(
-                std::num::NonZeroU32::new(NTSC_HEIGHT).unwrap(),
-                std::num::NonZeroU32::new(NTSC_WIDTH).unwrap(),
+                std::num::NonZeroU32::new(NES_FRAME_HEIGHT).unwrap(),
+                std::num::NonZeroU32::new(NES_FRAME_WIDTH).unwrap(),
                 frame,
                 fr::PixelType::U8x3,
             )
             .unwrap();
             let mut dest = fr::Image::new(
-                std::num::NonZeroU32::new(NTSC_HEIGHT * factor).unwrap(),
-                std::num::NonZeroU32::new(NTSC_WIDTH * factor).unwrap(),
+                std::num::NonZeroU32::new(NES_FRAME_HEIGHT * factor).unwrap(),
+                std::num::NonZeroU32::new(NES_FRAME_WIDTH * factor).unwrap(),
                 fr::PixelType::U8x3,
             );
             resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
             self.ppu_frame_handle.set(
                 ImageData::from(ColorImage::from_rgb(
                     [
-                        (NTSC_HEIGHT * factor) as usize,
-                        (NTSC_WIDTH * factor) as usize,
+                        (NES_FRAME_HEIGHT * factor) as usize,
+                        (NES_FRAME_WIDTH * factor) as usize,
                     ],
                     dest.buffer(),
                 )),
                 TextureOptions::default(),
             );
-            Some((NTSC_HEIGHT * factor, NTSC_WIDTH * factor))
+            Some((NES_FRAME_HEIGHT * factor, NES_FRAME_WIDTH * factor))
         } else {
             None
         }
