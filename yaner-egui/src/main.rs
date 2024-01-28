@@ -1,14 +1,14 @@
 use std::{collections::VecDeque, pin::Pin, time::SystemTime};
 
 use eframe::{
-    egui::{
-        load::SizedTexture, Button, FontDefinitions, KeyboardShortcut, Modifiers, TextureOptions,
-    },
+    egui::{load::SizedTexture, FontDefinitions, KeyboardShortcut, Modifiers, TextureOptions},
     epaint::{ColorImage, FontFamily, ImageData, TextureHandle},
     run_native, App, CreationContext,
 };
 use fast_image_resize as fr;
-use yaner::{cartridge::Cartridge, nes::Stepper};
+use yaner::nes::Stepper;
+
+mod menubar;
 
 const NTSC_HEIGHT: u32 = 256;
 const NTSC_WIDTH: u32 = 240;
@@ -141,66 +141,7 @@ impl App for Yaner {
         font.families.get_mut(&FontFamily::Monospace).unwrap();
         ctx.set_fonts(font);
 
-        let shortcuts = shortcuts();
-
-        eframe::egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
-            let mut open_file = || {
-                if let Some(path) = rfd::FileDialog::new().pick_file() {
-                    let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
-                    let stepper = yaner::nes::Stepper::new(nes);
-                    self.stepper = Some(stepper);
-                }
-            };
-
-            let close = || std::process::exit(0);
-
-            if ui.input_mut(|i| i.consume_shortcut(&shortcuts.open_file)) {
-                open_file();
-            } else if ui.input_mut(|i| i.consume_shortcut(&shortcuts.close)) {
-                close();
-            }
-
-            eframe::egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui
-                        .add(
-                            Button::new("\u{1F5C1}  Open...")
-                                .shortcut_text(ui.ctx().format_shortcut(&shortcuts.open_file)),
-                        )
-                        .clicked()
-                    {
-                        open_file();
-                        ui.close_menu();
-                    }
-
-                    if ui
-                        .add(
-                            Button::new("\u{2386}  Exit")
-                                .shortcut_text(ui.ctx().format_shortcut(&shortcuts.close)),
-                        )
-                        .clicked()
-                    {
-                        close();
-                    }
-                });
-                ui.menu_button("Edit", |ui| {
-                    let mut close_menu = false;
-                    close_menu |= ui
-                        .radio_value(&mut self.settings.image_size_factor, 1, "1x")
-                        .clicked();
-                    close_menu |= ui
-                        .radio_value(&mut self.settings.image_size_factor, 2, "2x")
-                        .clicked();
-                    close_menu |= ui
-                        .radio_value(&mut self.settings.image_size_factor, 3, "3x")
-                        .clicked();
-
-                    if close_menu {
-                        ui.close_menu();
-                    }
-                });
-            })
-        });
+        eframe::egui::TopBottomPanel::top("menubar").show(ctx, |ui| menubar::show(self, ui));
 
         eframe::egui::TopBottomPanel::bottom("footer").show(ctx, |ui| {
             eframe::egui::menu::bar(ui, |ui| {
