@@ -196,16 +196,15 @@ impl Steps {
         if self.halted() {
             Err(StepperError::Halted)
         } else {
-            self.with_steps_mut(|s| {
-                match Pin::new(s).resume(()) {
-                    CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
-                        // self.halted = true;
-                        Ok(cycle)
-                    }
-                    CoroutineState::Yielded(cycle) => Ok(cycle),
-                    CoroutineState::Complete(_) => Err(StepperError::Halted),
+            let cycle = self.with_steps_mut(|s| Pin::new(s).resume(()));
+            match cycle {
+                CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
+                    self.with_halted_mut(|h| *h = true);
+                    Ok(cycle)
                 }
-            })
+                CoroutineState::Yielded(cycle) => Ok(cycle),
+                CoroutineState::Complete(_) => Err(StepperError::Halted),
+            }
         }
     }
 

@@ -1,15 +1,12 @@
-#![feature(coroutines, coroutine_trait)]
-
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-use std::ops::{Coroutine, CoroutineState};
 use std::path::Path;
-use std::pin::Pin;
+
 use std::str::FromStr;
 
 use yaner::cartridge::Cartridge;
-use yaner::cpu::{CpuCycle, Flags};
-use yaner::nes::{Nes, NesCycle};
+use yaner::cpu::Flags;
+use yaner::nes::Nes;
 
 #[derive(Debug)]
 struct LogLine {
@@ -107,44 +104,26 @@ fn assert_log(nes: &Nes, line: &LogLine) {
     assert_eq!(dot, line.ppu_dot as u16, "incorrect ppu dot at {}", line);
 }
 
-// Steps the same way nintendulator does, which is:
-//   (cpu_step + 3 * ppu_step)
-//   if cpu_step == OpComplete { yield () }
-fn nintendulator_steps(nes: Nes) -> impl Coroutine<Yield = (), Return = ()> {
-    let mut steps = nes.steps();
-    move || loop {
-        match steps.step() {
-            Ok(NesCycle::PowerUp) => (),
-            Ok(NesCycle::Cpu(CpuCycle::OpComplete(_, _))) => {
-                yield ();
-            }
-            Ok(_) => (),
-            Err(_) => break,
-        }
-    }
-}
-
 #[test]
-#[should_panic] // cycles are offset now, maybe I'll fix this, maybe I won't
+#[should_panic] // ppu is offset by 3 dots, maybe I'll fix this, maybe I won't
 fn test_nestest() {
     let log = parse_log().expect("cannot parse log");
 
     let cartridge =
         Cartridge::try_from(Path::new("roms/nes-test-roms/other/nestest.nes").to_owned()).unwrap();
-    let nes = Nes::new_with_pc(cartridge, Some(0xC000));
 
-    let mut steps = nintendulator_steps(nes);
+    let mut steps = Nes::new_with_pc(cartridge, Some(0xC000)).steps();
 
     let mut log_iter = log.iter();
 
-    // while let CoroutineState::Yielded(_) = Coroutine::resume(Pin::new(&mut steps), ()) {
-    //     if let Some(line) = log_iter.next() {
-    //         assert_log(&nes, line)
-    //     }
-    // }
+    while steps.step_cpu().is_ok() {
+        if let Some(line) = log_iter.next() {
+            assert_log(steps.nes(), line)
+        }
+    }
 
     assert!(log_iter.next().is_none(), "did not consume whole log");
 
-    // let result = nes.debug().ram.read_u16(0x02);
-    // assert_eq!(0x00, result);
+    let result = steps.nes().debug().ram.read_u16(0x02);
+    assert_eq!(0x00, result);
 }
