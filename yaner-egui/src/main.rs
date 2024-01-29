@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, pin::Pin, time::SystemTime};
+use std::{collections::VecDeque, time::SystemTime};
 
 use eframe::{
     egui::{load::SizedTexture, FontDefinitions, KeyboardShortcut, Modifiers, TextureOptions},
@@ -6,7 +6,7 @@ use eframe::{
     run_native, App, CreationContext,
 };
 use fast_image_resize as fr;
-use yaner::nes::Stepper;
+use yaner::nes::Steps;
 
 mod menubar;
 
@@ -18,7 +18,7 @@ struct Settings {
 }
 
 struct Yaner {
-    stepper: Option<Pin<Box<Stepper>>>,
+    stepper: Option<Steps>,
 
     ppu_frame_handle: TextureHandle,
 
@@ -41,7 +41,7 @@ impl Yaner {
             ),
             frames: VecDeque::with_capacity(1000),
             settings: Settings {
-                image_size_factor: 1,
+                image_size_factor: 2,
             },
         }
     }
@@ -117,6 +117,7 @@ impl Yaner {
 struct Shortcuts {
     open_file: KeyboardShortcut,
     close: KeyboardShortcut,
+    reset: KeyboardShortcut,
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -124,6 +125,7 @@ fn shortcuts() -> Shortcuts {
     Shortcuts {
         open_file: KeyboardShortcut::new(Modifiers::CTRL, eframe::egui::Key::O),
         close: KeyboardShortcut::new(Modifiers::ALT, eframe::egui::Key::F4),
+        reset: KeyboardShortcut::new(Modifiers::CTRL, eframe::egui::Key::R),
     }
 }
 
@@ -132,6 +134,7 @@ fn shortcuts() -> Shortcuts {
     Shortcuts {
         open_file: KeyboardShortcut::new(Modifiers::MAC_CMD, eframe::egui::Key::O),
         close: KeyboardShortcut::new(Modifiers::MAC_CMD, eframe::egui::Key::W),
+        reset: KeyboardShortcut::new(Modifiers::MAC_CMD, eframe::egui::Key::R),
     }
 }
 
