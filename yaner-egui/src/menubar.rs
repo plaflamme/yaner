@@ -33,6 +33,8 @@ pub(super) fn show(app: &mut super::Yaner, ui: &mut Ui) -> eframe::egui::InnerRe
                 }
             }
 
+            ui.separator();
+
             if ui
                 .add(
                     Button::new("\u{2386}  Exit")
@@ -59,20 +61,22 @@ pub(super) fn show(app: &mut super::Yaner, ui: &mut Ui) -> eframe::egui::InnerRe
                 }
             }
 
-            let mut close_menu = false;
-            close_menu |= ui
-                .radio_value(&mut app.settings.image_size_factor, 1, "1x")
-                .clicked();
-            close_menu |= ui
-                .radio_value(&mut app.settings.image_size_factor, 2, "2x")
-                .clicked();
-            close_menu |= ui
-                .radio_value(&mut app.settings.image_size_factor, 3, "3x")
-                .clicked();
+            ui.menu_button("Video Size", |ui| {
+                let mut close_menu = false;
+                close_menu |= ui
+                    .radio_value(&mut app.settings.image_size_factor, 1, "1x")
+                    .clicked();
+                close_menu |= ui
+                    .radio_value(&mut app.settings.image_size_factor, 2, "2x")
+                    .clicked();
+                close_menu |= ui
+                    .radio_value(&mut app.settings.image_size_factor, 3, "3x")
+                    .clicked();
 
-            if close_menu {
-                ui.close_menu();
-            }
+                if close_menu {
+                    ui.close_menu();
+                }
+            });
         });
     })
 }
