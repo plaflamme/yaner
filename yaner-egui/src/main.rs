@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, time::SystemTime};
+use std::{collections::VecDeque, path::PathBuf, time::SystemTime};
 
 use eframe::{
     egui::{load::SizedTexture, FontDefinitions, KeyboardShortcut, Modifiers, TextureOptions},
@@ -44,6 +44,11 @@ impl Yaner {
                 image_size_factor: 2,
             },
         }
+    }
+
+    fn open(&mut self, path: PathBuf) {
+        let nes = yaner::nes::Nes::new(yaner::cartridge::Cartridge::try_from(path).unwrap());
+        self.stepper = Some(nes.steps());
     }
 
     fn update_ppu_frame(&mut self) -> Option<(u32, u32)> {

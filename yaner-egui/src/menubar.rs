@@ -1,5 +1,4 @@
 use eframe::egui::{Button, Ui};
-use yaner::cartridge::Cartridge;
 use yaner::Reset;
 
 pub(super) fn show(app: &mut super::Yaner, ui: &mut Ui) -> eframe::egui::InnerResponse<()> {
@@ -9,8 +8,7 @@ pub(super) fn show(app: &mut super::Yaner, ui: &mut Ui) -> eframe::egui::InnerRe
 
     if ui.input_mut(|i| i.consume_shortcut(&shortcuts.open_file)) {
         if let Some(path) = rfd::FileDialog::new().pick_file() {
-            let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
-            app.stepper = Some(nes.steps());
+            app.open(path);
         }
     } else if ui.input_mut(|i| i.consume_shortcut(&shortcuts.close)) {
         close();
@@ -29,11 +27,10 @@ pub(super) fn show(app: &mut super::Yaner, ui: &mut Ui) -> eframe::egui::InnerRe
                 )
                 .clicked()
             {
-                if let Some(path) = rfd::FileDialog::new().pick_file() {
-                    let nes = yaner::nes::Nes::new(Cartridge::try_from(path).unwrap());
-                    app.stepper = Some(nes.steps());
-                }
                 ui.close_menu();
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    app.open(path);
+                }
             }
 
             if ui
