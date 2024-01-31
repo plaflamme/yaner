@@ -6,7 +6,7 @@ use eframe::{
     run_native, App, CreationContext,
 };
 use fast_image_resize as fr;
-use yaner::{nes::Steps, ppu::renderer::Pixel};
+use yaner::{input::JoypadButtons, nes::Steps, ppu::renderer::Pixel};
 
 mod menubar;
 
@@ -153,6 +153,32 @@ impl App for Yaner {
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             ui.centered_and_justified(|ui| {
                 if let Some(stepper) = self.stepper.as_mut() {
+                    ctx.input(|input| {
+                        let mut buttons = JoypadButtons::empty();
+                        if input.key_down(eframe::egui::Key::Enter) {
+                            buttons |= JoypadButtons::Start;
+                        }
+                        if input.key_down(eframe::egui::Key::ArrowRight) {
+                            buttons |= JoypadButtons::Right;
+                        }
+                        if input.key_down(eframe::egui::Key::ArrowLeft) {
+                            buttons |= JoypadButtons::Left;
+                        }
+                        if input.key_down(eframe::egui::Key::ArrowUp) {
+                            buttons |= JoypadButtons::Up;
+                        }
+                        if input.key_down(eframe::egui::Key::ArrowDown) {
+                            buttons |= JoypadButtons::Down;
+                        }
+                        if input.key_down(eframe::egui::Key::Z) {
+                            buttons |= JoypadButtons::A;
+                        }
+                        if input.key_down(eframe::egui::Key::X) {
+                            buttons |= JoypadButtons::B;
+                        }
+
+                        stepper.nes().input1.update(buttons);
+                    });
                     stepper.step_frame().expect("oops");
                     let frame = stepper.current_frame();
                     let image_data =
