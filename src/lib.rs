@@ -1,5 +1,6 @@
 #![feature(cell_update, coroutines, coroutine_trait)]
 #![feature(type_alias_impl_trait)]
+#![feature(as_array_of_cells)]
 #[macro_use]
 pub mod helper;
 pub mod cartridge;

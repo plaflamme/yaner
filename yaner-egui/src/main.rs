@@ -6,7 +6,7 @@ use eframe::{
     run_native, App, CreationContext,
 };
 use fast_image_resize as fr;
-use yaner::nes::Steps;
+use yaner::{nes::Steps, ppu::renderer::Pixel};
 
 mod menubar;
 
@@ -49,52 +49,6 @@ impl Yaner {
     fn open(&mut self, path: PathBuf) {
         let nes = yaner::nes::Nes::new(yaner::cartridge::Cartridge::try_from(path).unwrap());
         self.stepper = Some(nes.steps());
-    }
-
-    fn update_ppu_frame(&mut self) -> Option<(u32, u32)> {
-        if let Some(stepper) = &self.stepper {
-            let frame = stepper
-                .nes()
-                .debug()
-                .ppu
-                .frame
-                .get()
-                .iter()
-                .flat_map(|pixel| {
-                    let (r, g, b) = pixel.rgb();
-                    [r, g, b]
-                })
-                .collect::<Vec<_>>();
-            let mut resizer = fr::Resizer::new(fr::ResizeAlg::Nearest);
-
-            let factor = self.settings.image_size_factor;
-            let src = fr::Image::from_vec_u8(
-                std::num::NonZeroU32::new(NES_FRAME_HEIGHT).unwrap(),
-                std::num::NonZeroU32::new(NES_FRAME_WIDTH).unwrap(),
-                frame,
-                fr::PixelType::U8x3,
-            )
-            .unwrap();
-            let mut dest = fr::Image::new(
-                std::num::NonZeroU32::new(NES_FRAME_HEIGHT * factor).unwrap(),
-                std::num::NonZeroU32::new(NES_FRAME_WIDTH * factor).unwrap(),
-                fr::PixelType::U8x3,
-            );
-            resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
-            self.ppu_frame_handle.set(
-                ImageData::from(ColorImage::from_rgb(
-                    [
-                        (NES_FRAME_HEIGHT * factor) as usize,
-                        (NES_FRAME_WIDTH * factor) as usize,
-                    ],
-                    dest.buffer(),
-                )),
-                TextureOptions::default(),
-            );
-            Some((NES_FRAME_HEIGHT * factor, NES_FRAME_WIDTH * factor))
-        } else {
-            None
-        }
     }
 
     fn update_frame_rate(&mut self) -> f32 {
@@ -143,6 +97,42 @@ fn shortcuts() -> Shortcuts {
     }
 }
 
+fn ppu_frame_to_image_data(
+    frame: &[std::cell::Cell<Pixel>; 256 * 240],
+    resize_factor: u32,
+) -> ImageData {
+    let frame = frame
+        .iter()
+        .flat_map(|pixel| {
+            let (r, g, b) = pixel.get().rgb();
+            [r, g, b]
+        })
+        .collect::<Vec<_>>();
+    let mut resizer = fr::Resizer::new(fr::ResizeAlg::Nearest);
+
+    let src = fr::Image::from_vec_u8(
+        std::num::NonZeroU32::new(NES_FRAME_HEIGHT).unwrap(),
+        std::num::NonZeroU32::new(NES_FRAME_WIDTH).unwrap(),
+        frame,
+        fr::PixelType::U8x3,
+    )
+    .unwrap();
+    let mut dest = fr::Image::new(
+        std::num::NonZeroU32::new(NES_FRAME_HEIGHT * resize_factor).unwrap(),
+        std::num::NonZeroU32::new(NES_FRAME_WIDTH * resize_factor).unwrap(),
+        fr::PixelType::U8x3,
+    );
+    resizer.resize(&src.view(), &mut dest.view_mut()).unwrap();
+
+    ImageData::from(ColorImage::from_rgb(
+        [
+            (NES_FRAME_HEIGHT * resize_factor) as usize,
+            (NES_FRAME_WIDTH * resize_factor) as usize,
+        ],
+        dest.buffer(),
+    ))
+}
+
 impl App for Yaner {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         let mut font = FontDefinitions::default();
@@ -162,9 +152,13 @@ impl App for Yaner {
 
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             ui.centered_and_justified(|ui| {
-                if let Some(stepper) = &mut self.stepper {
+                if let Some(stepper) = self.stepper.as_mut() {
                     stepper.step_frame().expect("oops");
-                    let (_height, _width) = self.update_ppu_frame().unwrap();
+                    let frame = stepper.current_frame();
+                    let image_data =
+                        ppu_frame_to_image_data(frame, self.settings.image_size_factor);
+                    self.ppu_frame_handle
+                        .set(image_data, TextureOptions::default());
                     ui.image(SizedTexture::from_handle(&self.ppu_frame_handle));
                 }
             })

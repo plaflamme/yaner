@@ -71,14 +71,11 @@ impl Core for YanerCore {
             ));
             match stepper.step_frame().unwrap() {
                 PpuCycle::Frame => {
-                    let state = stepper.nes().debug();
-                    let frame = state
-                        .ppu
-                        .frame
-                        .get()
+                    let frame = stepper
+                        .current_frame()
                         .iter()
                         .flat_map(|pixel| {
-                            let (r, g, b) = pixel.rgb();
+                            let (r, g, b) = pixel.get().rgb();
                             vec![b, g, r, 0]
                         })
                         .collect::<Vec<_>>();

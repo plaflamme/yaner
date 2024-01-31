@@ -8,6 +8,7 @@ use ouroboros::self_referencing;
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
+use crate::ppu::renderer::Pixel;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use crate::Reset;
 
@@ -186,6 +187,10 @@ pub struct Steps {
 impl Steps {
     pub fn nes(&self) -> &Nes {
         self.borrow_nes()
+    }
+
+    pub fn current_frame(&self) -> &[Cell<Pixel>; 256 * 240] {
+        self.nes().debug().ppu.frame.as_array_of_cells()
     }
 
     pub fn halted(&self) -> bool {
