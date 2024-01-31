@@ -204,8 +204,8 @@ impl SpritePipeline {
         scanline: u16,
         dot: u16,
         registers: &Registers,
-        oam_ram: &dyn AddressSpace,
-        bus: &dyn AddressSpace,
+        oam_ram: &impl AddressSpace,
+        bus: &impl AddressSpace,
     ) {
         match dot {
             1..=64 => {
