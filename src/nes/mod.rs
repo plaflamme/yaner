@@ -6,6 +6,7 @@ use std::rc::Rc;
 use ouroboros::self_referencing;
 
 use crate::Reset;
+use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::{CpuBus, IoRegisters};
 use crate::input::Joypad;
@@ -49,12 +50,13 @@ pub enum NesCycle {
 pub struct Nes {
     pub cpu: yaner_cpu::Cpu,
     pub cpu_bus: CpuBus,
+    pub apu: Apu,
+
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
     pub input2: Rc<Joypad>,
     pub mapper: Rc<RefCell<Box<dyn crate::cartridge::Mapper>>>,
-    // TODO: apu
 }
 
 impl Nes {
@@ -74,6 +76,8 @@ impl Nes {
         Nes {
             cpu: yaner_cpu::Cpu::new(start_at),
             cpu_bus,
+            apu: Apu::new(),
+
             ppu,
             clocks: Clocks::default(),
             input1,
@@ -90,6 +94,7 @@ impl Nes {
     #[define_opaque(NesCoroutine)]
     fn run(&self) -> NesCoroutine<'_> {
         let mut cpu = self.cpu.run();
+        let mut apu = self.apu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
 
