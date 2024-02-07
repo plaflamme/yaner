@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
 
+use crate::apu::Apu;
 use crate::cartridge::Mapper;
-use crate::input::{Input, NoInput};
+use crate::input::Input;
 use crate::memory::{AddressSpace, Ram2KB};
 use crate::ppu::PpuRegisters;
 use std::cell::{Cell, RefCell};
@@ -61,6 +62,7 @@ impl crate::memory::AddressSpace for CpuBus {
 
 // http://wiki.nesdev.com/w/index.php/2A03
 pub struct IoRegisters {
+    apu: Rc<Apu>,
     input1: Rc<dyn Input>,
     input2: Rc<dyn Input>,
 
@@ -71,8 +73,9 @@ pub struct IoRegisters {
 }
 
 impl IoRegisters {
-    pub fn new(input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
-        Self {
+    pub fn new(apu: Rc<Apu>, input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
+        IoRegisters {
+            apu,
             input1,
             input2,
             out_latch: Cell::default(),
@@ -80,19 +83,9 @@ impl IoRegisters {
         }
     }
 
-    fn default() -> Self {
-        Self::new(Rc::new(NoInput), Rc::new(NoInput))
-    }
-
     // This will return last write to OAM DMA and then None until the next write
     pub fn dma_latch(&self) -> Option<u8> {
         self.dma_latch.take()
-    }
-}
-
-impl Default for IoRegisters {
-    fn default() -> Self {
-        IoRegisters::default()
     }
 }
 
@@ -122,7 +115,7 @@ impl AddressSpace for IoRegisters {
                 self.input1.strobe(out0);
                 self.input2.strobe(out0);
             }
-            0x4017 => (),
+            0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write_u8(addr, value),
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => (),
         }
