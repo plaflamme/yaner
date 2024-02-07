@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 
+use crate::apu::Apu;
 use crate::memory::{AddressSpace, Ram2KB};
 use bitflags::bitflags;
 use std::cell::{Cell, RefCell};
@@ -196,6 +197,7 @@ bitflags!(
 #[derive(Debug, Clone, Copy)]
 pub enum Interrupt {
     Nmi,
+    Irq,
     Brk,
     Rst,
 }
@@ -295,7 +297,7 @@ macro_rules! memory_read {
         }
 
         let read = $crate::cpu_read_cycle!($read);
-        $cpu.poll_nmi();
+        $cpu.poll_interrupts();
         read
     }};
 }
@@ -304,7 +306,7 @@ macro_rules! memory_read {
 macro_rules! memory_write {
     ($cpu:expr, $write:expr) => {{
         $crate::cpu_write_cycle!($write);
-        $cpu.poll_nmi();
+        $cpu.poll_interrupts();
     }};
 }
 
@@ -389,9 +391,11 @@ impl Cpu {
         self.set_flags_from(self.acc.get())
     }
 
-    fn poll_nmi(&self) {
+    fn poll_interrupts(&self) {
         if self.bus.nmi_line.poll_nmi() {
             self.bus.intr.set(Some(Interrupt::Nmi));
+        } else if self.bus.irq_line.get() {
+            self.bus.intr.set(Some(Interrupt::Irq));
         }
     }
 
@@ -752,7 +756,10 @@ pub struct CpuBus {
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
     pub intr: Cell<Option<Interrupt>>,
 
+    // NMI is edge-sensitive
     nmi_line: NmiLine,
+    // IRQ is level-sensitive
+    irq_line: Cell<bool>,
 }
 
 impl CpuBus {
@@ -768,6 +775,7 @@ impl CpuBus {
             mapper,
             intr: Cell::default(),
             nmi_line: NmiLine::default(),
+            irq_line: Cell::default(),
         }
     }
 
@@ -781,6 +789,10 @@ impl CpuBus {
         } else {
             self.nmi_line.clear_nmi();
         }
+    }
+
+    pub fn set_irq_line(&self, state: bool) {
+        self.irq_line.set(state); // TODO: handle more than one IRQ
     }
 }
 
@@ -816,6 +828,7 @@ impl crate::memory::AddressSpace for CpuBus {
 
 // http://wiki.nesdev.com/w/index.php/2A03
 pub struct IoRegisters {
+    apu: Rc<Apu>,
     input1: Rc<dyn Input>,
     input2: Rc<dyn Input>,
 
@@ -826,8 +839,9 @@ pub struct IoRegisters {
 }
 
 impl IoRegisters {
-    pub fn new(input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
+    pub fn new(apu: Rc<Apu>, input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
         IoRegisters {
+            apu,
             input1,
             input2,
             out_latch: Cell::default(),
@@ -867,7 +881,7 @@ impl AddressSpace for IoRegisters {
                 self.input1.strobe(out0);
                 self.input2.strobe(out0);
             }
-            0x4017 => (),
+            0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write_u8(addr, value),
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
             _ => (),
         }

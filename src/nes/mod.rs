@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use ouroboros::self_referencing;
 
-use crate::apu::Apu;
+use crate::apu::{Apu, ApuCycle};
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
@@ -49,7 +49,7 @@ pub enum NesCycle {
 
 pub struct Nes {
     pub cpu: Cpu,
-    pub apu: Apu,
+    pub apu: Rc<Apu>,
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
@@ -66,13 +66,14 @@ impl Nes {
         let input2 = Rc::new(crate::input::Joypad::default());
         let mapper = Rc::new(RefCell::new(cartridge.mapper()));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
-        let ppu_mem_registers = PpuRegisters::new(ppu.clone());
-        let io_registers = IoRegisters::new(input1.clone(), input2.clone());
-        let cpu_bus = CpuBus::new(io_registers, ppu_mem_registers, mapper.clone());
+        let ppu_registers = PpuRegisters::new(ppu.clone());
+        let apu = Rc::new(Apu::new());
+        let io_registers = IoRegisters::new(apu.clone(), input1.clone(), input2.clone());
+        let cpu_bus = CpuBus::new(io_registers, ppu_registers, mapper.clone());
 
         Nes {
             cpu: Cpu::new(cpu_bus, start_at),
-            apu: Apu::new(),
+            apu,
             ppu,
             clocks: Clocks::default(),
             input1,
@@ -122,7 +123,9 @@ impl Nes {
 
                 if let Some(CpuCycle::Tick(_)) = cpu_tick.as_ref() {
                     match Pin::new(&mut apu).resume(()) {
-                        CoroutineState::Yielded(_) => (),
+                        CoroutineState::Yielded(apu_cycle) => match apu_cycle {
+                            ApuCycle::Tick { irq } => self.cpu.bus.set_irq_line(irq),
+                        },
                         CoroutineState::Complete(_) => panic!("apu stopped"),
                     }
                 }

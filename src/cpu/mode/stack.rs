@@ -6,11 +6,13 @@ pub(in crate::cpu) fn interrupt(
     cpu: &Cpu,
     interrupt: Interrupt,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
-    let (interrupt_vector, rst, extra_ticks) = match interrupt {
-        Interrupt::Nmi => (0xFFFA, false, 0),
-        Interrupt::Brk => (0xFFFE, false, 0),
+    // https://www.pagetable.com/?p=410
+    let (vector, rst, set_b) = match interrupt {
+        Interrupt::Nmi => (0xFFFA, false, false),
+        Interrupt::Irq => (0xFFFE, false, false),
+        Interrupt::Brk => (0xFFFE, false, true),
         //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        Interrupt::Rst => (0xFFFC, true, 2),
+        Interrupt::Rst => (0xFFFC, true, false),
     };
 
     move || {
@@ -22,7 +24,9 @@ pub(in crate::cpu) fn interrupt(
             memory_write! { cpu, cpu.push_stack(pc_lo) };
 
             let mut p = cpu.flags.get();
-            p.insert(Flags::B | Flags::U);
+            if set_b {
+                p.insert(Flags::B);
+            }
             memory_write! { cpu, cpu.push_stack(p.bits()) };
         } else {
             // According to http://wiki.nesdev.com/w/index.php/CPU_power_up_state#cite_note-reset-stack-push-3
@@ -32,24 +36,25 @@ pub(in crate::cpu) fn interrupt(
             memory_read! { cpu, () };
             memory_read! { cpu, () };
             memory_read! { cpu, () };
-        }
-        // http://wiki.nesdev.com/w/index.php/CPU_pin_out_and_signal_description
-        // When [the reset button is] released, CPU starts executing code (read $FFFC, read $FFFD, ...) after 6 M2 clocks.
-        for _ in 0..extra_ticks {
+
+            // TODO: figure out why blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes fails when these are missing
+            memory_read! { cpu, () };
             memory_read! { cpu, () };
         }
 
-        let pc_lo = memory_read! { cpu, cpu.bus.read_u8(interrupt_vector) as u16 };
+        let pc_lo = memory_read! { cpu, cpu.bus.read_u8(vector) as u16 };
 
         cpu.set_flag(Flags::I, true);
 
-        let pc_hi = memory_read! { cpu, cpu.bus.read_u8(interrupt_vector.wrapping_add(1)) as u16 };
+        let pc_hi = memory_read! { cpu, cpu.bus.read_u8(vector.wrapping_add(1)) as u16 };
         let pc = pc_hi << 8 | pc_lo;
         cpu.pc.set(pc);
 
         // Allow the user to override the resulting pc
         if let Some(pc) = cpu.rst_pc {
-            cpu.pc.set(pc);
+            if rst {
+                cpu.pc.set(pc);
+            }
         }
 
         OpTrace::Implicit
