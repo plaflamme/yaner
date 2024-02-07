@@ -2,6 +2,7 @@
 #![feature(type_alias_impl_trait)]
 #[macro_use]
 pub mod helper;
+pub mod apu;
 pub mod cartridge;
 pub mod cpu;
 pub mod input;

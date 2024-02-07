@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use ouroboros::self_referencing;
 
+use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
@@ -26,8 +27,7 @@ pub struct Clocks {
 
 impl Clocks {
     fn tick_cpu(&self) {
-        self.cpu_cycles.update(|c| c.wrapping_add(1));
-        self.ppu_cycles.update(|c| c.wrapping_add(1));
+        self.cpu_cycles.update(|c: u64| c.wrapping_add(1));
     }
 
     fn tick_ppu(&self) {
@@ -49,11 +49,11 @@ pub enum NesCycle {
 
 pub struct Nes {
     pub cpu: Cpu,
+    pub apu: Apu,
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
     pub input2: Rc<Joypad>,
-    // TODO: apu
 }
 
 impl Nes {
@@ -72,6 +72,7 @@ impl Nes {
 
         Nes {
             cpu: Cpu::new(cpu_bus, start_at),
+            apu: Apu::new(),
             ppu,
             clocks: Clocks::default(),
             input1,
@@ -86,6 +87,7 @@ impl Nes {
     // yields on every nes ppu tick
     fn ppu_steps(&self) -> NesCoroutine {
         let mut cpu = self.cpu.run();
+        let mut apu = self.apu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
 
@@ -117,6 +119,13 @@ impl Nes {
                     },
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
+
+                if let Some(CpuCycle::Tick(_)) = cpu_tick.as_ref() {
+                    match Pin::new(&mut apu).resume(()) {
+                        CoroutineState::Yielded(_) => (),
+                        CoroutineState::Complete(_) => panic!("apu stopped"),
+                    }
+                }
 
                 while self.clocks.ppu_master_clock.get() + ppu_stride
                     <= (self.clocks.cpu_master_clock.get() - ppu_offset)
