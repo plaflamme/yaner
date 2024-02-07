@@ -50,7 +50,7 @@ pub enum NesCycle {
 pub struct Nes {
     pub cpu: yaner_cpu::Cpu,
     pub cpu_bus: CpuBus,
-    pub apu: Apu,
+    pub apu: Rc<Apu>,
 
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
@@ -69,15 +69,15 @@ impl Nes {
         let input2 = Rc::new(crate::input::Joypad::default());
         let mapper = Rc::new(RefCell::new(cartridge.mapper()));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
-        let ppu_mem_registers = PpuRegisters::new(ppu.clone());
-        let io_registers = IoRegisters::new(input1.clone(), input2.clone());
-        let cpu_bus = CpuBus::new(io_registers, ppu_mem_registers, mapper.clone());
+        let ppu_registers = PpuRegisters::new(ppu.clone());
+        let apu = Rc::new(Apu::new());
+        let io_registers = IoRegisters::new(apu.clone(), input1.clone(), input2.clone());
+        let cpu_bus = CpuBus::new(io_registers, ppu_registers, mapper.clone());
 
         Nes {
             cpu: yaner_cpu::Cpu::new(start_at),
             cpu_bus,
-            apu: Apu::new(),
-
+            apu,
             ppu,
             clocks: Clocks::default(),
             input1,
