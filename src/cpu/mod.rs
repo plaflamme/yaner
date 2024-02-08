@@ -200,6 +200,39 @@ pub enum Interrupt {
     Rst,
 }
 
+// https://www.nesdev.org/wiki/NMI
+#[derive(Default)]
+struct NmiState {
+    line: Cell<bool>,
+    state: Cell<bool>,
+}
+
+impl NmiState {
+    // Pull the nmi line.
+    // The NMI unit is edge-sensitive, meaning that it reacts to high-to-low transitions in the signal.
+    //   When the line changes from false to true, the internal state is set to true,
+    //   but setting it from true to true will not alter the internal state (i.e: it will remain false if it was false).
+    pub fn set_nmi_line(&self) {
+        let prev_mni = self.line.get();
+        if !prev_mni {
+            self.state.set(true);
+        }
+        self.line.set(true);
+    }
+
+    pub fn clear_nmi_line(&self) {
+        self.line.set(false);
+        self.state.set(false);
+    }
+
+    // polling the nmi state clears it
+    pub fn poll_nmi_state(&self) -> bool {
+        let state = self.state.get();
+        self.state.set(false);
+        state
+    }
+}
+
 // http://nesdev.com/6502_cpu.txt
 // http://wiki.nesdev.com/w/index.php/CPU_ALL
 pub struct Cpu {
@@ -211,6 +244,9 @@ pub struct Cpu {
     pc: Cell<u16>,
 
     pub bus: bus::CpuBus,
+
+    nmi_state: NmiState,
+    pending_interrupt: Cell<Option<Interrupt>>,
 
     // Override the rst_pc
     rst_pc: Option<u16>,
@@ -241,7 +277,7 @@ impl Display for Cpu {
 
 impl Reset for Cpu {
     fn reset(&self) {
-        self.bus.intr.set(Some(Interrupt::Rst));
+        self.pending_interrupt.set(Some(Interrupt::Rst));
     }
 }
 
@@ -322,6 +358,9 @@ impl Cpu {
             bus,
 
             rst_pc,
+
+            nmi_state: NmiState::default(),
+            pending_interrupt: Cell::default(),
         }
     }
 
@@ -390,14 +429,22 @@ impl Cpu {
     }
 
     fn poll_interrupts(&self) {
+        if self.bus.ppu_registers.nmi() {
+            self.nmi_state.set_nmi_line();
+        } else {
+            self.nmi_state.clear_nmi_line();
+        }
+
+        if self.nmi_state.poll_nmi_state() {
+            self.pending_interrupt.set(Some(Interrupt::Nmi));
+        }
+
         self.bus.poll_interrupts();
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuCycle, Return = ()> + '_ {
         // used to delay interrupts by one op
-        // TODO: this probably requires more granular timing.
-        let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
-
+        let mut interrupt = Some(Interrupt::Rst);
         move || loop {
             if let Some(intr) = interrupt.take() {
                 let trace = yield_complete!(stack::interrupt(self, intr));
@@ -409,7 +456,7 @@ impl Cpu {
             };
 
             if interrupt.is_none() {
-                interrupt = self.bus.intr_latch();
+                interrupt = self.pending_interrupt.take();
             }
 
             let trace = match opcode {

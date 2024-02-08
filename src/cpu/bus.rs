@@ -9,41 +9,6 @@ use crate::input::Input;
 use crate::ppu::PpuRegisters;
 use std::rc::Rc;
 
-use super::Interrupt;
-
-// https://www.nesdev.org/wiki/NMI
-#[derive(Default)]
-struct NmiState {
-    line: Cell<bool>,
-    state: Cell<bool>,
-}
-
-impl NmiState {
-    // Pull the nmi line.
-    // The NMI unit is edge-sensitive, meaning that it reacts to high-to-low transitions in the signal.
-    //   When the line changes from false to true, the internal state is set to true,
-    //   but setting it from true to true will not alter the internal state (i.e: it will remain false if it was false).
-    pub fn set_nmi_line(&self) {
-        let prev_mni = self.line.get();
-        if !prev_mni {
-            self.state.set(true);
-        }
-        self.line.set(true);
-    }
-
-    pub fn clear_nmi_line(&self) {
-        self.line.set(false);
-        self.state.set(false);
-    }
-
-    // polling the nmi state clears it
-    pub fn poll_nmi_state(&self) -> bool {
-        let state = self.state.get();
-        self.state.set(false);
-        state
-    }
-}
-
 bitflags! {
     #[derive(Clone, Copy, PartialEq, Eq, Default)]
     pub struct Irq: u8 {
@@ -119,10 +84,7 @@ pub struct CpuBus {
     pub io_regsiters: IoRegisters,
     pub ppu_registers: PpuRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
-    pub intr: Cell<Option<Interrupt>>,
 
-    // NMI is edge-sensitive
-    nmi_state: NmiState,
     // IRQ is level-sensitive
     irq_line: Cell<Irq>,
 }
@@ -138,32 +100,17 @@ impl CpuBus {
             io_regsiters,
             ppu_registers,
             mapper,
-            intr: Cell::default(),
-            nmi_state: NmiState::default(),
             irq_line: Cell::default(),
         }
     }
 
     pub fn poll_interrupts(&self) {
-        // poll NMI line with side effects
-        if self.ppu_registers.nmi() {
-            self.nmi_state.set_nmi_line();
-        } else {
-            self.nmi_state.clear_nmi_line();
-        }
-
         // poll the APU for IRQs
         self.irq_line.set(self.io_regsiters.apu.irqs());
 
-        if self.nmi_state.poll_nmi_state() {
-            self.intr.set(Some(Interrupt::Nmi));
-        } else if self.irq_line.get().bits() != 0 {
-            self.intr.set(Some(Interrupt::Irq));
+        if self.irq_line.get().bits() != 0 {
+            // self.intr.set(Some(Interrupt::Irq));
         }
-    }
-
-    pub fn intr_latch(&self) -> Option<Interrupt> {
-        self.intr.take()
     }
 }
 

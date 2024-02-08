@@ -17,7 +17,7 @@ impl CpuState {
             y: cpu.y.get(),
             sp: cpu.sp.get(),
             flags: cpu.flags.get(),
-            intr: cpu.bus.intr.get(),
+            intr: cpu.pending_interrupt.get(),
         }
     }
 }
