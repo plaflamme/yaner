@@ -6,16 +6,36 @@ pub(in crate::cpu) fn interrupt(
     cpu: &Cpu,
     interrupt: Interrupt,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
-    // https://www.pagetable.com/?p=410
-    let (vector, rst, set_b) = match interrupt {
-        Interrupt::Nmi => (0xFFFA, false, false),
-        Interrupt::Irq => (0xFFFE, false, false),
-        Interrupt::Brk => (0xFFFE, false, true),
-        //   See start sequence here http://users.telenet.be/kim1-6502/6502/proman.html#92
-        Interrupt::Rst => (0xFFFC, true, false),
-    };
-
     move || {
+        // Useful information on the differences between IRQ/NMI/BRK/RST
+        //   which all share the BRK behaviour: https://www.pagetable.com/?p=410
+
+        // This deals with the fetch next opcode part which differs between the interrupts
+        // This also determines whether the next few cycles are in read or write mode.
+        let (vector, rst, set_b) = match interrupt {
+            Interrupt::Brk => {
+                memory_read! { cpu, cpu.next_pc_read_u8() };
+                (0xFFFE, false, true)
+            }
+            Interrupt::Nmi => {
+                // PC increment is disabled for NMI or IRQ
+                memory_read! { cpu, cpu.pc_read_u8() };
+                (0xFFFA, false, false)
+            }
+            Interrupt::Irq => {
+                // PC increment is disabled for NMI or IRQ
+                memory_read! { cpu, cpu.pc_read_u8() };
+                (0xFFFA, false, false)
+            }
+            Interrupt::Rst => {
+                // These propably mimic the opcode + operand fetches that didn't occur on reset
+                // Without these blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes fails
+                memory_read! { cpu, () }; // opcode
+                memory_read! { cpu, () }; // operand
+                (0xFFFC, true, false)
+            }
+        };
+
         if !rst {
             let pc_hi = (cpu.pc.get() >> 8) as u8;
             memory_write! { cpu, cpu.push_stack(pc_hi) };
@@ -23,9 +43,14 @@ pub(in crate::cpu) fn interrupt(
             let pc_lo = (cpu.pc.get() & 0x00FF) as u8;
             memory_write! { cpu, cpu.push_stack(pc_lo) };
 
+            // NOTE: according to https://www.nesdev.org/wiki/CPU_interrupts
+            // Here is when the interrupt vector is actually determined.
+
             let mut p = cpu.flags.get();
             if set_b {
                 p.insert(Flags::B);
+            } else {
+                p.remove(Flags::B)
             }
             memory_write! { cpu, cpu.push_stack(p.bits()) };
         } else {
@@ -34,10 +59,6 @@ pub(in crate::cpu) fn interrupt(
             cpu.sp.set(0xFD);
             cpu.flags.set(Flags::from_bits(0x34).unwrap());
             memory_read! { cpu, () };
-            memory_read! { cpu, () };
-            memory_read! { cpu, () };
-
-            // TODO: figure out why blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes fails when these are missing
             memory_read! { cpu, () };
             memory_read! { cpu, () };
         }
@@ -72,11 +93,7 @@ pub(in crate::cpu) fn interrupt(
 //  6   $FFFE   R  fetch PCL
 //  7   $FFFF   R  fetch PCH
 pub(in crate::cpu) fn brk(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
-    move || {
-        let _ = memory_read! { cpu, cpu.next_pc_read_u8() };
-
-        yield_complete!(interrupt(cpu, Interrupt::Brk))
-    }
+    move || yield_complete!(interrupt(cpu, Interrupt::Brk))
 }
 
 //  #  address R/W description

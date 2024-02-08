@@ -1,4 +1,4 @@
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 use std::{cell::Cell, ops::Coroutine};
 
 mod frame_counter;
