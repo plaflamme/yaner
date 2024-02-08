@@ -7,7 +7,7 @@ use ouroboros::self_referencing;
 
 use crate::apu::{Apu, ApuCycle};
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
+use crate::cpu::{bus::CpuBus, bus::IoRegisters, Cpu, CpuCycle};
 use crate::input::Joypad;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 use crate::Reset;
