@@ -5,7 +5,7 @@ mod frame_counter;
 
 use frame_counter::FrameCounter;
 
-use crate::memory::AddressSpace;
+use crate::{cpu::bus::Irq, memory::AddressSpace};
 
 // https://www.nesdev.org/wiki/APU_Frame_Counter
 bitflags! {
@@ -22,12 +22,13 @@ bitflags! {
 }
 
 pub enum ApuCycle {
-    Tick { irq: bool },
+    Tick,
 }
 
 pub struct Apu {
     status: Cell<Status>,
     frame_counter: FrameCounter,
+    irqs: Cell<Irq>,
 }
 
 impl Apu {
@@ -35,18 +36,26 @@ impl Apu {
         Self {
             status: Cell::default(),
             frame_counter: FrameCounter::new(),
+            irqs: Cell::default(),
         }
+    }
+
+    pub fn irqs(&self) -> Irq {
+        self.irqs.get()
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
         move || loop {
             if let Some(clock) = self.frame_counter.tick() {
-                yield ApuCycle::Tick {
-                    irq: clock.raise_interrupt,
-                }
-            } else {
-                yield ApuCycle::Tick { irq: false }
+                self.irqs.update(|f| {
+                    if clock.raise_interrupt {
+                        f | Irq::FrameCounter
+                    } else {
+                        f - Irq::FrameCounter
+                    }
+                });
             }
+            yield ApuCycle::Tick
         }
     }
 }

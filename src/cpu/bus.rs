@@ -1,3 +1,5 @@
+use bitflags::bitflags;
+
 use crate::apu::Apu;
 use crate::memory::{AddressSpace, Ram2KB};
 use std::cell::{Cell, RefCell};
@@ -39,6 +41,14 @@ impl NmiState {
         let state = self.state.get();
         self.state.set(false);
         state
+    }
+}
+
+bitflags! {
+    #[derive(Clone, Copy, PartialEq, Eq, Default)]
+    pub struct Irq: u8 {
+        const FrameCounter = 1 << 0;
+        const Dmc = 1 << 1;
     }
 }
 
@@ -114,7 +124,7 @@ pub struct CpuBus {
     // NMI is edge-sensitive
     nmi_state: NmiState,
     // IRQ is level-sensitive
-    irq_line: Cell<bool>,
+    irq_line: Cell<Irq>,
 }
 
 impl CpuBus {
@@ -142,19 +152,18 @@ impl CpuBus {
             self.nmi_state.clear_nmi_line();
         }
 
+        // poll the APU for IRQs
+        self.irq_line.set(self.io_regsiters.apu.irqs());
+
         if self.nmi_state.poll_nmi_state() {
             self.intr.set(Some(Interrupt::Nmi));
-        } else if self.irq_line.get() {
+        } else if self.irq_line.get().bits() != 0 {
             self.intr.set(Some(Interrupt::Irq));
         }
     }
 
     pub fn intr_latch(&self) -> Option<Interrupt> {
         self.intr.take()
-    }
-
-    pub fn set_irq_line(&self, state: bool) {
-        self.irq_line.set(state); // TODO: handle more than one IRQ
     }
 }
 

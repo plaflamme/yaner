@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use ouroboros::self_referencing;
 
-use crate::apu::{Apu, ApuCycle};
+use crate::apu::Apu;
 use crate::cartridge::Cartridge;
 use crate::cpu::{bus::CpuBus, bus::IoRegisters, Cpu, CpuCycle};
 use crate::input::Joypad;
@@ -123,9 +123,7 @@ impl Nes {
 
                 if let Some(CpuCycle::Tick(_)) = cpu_tick.as_ref() {
                     match Pin::new(&mut apu).resume(()) {
-                        CoroutineState::Yielded(apu_cycle) => match apu_cycle {
-                            ApuCycle::Tick { irq } => self.cpu.bus.set_irq_line(irq),
-                        },
+                        CoroutineState::Yielded(_) => (),
                         CoroutineState::Complete(_) => panic!("apu stopped"),
                     }
                 }
