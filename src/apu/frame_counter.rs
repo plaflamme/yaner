@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 use bitflags::bitflags;
 
+#[derive(PartialEq, Eq)]
 pub enum Mode {
     FourStep = 0,
     FiveStep = 1,
@@ -75,19 +76,19 @@ impl FrameCounter {
         }
     }
 
-    fn set_state(&self, value: Register) {
-        self.register.set(value);
-        self.step.set(0);
-        self.cycles
-            .set(Self::NTSC_STEP_CYCLES[value.mode() as usize][0]);
-    }
-
     pub fn write(&self, value: u8) {
         let value = Register::from_bits_truncate(value);
         // If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle.
         let cycles = self.cycles.get();
         let delay = if cycles & 0x01 == 1 { 4 } else { 3 };
         self.bufferred.set(Some((delay, value)));
+    }
+
+    fn set_state(&self, value: Register) {
+        self.register.set(value);
+        self.step.set(0);
+        self.cycles
+            .set(Self::NTSC_STEP_CYCLES[value.mode() as usize][0]);
     }
 
     fn cycle(&self) -> Option<Clock> {
@@ -119,7 +120,7 @@ impl FrameCounter {
             };
 
             let raise_interrupt =
-                !state.inhibit_irq() && matches!(state.mode(), Mode::FourStep) && step >= 3;
+                !state.inhibit_irq() && state.mode() == Mode::FourStep && step >= 3;
 
             Some(Clock {
                 frame_type,
@@ -137,7 +138,7 @@ impl FrameCounter {
                 self.set_state(value);
 
                 // If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated.
-                if matches!(value.mode(), Mode::FiveStep) {
+                if value.mode() == Mode::FiveStep {
                     // Note this can't generate a Clock, but the previous can.
                     self.cycle();
                     // TODO: we need to generate another quarter frame here...
