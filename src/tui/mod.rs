@@ -16,7 +16,6 @@ use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, NesCycle};
 use crate::ppu::reg::{PpuMask, PpuStatus};
-use crate::ppu::PpuCycle;
 
 fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
     use std::fmt::Write;
@@ -609,9 +608,7 @@ impl Debugger {
                             .step_until(|nes, _| nes.debug().ppu.status.contains(PpuStatus::V))?;
                     }
                     Key::Char('n') => {
-                        self.stepper.step_until(|_, cycle| {
-                            matches!(cycle, NesCycle::Ppu(PpuCycle::Tick { nmi: true }))
-                        })?;
+                        self.stepper.step_until(|nes, _| nes.ppu.nmi())?;
                     }
                     Key::Char('b') => {
                         self.stepper

@@ -9,18 +9,19 @@ use std::rc::Rc;
 
 use super::Interrupt;
 
+// https://www.nesdev.org/wiki/NMI
 #[derive(Default)]
-struct NmiLine {
+struct NmiState {
     line: Cell<bool>,
     state: Cell<bool>,
 }
 
-impl NmiLine {
+impl NmiState {
     // Pull the nmi line.
     // The NMI unit is edge-sensitive, meaning that it reacts to high-to-low transitions in the signal.
     //   When the line changes from false to true, the internal state is set to true,
-    //   but setting it from true to true will not alter the internal state.
-    pub fn set_nmi(&self) {
+    //   but setting it from true to true will not alter the internal state (i.e: it will remain false if it was false).
+    pub fn set_nmi_line(&self) {
         let prev_mni = self.line.get();
         if !prev_mni {
             self.state.set(true);
@@ -28,13 +29,13 @@ impl NmiLine {
         self.line.set(true);
     }
 
-    pub fn clear_nmi(&self) {
+    pub fn clear_nmi_line(&self) {
         self.line.set(false);
         self.state.set(false);
     }
 
     // polling the nmi state clears it
-    pub fn poll_nmi(&self) -> bool {
+    pub fn poll_nmi_state(&self) -> bool {
         let state = self.state.get();
         self.state.set(false);
         state
@@ -111,7 +112,7 @@ pub struct CpuBus {
     pub intr: Cell<Option<Interrupt>>,
 
     // NMI is edge-sensitive
-    nmi_line: NmiLine,
+    nmi_state: NmiState,
     // IRQ is level-sensitive
     irq_line: Cell<bool>,
 }
@@ -128,13 +129,20 @@ impl CpuBus {
             ppu_registers,
             mapper,
             intr: Cell::default(),
-            nmi_line: NmiLine::default(),
+            nmi_state: NmiState::default(),
             irq_line: Cell::default(),
         }
     }
 
     pub fn poll_interrupts(&self) {
-        if self.nmi_line.poll_nmi() {
+        // poll NMI line with side effects
+        if self.ppu_registers.nmi() {
+            self.nmi_state.set_nmi_line();
+        } else {
+            self.nmi_state.clear_nmi_line();
+        }
+
+        if self.nmi_state.poll_nmi_state() {
             self.intr.set(Some(Interrupt::Nmi));
         } else if self.irq_line.get() {
             self.intr.set(Some(Interrupt::Irq));
@@ -143,14 +151,6 @@ impl CpuBus {
 
     pub fn intr_latch(&self) -> Option<Interrupt> {
         self.intr.take()
-    }
-
-    pub fn set_nmi_line(&self, state: bool) {
-        if state {
-            self.nmi_line.set_nmi();
-        } else {
-            self.nmi_line.clear_nmi();
-        }
     }
 
     pub fn set_irq_line(&self, state: bool) {

@@ -17,6 +17,8 @@ pub mod vram_address;
 use reg::{PpuCtrl, PpuMask, Registers};
 use renderer::Renderer;
 
+use self::reg::PpuStatus;
+
 // NOTES:
 //   Nametable - this is stored in VRAM by the CPU. Each byte is an index into the pattern table.
 //   Pattern table - these are 16 bytes values that contains the pattern that should be displayed on screen.
@@ -54,6 +56,11 @@ impl Ppu {
 
             renderer: Renderer::default(),
         }
+    }
+
+    pub fn nmi(&self) -> bool {
+        self.registers.status.get().contains(PpuStatus::V)
+            && self.registers.ctrl.get().contains(PpuCtrl::V)
     }
 
     // read PPUSTATUS with side effects
@@ -94,7 +101,7 @@ impl Ppu {
 
 #[derive(Debug)]
 pub enum PpuCycle {
-    Tick { nmi: bool },
+    Tick,
     Frame,
 }
 
@@ -181,6 +188,11 @@ impl PpuRegisters {
             read_buffer: Cell::default(),
             open_bus: Cell::default(),
         }
+    }
+
+    // true when the PPU is pulling the NMI low.
+    pub fn nmi(&self) -> bool {
+        self.ppu.nmi()
     }
 
     pub fn decay_open_bus(&self) {

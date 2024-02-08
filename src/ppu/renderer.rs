@@ -4,7 +4,7 @@ use std::ops::Coroutine;
 
 use super::rgb;
 use crate::memory::AddressSpace;
-use crate::ppu::reg::{PpuCtrl, PpuMask, PpuStatus};
+use crate::ppu::reg::{PpuMask, PpuStatus};
 use crate::ppu::sprite::SpritePipeline;
 use crate::ppu::{PpuCycle, Registers};
 
@@ -483,10 +483,7 @@ impl Renderer {
                 self.frame_pixels.set([Pixel::default(); 256 * 240]);
                 odd_frame = !odd_frame;
             } else {
-                yield PpuCycle::Tick {
-                    nmi: registers.status.get().contains(PpuStatus::V)
-                        && registers.ctrl.get().contains(PpuCtrl::V),
-                };
+                yield PpuCycle::Tick;
             }
         }
     }
