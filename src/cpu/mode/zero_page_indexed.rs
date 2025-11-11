@@ -3,6 +3,7 @@ use crate::memory::AddressSpace;
 use crate::{memory_read, memory_write};
 
 fn zp_indexed(index: u8, cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
+    #[coroutine]
     move || {
         let addr = memory_read! { cpu, cpu.next_pc_read_u8() };
 
@@ -26,6 +27,7 @@ fn read<'a, O: ReadOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
@@ -65,6 +67,7 @@ fn modify<'a, O: ModifyOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
@@ -100,6 +103,7 @@ fn write<'a, O: WriteOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(zp_indexed(index, cpu));
         let value = operation.operate(cpu);

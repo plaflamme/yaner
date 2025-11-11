@@ -10,6 +10,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let value = memory_read! { cpu, cpu.next_pc_read_u8() };
         operation.operate(cpu, value);

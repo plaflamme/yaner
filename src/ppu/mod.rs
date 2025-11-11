@@ -222,10 +222,9 @@ impl AddressSpace for PpuRegisters {
             0x2001 => self.open_bus.get(),
             0x2002 => {
                 let result = self.ppu.read_status();
-                let ob = self
-                    .open_bus
+                self.open_bus
                     .update(|b| b & 0b0001_1111 | result & 0b1110_0000);
-                result | (ob & 0b0001_1111)
+                result | (self.open_bus.get() & 0b0001_1111)
             }
             0x2003 => self.open_bus.get(),
             0x2004 => {

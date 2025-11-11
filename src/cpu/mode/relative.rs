@@ -29,6 +29,7 @@ pub(in crate::cpu) fn branch<'a, O: BranchOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let operand = memory_read! { cpu, cpu.next_pc_read_u8() as i8 };
 

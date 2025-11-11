@@ -6,6 +6,7 @@ fn abs_indexed(
     index: u8,
     cpu: &Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, bool)> + '_ {
+    #[coroutine]
     move || {
         let addr_lo = memory_read! { cpu, cpu.next_pc_read_u8() };
 
@@ -45,6 +46,7 @@ fn read<'a, O: ReadOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, oops) = yield_complete!(abs_indexed(false, index, cpu));
         let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
@@ -94,6 +96,7 @@ fn modify<'a, O: ModifyOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, _) = yield_complete!(abs_indexed(true, index, cpu));
 
@@ -151,6 +154,7 @@ fn write<'a, O: WriteOperation>(
     index: u8,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, _) = yield_complete!(abs_indexed(true, index, cpu));
 

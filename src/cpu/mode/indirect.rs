@@ -12,6 +12,7 @@ use crate::{memory::AddressSpace, memory_read};
 // Note: * The PCH will always be fetched from the same page
 //         than PCL, i.e. page boundary crossing is not handled.
 pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
+    #[coroutine]
     move || {
         let addr_lo = memory_read! { cpu, cpu.next_pc_read_u8() };
 

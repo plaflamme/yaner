@@ -15,13 +15,13 @@ pub mod opcode;
 
 pub mod generator;
 
+use crate::Reset;
 use crate::cartridge::Mapper;
 use crate::input::Input;
 use crate::ppu::PpuRegisters;
-use crate::Reset;
 use instr::*;
-use opcode::OpCode;
 use opcode::OPCODES;
+use opcode::OpCode;
 use std::rc::Rc;
 
 // http://obelisk.me.uk/6502/reference.html
@@ -400,6 +400,7 @@ impl Cpu {
         // TODO: this probably requires more granular timing.
         let mut interrupt: Option<Interrupt> = Some(Interrupt::Rst);
 
+        #[coroutine]
         move || loop {
             if let Some(intr) = interrupt.take() {
                 let trace = yield_complete!(stack::interrupt(self, intr));

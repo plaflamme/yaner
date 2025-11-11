@@ -10,6 +10,7 @@ pub(in crate::cpu) fn run<'a, O: ImplicitOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     || {
         memory_read! { cpu, cpu.pc_read_u8() };
         operation.operate(cpu);

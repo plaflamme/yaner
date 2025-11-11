@@ -10,6 +10,7 @@ pub fn run(
     addr: u16,
     require_alignment: bool, // TODO: not exactly sure what this is.
 ) -> impl Coroutine<Yield = CpuCycle, Return = ()> + '_ {
+    #[coroutine]
     move || {
         // http://wiki.nesdev.com/w/index.php/PPU_OAM#DMA
 

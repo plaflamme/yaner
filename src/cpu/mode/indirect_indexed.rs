@@ -2,6 +2,7 @@ use super::*;
 use crate::{memory::AddressSpace, memory_read, memory_write};
 
 fn ind_x(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
+    #[coroutine]
     move || {
         let pointer = memory_read! { cpu, cpu.next_pc_read_u8() };
 
@@ -30,6 +31,7 @@ pub(in crate::cpu) fn x_read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(ind_x(cpu));
         let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
@@ -57,6 +59,7 @@ pub(in crate::cpu) fn x_modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(ind_x(cpu));
 
@@ -86,6 +89,7 @@ pub(in crate::cpu) fn x_write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(ind_x(cpu));
         memory_write! { cpu, cpu.bus.write_u8(addr, operation.operate(cpu)) };
@@ -97,6 +101,7 @@ fn ind_y(
     eager: bool,
     cpu: &Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = (u16, u16, bool)> + '_ {
+    #[coroutine]
     move || {
         let pointer = memory_read! { cpu, cpu.next_pc_read_u8() };
 
@@ -140,6 +145,7 @@ pub(in crate::cpu) fn y_read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, oops) = yield_complete!(ind_y(false, cpu));
         let value = memory_read! { cpu, cpu.bus.read_u8(addr) };
@@ -176,6 +182,7 @@ pub(in crate::cpu) fn y_modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, _) = yield_complete!(ind_y(true, cpu));
 
@@ -214,6 +221,7 @@ pub(in crate::cpu) fn y_write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let (addr, unfixed, _) = yield_complete!(ind_y(true, cpu));
 

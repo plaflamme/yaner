@@ -441,6 +441,7 @@ impl Renderer {
         oam_ram: &'a dyn AddressSpace,
     ) -> impl Coroutine<Yield = PpuCycle, Return = ()> + 'a {
         let mut odd_frame = false;
+        #[coroutine]
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
                 (0..=239, _) => {
@@ -473,8 +474,8 @@ impl Renderer {
 
                 _ => (),
             }
-
-            if self.dot.update(|dot| (dot + 1) % 341) == 0 {
+            self.dot.update(|dot| (dot + 1) % 341);
+            if self.dot.get() == 0 {
                 self.scanline.update(|sc| (sc + 1) % 262);
             }
 

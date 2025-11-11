@@ -2,6 +2,7 @@ use super::*;
 use crate::{memory::AddressSpace, memory_read, memory_write};
 
 fn abs_addr(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
+    #[coroutine]
     move || {
         let addr_lo = memory_read! { cpu, cpu.next_pc_read_u8() as u16 };
         let addr_hi = memory_read! { cpu, cpu.next_pc_read_u8() as u16 };
@@ -16,6 +17,7 @@ fn abs_addr(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = u16> + '_ {
 //  3    PC     R  copy low address byte to PCL, fetch high address
 //                 byte to PCH
 pub(in crate::cpu) fn jmp(cpu: &Cpu) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + '_ {
+    #[coroutine]
     move || {
         let addr_lo = memory_read! { cpu, cpu.next_pc_read_u8() as u16 };
 
@@ -36,6 +38,7 @@ pub(in crate::cpu) fn read<'a, O: ReadOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(abs_addr(cpu));
 
@@ -59,6 +62,7 @@ pub(in crate::cpu) fn modify<'a, O: ModifyOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(abs_addr(cpu));
 
@@ -84,6 +88,7 @@ pub(in crate::cpu) fn write<'a, O: WriteOperation>(
     operation: &'a O,
     cpu: &'a Cpu,
 ) -> impl Coroutine<Yield = CpuCycle, Return = OpTrace> + 'a {
+    #[coroutine]
     move || {
         let addr = yield_complete!(abs_addr(cpu));
 

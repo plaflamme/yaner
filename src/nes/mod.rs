@@ -5,11 +5,11 @@ use std::rc::Rc;
 
 use ouroboros::self_referencing;
 
+use crate::Reset;
 use crate::cartridge::Cartridge;
 use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
 use crate::input::Joypad;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
-use crate::Reset;
 
 pub mod debug;
 
@@ -84,6 +84,7 @@ impl Nes {
     }
 
     // yields on every nes ppu tick
+    #[define_opaque(NesCoroutine)]
     fn ppu_steps(&self) -> NesCoroutine {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
@@ -95,7 +96,7 @@ impl Nes {
         let ppu_offset = 1;
 
         self.clocks.cpu_master_clock.set(12);
-
+        #[coroutine]
         move || {
             yield NesCycle::PowerUp;
             loop {

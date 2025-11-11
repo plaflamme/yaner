@@ -1,10 +1,10 @@
 // consumes a generator within another generator
 #[macro_export]
 macro_rules! yield_complete {
-    ($gn:expr) => {{
-        let mut gen = $gn;
+    ($co:expr) => {{
+        let mut coroutine = $co;
         loop {
-            match std::ops::Coroutine::resume(std::pin::Pin::new(&mut gen), ()) {
+            match std::ops::Coroutine::resume(std::pin::Pin::new(&mut coroutine), ()) {
                 std::ops::CoroutineState::Yielded(value) => yield value,
                 std::ops::CoroutineState::Complete(value) => break value,
             };
@@ -14,10 +14,10 @@ macro_rules! yield_complete {
 
 #[macro_export]
 macro_rules! consume_generator {
-    ($gn:expr, $y: expr) => {{
-        let mut gen = $gn;
+    ($co:expr, $y: expr) => {{
+        let mut coroutine = $co;
         loop {
-            match std::ops::Coroutine::resume(std::pin::Pin::new(&mut gen), ()) {
+            match std::ops::Coroutine::resume(std::pin::Pin::new(&mut coroutine), ()) {
                 std::ops::CoroutineState::Yielded(_) => $y,
                 std::ops::CoroutineState::Complete(value) => break value,
             };
