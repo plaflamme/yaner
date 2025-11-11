@@ -79,13 +79,13 @@ impl Nes {
         }
     }
 
-    pub fn debug(&self) -> debug::NesState {
+    pub fn debug(&self) -> debug::NesState<'_> {
         debug::NesState::new(self)
     }
 
     // yields on every nes ppu tick
     #[define_opaque(NesCoroutine)]
-    fn ppu_steps(&self) -> NesCoroutine {
+    fn ppu_steps(&self) -> NesCoroutine<'_> {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
@@ -142,7 +142,7 @@ impl Nes {
                     //   5_369_318 cycles/s
                     //   0.6 * 5_369_318 = 3_221_590.8
                     //   So 600ms on the NES is approximately 3_221_590 PPU ticks
-                    if self.clocks.ppu_cycles.get() % 3_221_590 == 0 {
+                    if self.clocks.ppu_cycles.get().is_multiple_of(3_221_590) {
                         // TODO: this should remember when each bit was last set to 1
                         // TODO: this should just happen as a side effect of ticking the ppu
                         self.cpu.bus.ppu_registers.decay_open_bus()
