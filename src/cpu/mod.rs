@@ -17,7 +17,7 @@ pub mod generator;
 
 use crate::Reset;
 use crate::cartridge::Mapper;
-use crate::input::Input;
+use crate::input::{Input, NoInput};
 use crate::ppu::PpuRegisters;
 use instr::*;
 use opcode::OPCODES;
@@ -828,7 +828,7 @@ pub struct IoRegisters {
 
 impl IoRegisters {
     pub fn new(input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
-        IoRegisters {
+        Self {
             input1,
             input2,
             out_latch: Cell::default(),
@@ -836,9 +836,19 @@ impl IoRegisters {
         }
     }
 
+    fn default() -> Self {
+        Self::new(Rc::new(NoInput), Rc::new(NoInput))
+    }
+
     // This will return last write to OAM DMA and then None until the next write
     pub fn dma_latch(&self) -> Option<u8> {
         self.dma_latch.take()
+    }
+}
+
+impl Default for IoRegisters {
+    fn default() -> Self {
+        IoRegisters::default()
     }
 }
 

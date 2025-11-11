@@ -8,6 +8,15 @@ pub trait Input {
     fn read(&self) -> u8;
 }
 
+pub struct NoInput;
+impl Input for NoInput {
+    fn strobe(&self, _value: u8) {}
+
+    fn read(&self) -> u8 {
+        0
+    }
+}
+
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct JoypadButtons: u8 {
