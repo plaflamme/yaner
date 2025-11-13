@@ -1,0 +1,6 @@
+[package]
+name = "yaner-cpu"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.4"
