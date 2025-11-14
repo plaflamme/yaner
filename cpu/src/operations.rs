@@ -617,7 +617,7 @@ impl ImplicitOperation for tya {
 
 pub struct xaa;
 impl ImplicitOperation for xaa {
-    fn run(&self, cpu: &Cpu) {
+    fn run(&self, _cpu: &Cpu) {
         todo!()
     }
 }

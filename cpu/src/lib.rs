@@ -1,5 +1,5 @@
 #![feature(coroutines, coroutine_trait)]
-use std::{cell::Cell, io::Read, ops::Coroutine};
+use std::{cell::Cell, ops::Coroutine};
 
 use bitflags::bitflags;
 
@@ -211,6 +211,9 @@ pub struct Cpu {
     // /RESET line - held low to reset CPU
     rst_line: Cell<bool>,
 
+    // Use to delay setting the `I` flag by one instrcution
+    delay_intr_flag: Cell<Option<Flags>>,
+
     io_bus: Cell<u8>,
 }
 
@@ -234,6 +237,8 @@ impl Cpu {
             nmi_line: Cell::default(),
             irq_line: Cell::new(false),
             rst_line: Cell::new(false),
+
+            delay_intr_flag: Cell::default(),
 
             io_bus: Cell::new(0),
         }
@@ -285,20 +290,185 @@ impl Cpu {
                 value
             }};
         }
+
+        // https://www.nesdev.org/wiki/Stack
+        // "In an empty stack, the stack pointer points to the element where the next value will be stored. It is moved after pushing and before pulling. [...] 6502 and 65816 use an empty stack."
         macro_rules! push {
             ($value:expr) => {
                 write!(0x0100 | (self.sp.get() as u16), $value);
                 self.sp.update(|sp| sp.wrapping_sub(1));
             };
         }
+
+        // https://www.nesdev.org/wiki/Stack
+        // "In an empty stack, the stack pointer points to the element where the next value will be stored. It is moved after pushing and before pulling. [...] 6502 and 65816 use an empty stack."
         macro_rules! pop {
-            ($value:expr) => {
+            () => {{
                 self.sp.update(|sp| sp.wrapping_add(1));
                 read!(0x0100 | (self.sp.get() as u16))
-            };
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away),
+        //                 increment PC
+        //  3  $0100,S  W  push PCH on stack (with B flag set), decrement S
+        //  4  $0100,S  W  push PCL on stack, decrement S
+        //  *** HIJACK: if NMI is asserted up to this point, then brk will jump to the NMI vector instead ***
+        //  5  $0100,S  W  push P on stack, decrement S
+        //  6   $FFFE   R  fetch PCL
+        //  7   $FFFF   R  fetch PCH
+        macro_rules! brk {
+            () => {{
+                let _ = next_pc!();
+                push!((self.pc.get() >> 8) as u8);
+                push!((self.pc.get() & 0x00FF) as u8);
+
+                // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
+                // HIJACK: probably here?
+
+                let mut p = self.flags.get();
+                p.insert(Flags::B | Flags::U);
+                push!(p.bits());
+
+                let pcl = read!(0xFFFE);
+                self.set_flag(Flags::I, true);
+                let pch = read!(0xFFFF);
+                self.pc.set((pch as u16) << 8 | pcl as u16)
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -------------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  fetch low address byte, increment PC
+        //  3  $0100,S  R  internal operation (predecrement S?)
+        //  4  $0100,S  W  push PCH on stack, decrement S
+        //  5  $0100,S  W  push PCL on stack, decrement S
+        //  6    PC     R  copy low address byte to PCL, fetch high address
+        //                 byte to PCH
+        macro_rules! jsr {
+            () => {{
+                let pcl = next_pc!();
+
+                read!(0x0100 | (self.sp.get() as u16));
+                push!((self.pc.get() >> 8) as u8);
+                push!((self.pc.get() & 0x00FF) as u8);
+                let pch = next_pc!();
+                self.pc.set((pch as u16) << 8 | pcl as u16)
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  R  increment S
+        //  4  $0100,S  R  pull P from stack, increment S
+        //  5  $0100,S  R  pull PCL from stack, increment S
+        //  6  $0100,S  R  pull PCH from stack
+        macro_rules! rti {
+            () => {{
+                let _ = next_pc!();
+                read!(self.sp.get() as u16);
+                let p = pop!();
+                self.flags.set(Flags::from_bits_truncate(p) | Flags::U);
+                let pcl = pop!();
+                let pch = pop!();
+                self.pc.set((pch as u16) << 8 | pcl as u16)
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  R  increment S
+        //  4  $0100,S  R  pull PCL from stack, increment S
+        //  5  $0100,S  R  pull PCH from stack
+        //  6    PC     R  increment PC
+        macro_rules! rts {
+            () => {{
+                let _ = next_pc!();
+                read!(self.sp.get() as u16);
+                let pcl = pop!();
+                let pch = pop!();
+                self.pc.set((pch as u16) << 8 | pcl as u16);
+                next_pc!();
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  W  push register on stack, decrement S
+        macro_rules! pha {
+            () => {{
+                let _ = next_pc!();
+                push!(self.acc.get());
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  W  pull register from stack, increment S
+        macro_rules! php {
+            () => {{
+                let _ = next_pc!();
+                push!((self.flags.get() | Flags::B).bits());
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  R  increment S
+        //  4  $0100,S  R  pull register from stack
+        macro_rules! pla {
+            () => {{
+                let _ = next_pc!();
+                read!(self.sp.get() as u16);
+                self.acc.set(pop!());
+            }};
+        }
+
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
+        //  3  $0100,S  R  increment S
+        //  4  $0100,S  R  pull register from stack
+        macro_rules! plp {
+            () => {{
+                let _ = next_pc!();
+                read!(self.sp.get() as u16);
+                let p = pop!();
+
+                let mut flags = Flags::from_bits_truncate(p);
+                flags.remove(Flags::B);
+                flags.insert(Flags::U); // this must always be 1
+
+                // Note that the effect of changing I is delayed one instruction because the flag is changed after IRQ is polled, delaying the effect until IRQ is polled in the next instruction like with CLI and SEI.
+                if flags.contains(Flags::I){
+                self.delay_intr_flag.set(Some(Flags::I));
+                flags.remove(Flags::I);}
+                self.flags.set(flags);
+            }};
         }
 
         macro_rules! abs {
+            () => {{
+                let addr_lo = next_pc!() as u16;
+                let addr_hi = next_pc!() as u16;
+                (addr_hi << 8) | addr_lo
+            }};
+
             //  #  address R/W description
             // --- ------- --- -------------------------------------------------
             //  1    PC     R  fetch opcode, increment PC
@@ -306,13 +476,10 @@ impl Cpu {
             //  3    PC     R  copy low address byte to PCL, fetch high address
             //                 byte to PCH
             (OpType::Implicit, operations::jmp) => {{
-                let addr_lo = next_pc!() as u16;
-                let addr_hi = next_pc!() as u16;
-                let addr = (addr_hi << 8) | addr_lo;
-                self.pc.set(addr);
+                self.pc.set(abs!());
             }};
 
-            (OpType::Stack, operations::jsr) => {{ todo!("does this go here?") }};
+            (OpType::Stack, $op:expr) => {{ $op }};
 
             //  #  address R/W description
             // --- ------- --- ------------------------------------------
@@ -321,11 +488,7 @@ impl Cpu {
             //  3    PC     R  fetch high byte of address, increment PC
             //  4  address  R  read from effective address
             (OpType::Read, $op: expr) => {{
-                let addr_lo = next_pc!() as u16;
-                let addr_hi = next_pc!() as u16;
-                let addr = (addr_hi << 8) | addr_lo;
-                let value = read!(addr);
-                ReadOperation::operate(&$op, self, value);
+                $op.operate(self, read!(abs!()));
             }};
 
             //  #  address R/W description
@@ -338,9 +501,7 @@ impl Cpu {
             //                 and do the operation on it
             //  6  address  W  write the new value to effective address
             (OpType::Modify, $op: expr) => {{
-                let addr_lo = next_pc!() as u16;
-                let addr_hi = next_pc!() as u16;
-                let addr = (addr_hi << 8) | addr_lo;
+                let addr = abs!();
                 let value = read!(addr);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
@@ -354,10 +515,7 @@ impl Cpu {
             //  3    PC     R  fetch high byte of address, increment PC
             //  4  address  W  write register to effective address
             (OpType::Write, $op: expr) => {{
-                let addr_lo = next_pc!() as u16;
-                let addr_hi = next_pc!() as u16;
-                let addr = (addr_hi << 8) | addr_lo;
-                write!(addr, $op.operate(self));
+                write!(abs!(), $op.operate(self));
             }};
         }
 
@@ -454,7 +612,7 @@ impl Cpu {
                 let (_, value) = $op.modify(self, 0, value);
                 self.acc.set(value);
             }};
-            (OpType::Stack, $op: expr) => {{ todo!() }};
+            (OpType::Stack, $op: expr) => {{ $op }};
         }
 
         macro_rules! zp {
@@ -675,6 +833,9 @@ impl Cpu {
         move || {
             loop {
                 let opcode = next_pc!();
+                if let Some(delayed) = self.delay_intr_flag.take() {
+                    self.flags.update(|f| f | delayed);
+                }
                 include!(concat!(env!("OUT_DIR"), "/out.rs"));
             }
         }
