@@ -215,6 +215,8 @@ pub struct Cpu {
 
     // Use to delay setting the `I` flag by one instrcution
     delay_intr_flag: Cell<Option<Flags>>,
+    // The PC of the currently executing instruction
+    active_pc: Cell<u16>,
 
     io_bus: Cell<u8>,
 }
@@ -241,6 +243,7 @@ impl Cpu {
             rst_line: Cell::new(false),
 
             delay_intr_flag: Cell::default(),
+            active_pc: Cell::default(),
 
             io_bus: Cell::new(0),
         }
@@ -834,6 +837,7 @@ impl Cpu {
         #[coroutine]
         move || {
             loop {
+                self.active_pc.set(self.pc.get());
                 let opcode = next_pc!();
 
                 // TODO: IRQ, NMI, RST
@@ -842,6 +846,69 @@ impl Cpu {
                     self.flags.update(|f| f | delayed);
                 }
                 include!(concat!(env!("OUT_DIR"), "/out.rs"));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use core::panic;
+    use std::{
+        ops::{Coroutine, CoroutineState},
+        pin::Pin,
+    };
+
+    use super::Cpu;
+    use super::CpuTick;
+    use super::Rw;
+
+    #[test]
+    fn klaus_6502_functional_test() {
+        let mut ram = [0; 0x10000];
+        let pgr = std::fs::read("../roms/6502_functional_test.bin").expect("rom is present");
+
+        // Assembler was configured to start at 0
+        // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L620
+        ram[0x0000..pgr.len()].copy_from_slice(&pgr);
+
+        let cpu = Cpu::new();
+        // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L115
+        cpu.pc.set(0x400);
+
+        let mut cpu_routine = cpu.run();
+        let mut same_pc_counter = 0;
+        loop {
+            let active_pc = cpu.active_pc.get();
+            // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L13374-L13377
+            if active_pc == 0x3469 {
+                break;
+            }
+            match Pin::new(&mut cpu_routine).resume(()) {
+                CoroutineState::Yielded(CpuTick { rw, addr }) => match rw {
+                    Rw::Read => cpu.io_bus.set(ram[addr as usize]),
+                    Rw::Write => ram[addr as usize] = cpu.io_bus.get(),
+                },
+                CoroutineState::Complete(_) => {
+                    panic!("cpu stopped, PC was ${active_pc}");
+                }
+            }
+
+            if cpu.active_pc.get() == active_pc {
+                same_pc_counter += 1;
+            } else {
+                same_pc_counter = 0;
+            }
+
+            if same_pc_counter == 100 {
+                panic!(
+                    "
+Stuck at PC 0x{active_pc:X}
+Go here and look up the value: https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst
+It should indicate the error condition.
+                    "
+                )
             }
         }
     }
