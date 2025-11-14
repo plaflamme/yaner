@@ -5,6 +5,8 @@ use bitflags::bitflags;
 
 mod operations;
 
+use operations::{BranchOperation, ModifyOperation, ReadOperation, WriteOperation};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[rustfmt::skip]
 pub enum Op {
@@ -605,7 +607,7 @@ impl Cpu {
         macro_rules! imp {
             (OpType::Read, $op: expr) => {{
                 let value = next_pc!();
-                ReadOperation::operate(&$op, self, value);
+                $op.operate(self, value);
             }};
             (OpType::Modify, $op: expr) => {{
                 let value = self.acc.get();
@@ -833,6 +835,9 @@ impl Cpu {
         move || {
             loop {
                 let opcode = next_pc!();
+
+                // TODO: IRQ, NMI, RST
+
                 if let Some(delayed) = self.delay_intr_flag.take() {
                     self.flags.update(|f| f | delayed);
                 }
@@ -840,39 +845,4 @@ impl Cpu {
             }
         }
     }
-}
-
-trait BranchOperation {
-    fn branch(&self, cpu: &Cpu) -> bool;
-}
-
-trait ImplicitOperation {
-    fn run(&self, cpu: &Cpu);
-}
-
-// Implicit operations still read, but they don't use the value
-impl<T> ReadOperation for T
-where
-    T: ImplicitOperation,
-{
-    fn operate(&self, cpu: &Cpu, _value: u8) {
-        self.run(cpu);
-    }
-}
-
-trait ModifyOperation {
-    // this includes addr because TAS, SHX and SHY operate on the high byte of the target address
-    //   instead of the value
-    fn modify(&self, cpu: &Cpu, addr: u16, value: u8) -> (u16, u8) {
-        (addr, self.operate(cpu, value))
-    }
-    fn operate(&self, cpu: &Cpu, value: u8) -> u8;
-}
-
-trait ReadOperation {
-    fn operate(&self, cpu: &Cpu, value: u8);
-}
-
-trait WriteOperation {
-    fn operate(&self, cpu: &Cpu) -> u8;
 }

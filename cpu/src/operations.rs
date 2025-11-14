@@ -2,6 +2,41 @@
 #![allow(dead_code)]
 use super::*;
 
+pub(super) trait BranchOperation {
+    fn branch(&self, cpu: &Cpu) -> bool;
+}
+
+pub(super) trait ImplicitOperation {
+    fn run(&self, cpu: &Cpu);
+}
+
+// Implicit operations still read, but they don't use the value
+impl<T> ReadOperation for T
+where
+    T: ImplicitOperation,
+{
+    fn operate(&self, cpu: &Cpu, _value: u8) {
+        self.run(cpu);
+    }
+}
+
+pub(super) trait ModifyOperation {
+    // this includes addr because TAS, SHX and SHY operate on the high byte of the target address
+    //   instead of the value
+    fn modify(&self, cpu: &Cpu, addr: u16, value: u8) -> (u16, u8) {
+        (addr, self.operate(cpu, value))
+    }
+    fn operate(&self, cpu: &Cpu, value: u8) -> u8;
+}
+
+pub(super) trait ReadOperation {
+    fn operate(&self, cpu: &Cpu, value: u8);
+}
+
+pub(super) trait WriteOperation {
+    fn operate(&self, cpu: &Cpu) -> u8;
+}
+
 // http://nesdev.com/6502_cpu.txt
 // http://nesdev.com/undocumented_opcodes.txt
 // http://www.oxyron.de/html/opcodes02.html
