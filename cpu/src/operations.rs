@@ -474,7 +474,7 @@ impl WriteOperation for sty {
 // http://obelisk.me.uk/6502/reference.html#CLC
 pub struct clc;
 impl ImplicitOperation for clc {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::C, false);
     }
 }
@@ -482,7 +482,7 @@ impl ImplicitOperation for clc {
 // http://obelisk.me.uk/6502/reference.html#CLD
 pub struct cld;
 impl ImplicitOperation for cld {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::D, false);
     }
 }
@@ -490,7 +490,7 @@ impl ImplicitOperation for cld {
 // http://obelisk.me.uk/6502/reference.html#CLI
 pub struct cli;
 impl ImplicitOperation for cli {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::I, false);
     }
 }
@@ -498,35 +498,35 @@ impl ImplicitOperation for cli {
 // http://obelisk.me.uk/6502/reference.html#CLV
 pub struct clv;
 impl ImplicitOperation for clv {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::V, false);
     }
 }
 
 pub struct dex;
 impl ImplicitOperation for dex {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.x.set(dec.operate(cpu, cpu.x.get()));
     }
 }
 
 pub struct dey;
 impl ImplicitOperation for dey {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.y.set(dec.operate(cpu, cpu.y.get()));
     }
 }
 
 pub struct inx;
 impl ImplicitOperation for inx {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.x.set(inc.operate(cpu, cpu.x.get()));
     }
 }
 
 pub struct iny;
 impl ImplicitOperation for iny {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.y.set(inc.operate(cpu, cpu.y.get()));
     }
 }
@@ -534,16 +534,13 @@ impl ImplicitOperation for iny {
 // http://obelisk.me.uk/6502/reference.html#NOP
 pub struct nop;
 impl ImplicitOperation for nop {
-    fn operate(&self, _: &Cpu) {}
-}
-impl ReadOperation for nop {
-    fn operate(&self, _: &Cpu, _: u8) {}
+    fn run(&self, _: &Cpu) {}
 }
 
 // http://obelisk.me.uk/6502/reference.html#SEC
 pub struct sec;
 impl ImplicitOperation for sec {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::C, true);
     }
 }
@@ -551,7 +548,7 @@ impl ImplicitOperation for sec {
 // http://obelisk.me.uk/6502/reference.html#SED
 pub struct sed;
 impl ImplicitOperation for sed {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::D, true);
     }
 }
@@ -559,7 +556,7 @@ impl ImplicitOperation for sed {
 // http://obelisk.me.uk/6502/reference.html#SEI
 pub struct sei;
 impl ImplicitOperation for sei {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.set_flag(Flags::I, true);
     }
 }
@@ -567,7 +564,7 @@ impl ImplicitOperation for sei {
 // http://obelisk.me.uk/6502/reference.html#TAY
 pub struct tay;
 impl ImplicitOperation for tay {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.y.set(cpu.acc.get());
         cpu.set_flags_from(cpu.y.get());
     }
@@ -576,7 +573,7 @@ impl ImplicitOperation for tay {
 // http://obelisk.me.uk/6502/reference.html#TAX
 pub struct tax;
 impl ImplicitOperation for tax {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.x.set(cpu.acc.get());
         cpu.set_flags_from(cpu.x.get());
     }
@@ -585,7 +582,7 @@ impl ImplicitOperation for tax {
 // http://obelisk.me.uk/6502/reference.html#TSX
 pub struct tsx;
 impl ImplicitOperation for tsx {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         let sp = cpu.sp.get();
         cpu.x.set(sp);
         cpu.set_flags_from(sp);
@@ -595,7 +592,7 @@ impl ImplicitOperation for tsx {
 // http://obelisk.me.uk/6502/reference.html#TXA
 pub struct txa;
 impl ImplicitOperation for txa {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.acc.set(cpu.x.get());
         cpu.set_flags_from_acc();
     }
@@ -604,7 +601,7 @@ impl ImplicitOperation for txa {
 // http://obelisk.me.uk/6502/reference.html#TXS
 pub struct txs;
 impl ImplicitOperation for txs {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.sp.set(cpu.x.get());
     }
 }
@@ -612,10 +609,15 @@ impl ImplicitOperation for txs {
 // http://obelisk.me.uk/6502/reference.html#TYA
 pub struct tya;
 impl ImplicitOperation for tya {
-    fn operate(&self, cpu: &Cpu) {
+    fn run(&self, cpu: &Cpu) {
         cpu.acc.set(cpu.y.get());
         cpu.set_flags_from_acc();
     }
 }
 
-mod immediate {}
+pub struct xaa;
+impl ImplicitOperation for xaa {
+    fn run(&self, cpu: &Cpu) {
+        todo!()
+    }
+}

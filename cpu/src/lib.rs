@@ -1,5 +1,5 @@
 #![feature(coroutines, coroutine_trait)]
-use std::{cell::Cell, ops::Coroutine};
+use std::{cell::Cell, io::Read, ops::Coroutine};
 
 use bitflags::bitflags;
 
@@ -41,11 +41,12 @@ pub enum AddressingMode {
 
 #[allow(unused)]
 enum OpType {
-    Branch,
     Read,
     Modify,
     Write,
+    Branch,
     Stack,
+    Implicit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -298,10 +299,66 @@ impl Cpu {
         }
 
         macro_rules! abs {
-            (OpType::Stack, $op: expr) => {{ todo!() }};
-            (OpType::Read, $op: expr) => {{ todo!() }};
-            (OpType::Modify, $op: expr) => {{ todo!() }};
-            (OpType::Write, $op: expr) => {{ todo!() }};
+            //  #  address R/W description
+            // --- ------- --- -------------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch low address byte, increment PC
+            //  3    PC     R  copy low address byte to PCL, fetch high address
+            //                 byte to PCH
+            (OpType::Implicit, operations::jmp) => {{
+                let addr_lo = next_pc!() as u16;
+                let addr_hi = next_pc!() as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                self.pc.set(addr);
+            }};
+
+            (OpType::Stack, operations::jsr) => {{ todo!("does this go here?") }};
+
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch low byte of address, increment PC
+            //  3    PC     R  fetch high byte of address, increment PC
+            //  4  address  R  read from effective address
+            (OpType::Read, $op: expr) => {{
+                let addr_lo = next_pc!() as u16;
+                let addr_hi = next_pc!() as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                let value = read!(addr);
+                ReadOperation::operate(&$op, self, value);
+            }};
+
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch low byte of address, increment PC
+            //  3    PC     R  fetch high byte of address, increment PC
+            //  4  address  R  read from effective address
+            //  5  address  W  write the value back to effective address,
+            //                 and do the operation on it
+            //  6  address  W  write the new value to effective address
+            (OpType::Modify, $op: expr) => {{
+                let addr_lo = next_pc!() as u16;
+                let addr_hi = next_pc!() as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                let value = read!(addr);
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            }};
+
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch low byte of address, increment PC
+            //  3    PC     R  fetch high byte of address, increment PC
+            //  4  address  W  write register to effective address
+            (OpType::Write, $op: expr) => {{
+                let addr_lo = next_pc!() as u16;
+                let addr_hi = next_pc!() as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                write!(addr, $op.operate(self));
+            }};
         }
 
         macro_rules! abs_indexed {
@@ -336,9 +393,9 @@ impl Cpu {
             (OpType::Read, $op: expr, $index: expr) => {{
                 let (addr, value, oops) = abs_indexed!($index);
                 if oops {
-                    ReadOperation::operate(&$op, self, read!(addr));
+                    $op.operate(self, read!(addr));
                 } else {
-                    ReadOperation::operate(&$op, self, value);
+                    $op.operate(self, value);
                 }
             }};
             //  #   address  R/W description
@@ -387,39 +444,201 @@ impl Cpu {
             };
         }
 
-        macro_rules! zp {
-            (OpType::Read, $op: expr) => {{ todo!() }};
-            (OpType::Modify, $op: expr) => {{ todo!() }};
-            (OpType::Write, $op: expr) => {{ todo!() }};
-        }
-
         macro_rules! imp {
-            (OpType::Read, $op: expr) => {{ todo!() }};
-            (OpType::Modify, $op: expr) => {{ todo!() }};
-            (OpType::Write, $op: expr) => {{ todo!() }};
+            (OpType::Read, $op: expr) => {{
+                let value = next_pc!();
+                ReadOperation::operate(&$op, self, value);
+            }};
+            (OpType::Modify, $op: expr) => {{
+                let value = self.acc.get();
+                let (_, value) = $op.modify(self, 0, value);
+                self.acc.set(value);
+            }};
             (OpType::Stack, $op: expr) => {{ todo!() }};
         }
 
+        macro_rules! zp {
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch address, increment PC
+            //  3  address  R  read from effective address
+            (OpType::Read, $op: expr) => {{
+                let addr = next_pc!() as u16;
+                let value = read!(addr);
+                $op.operate(self, value);
+            }};
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch address, increment PC
+            //  3  address  R  read from effective address
+            //  4  address  W  write the value back to effective address,
+            //                 and do the operation on it
+            //  5  address  W  write the new value to effective address
+            (OpType::Modify, $op: expr) => {{
+                let addr = next_pc!() as u16;
+                let value = read!(addr);
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            }};
+
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch address, increment PC
+            //  3  address  W  write register to effective address
+            (OpType::Write, $op: expr) => {{
+                let addr = next_pc!() as u16;
+                write!(addr, $op.operate(self));
+            }};
+        }
+
         macro_rules! imm {
-            (OpType::Read, $op: expr) => {{ todo!() }};
-            (OpType::Modify, $op: expr) => {{ todo!() }};
-            (OpType::Write, $op: expr) => {{ todo!() }};
+            //  #  address R/W description
+            // --- ------- --- ------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  fetch value, increment PC
+            (OpType::Read, $op: expr) => {{
+                let value = next_pc!();
+                $op.operate(self, value);
+            }};
         }
 
         macro_rules! ind {
-            (OpType::Read, $op: expr) => {{ todo!() }};
-            (OpType::Modify, $op: expr) => {{ todo!() }};
-            (OpType::Write, $op: expr) => {{ todo!() }};
+            //  #   address  R/W description
+            // --- --------- --- ------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch pointer address low, increment PC
+            //  3     PC      R  fetch pointer address high, increment PC
+            //  4   pointer   R  fetch low address to latch
+            //  5  pointer+1* R  fetch PCH, copy latch to PCL
+            //
+            // Note: * The PCH will always be fetched from the same page
+            //         than PCL, i.e. page boundary crossing is not handled.
+            (OpType::Implicit, operations::jmp) => {{
+                let ptr_lo = next_pc!() as u16;
+                let ptr_hi = next_pc!() as u16;
+                let ptr = (ptr_hi << 8) | ptr_lo;
+                let addr_lo = read!(ptr) as u16;
+                let ptr_plus_1 = (ptr & 0xFF00) | ptr_lo.wrapping_add(1) as u16;
+                let addr_hi = read!(ptr_plus_1) as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                self.pc.set(addr);
+            }};
         }
 
         macro_rules! ind_indexed {
-            ($index: expr, OpType::Read, $op: expr) => {{ todo!() }};
-            ($index: expr, OpType::Modify, $op: expr) => {{ todo!() }};
-            ($index: expr, OpType::Write, $op: expr) => {{ todo!() }};
+            ($index: expr) => {{
+                let ptr = next_pc!();
+                read!(ptr as u16);
+                let addr_lo = read!(ptr.wrapping_add($index) as u16) as u16;
+                let addr_hi = read!(ptr.wrapping_add($index).wrapping_add(1) as u16) as u16;
+                let addr = (addr_hi << 8) | addr_lo;
+                let value = read!(addr);
+                (addr, value)
+            }};
+
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  read from the address, add X to it
+            //  4   pointer+X   R  fetch effective address low
+            //  5  pointer+X+1  R  fetch effective address high
+            //  6    address    R  read from effective address
+            //
+            // Note: The effective address is always fetched from zero page,
+            //       i.e. the zero page boundary crossing is not handled.
+            ($index: expr, OpType::Read, $op: expr) => {{
+                let (_, value) = ind_indexed!($index);
+                $op.operate(self, value);
+            }};
+
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  read from the address, add X to it
+            //  4   pointer+X   R  fetch effective address low
+            //  5  pointer+X+1  R  fetch effective address high
+            //  6    address    R  read from effective address
+            //  7    address    W  write the value back to effective address,
+            //                     and do the operation on it
+            //  8    address    W  write the new value to effective address
+            //
+            // Note: The effective address is always fetched from zero page,
+            //       i.e. the zero page boundary crossing is not handled.
+            ($index: expr, OpType::Modify, $op: expr) => {{
+                let (addr, value) = ind_indexed!($index);
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            }};
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  read from the address, add X to it
+            //  4   pointer+X   R  fetch effective address low
+            //  5  pointer+X+1  R  fetch effective address high
+            //  6    address    W  write to effective address
+            //
+            // Note: The effective address is always fetched from zero page,
+            //       i.e. the zero page boundary crossing is not handled.
+            ($index: expr, OpType::Write, $op: expr) => {{
+                let (addr, _) = ind_indexed!($index);
+                write!(addr, $op.operate(self));
+            }};
         }
 
         macro_rules! rel {
-            (OpType::Branch, $op: expr) => {{ todo!() }};
+            //  #   address  R/W description
+            // --- --------- --- ---------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch operand, increment PC
+            //  3     PC      R  Fetch opcode of next instruction,
+            //                   If branch is taken, add operand to PCL.
+            //                   Otherwise increment PC.
+            //  4+    PC*     R  Fetch opcode of next instruction.
+            //                   Fix PCH. If it did not change, increment PC.
+            //  5!    PC      R  Fetch opcode of next instruction,
+            //                   increment PC.
+            //
+            // Notes: The opcode fetch of the next instruction is included to
+            //        this diagram for illustration purposes. When determining
+            //        real execution times, remember to subtract the last
+            //        cycle.
+            //
+            //        * The high byte of Program Counter (PCH) may be invalid
+            //          at this time, i.e. it may be smaller or bigger by $100.
+            //
+            //        + If branch is taken, this cycle will be executed.
+            //
+            //        ! If branch occurs to different page, this cycle will be
+            //          executed.
+            (OpType::Branch, $op: expr) => {{
+                let operand = next_pc!() as i8;
+                if $op.branch(self) {
+                    let pc = self.pc.get();
+                    let pcl = (pc & 0x00FF) as u8;
+                    let pch = ((pc & 0xFF00) >> 8) as u8;
+                    read!(pc);
+
+                    let (pcl, carry) = pcl.overflowing_add_signed(operand);
+                    let pch = if carry {
+                        // page boundary crossing incurs an additional cycle
+                        let _ = read!(pc);
+                        pch.wrapping_add_signed(operand.signum())
+                    } else {
+                        pch
+                    };
+
+                    let new_pc = (pch as u16) << 8 | pcl as u16;
+                    self.pc.set(new_pc);
+                }
+            }};
         }
 
         macro_rules! zp_indexed {
@@ -432,7 +651,7 @@ impl Cpu {
             }};
             ($index: expr, OpType::Read, $op: expr) => {{
                 let (_, value) = zp_indexed!($index);
-                ReadOperation::operate(&$op, self, value);
+                $op.operate(self, value);
             }};
             ($index: expr, OpType::Modify, $op: expr) => {
                 let (addr, value) = zp_indexed!($index);
@@ -443,6 +662,12 @@ impl Cpu {
             ($index: expr, OpType::Write, $op: expr) => {
                 let (addr, _) = zp_indexed!($index);
                 write!(addr, $op.operate(self));
+            };
+        }
+
+        macro_rules! kil {
+            () => {
+                return
             };
         }
 
@@ -461,7 +686,17 @@ trait BranchOperation {
 }
 
 trait ImplicitOperation {
-    fn operate(&self, cpu: &Cpu);
+    fn run(&self, cpu: &Cpu);
+}
+
+// Implicit operations still read, but they don't use the value
+impl<T> ReadOperation for T
+where
+    T: ImplicitOperation,
+{
+    fn operate(&self, cpu: &Cpu, _value: u8) {
+        self.run(cpu);
+    }
 }
 
 trait ModifyOperation {

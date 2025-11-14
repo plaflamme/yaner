@@ -106,7 +106,7 @@ impl ToTokens for Op {
 #[derive(Debug, Clone, Copy, Default, EnumString)]
 pub enum AddressingMode {
     #[default]
-    Imp,
+    Imp, // Implicit from the op, things like RTS or BRK
     #[strum(serialize = "imm")]
     Imm,
     #[strum(serialize = "zp")]
@@ -141,6 +141,12 @@ impl ToTokens for OpCode {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let mode = OpType::from_op(self.op);
         let op = self.op;
+
+        if matches!(op, Op::KIL) {
+            let tt = quote!(kil!());
+            tokens.append_all(tt);
+            return;
+        }
         let tt = match self.mode {
             AddressingMode::Abs => quote!(abs!(#mode, #op)),
             AddressingMode::AbX => quote!(abs_indexed!(#mode, #op, self.x.get())),
@@ -165,6 +171,7 @@ enum OpType {
     Write,
     Branch,
     Stack,
+    Implicit,
 }
 
 impl OpType {
@@ -216,7 +223,7 @@ impl OpType {
             INY => OpType::Read,
             ISC => OpType::Modify,
 
-            JMP => OpType::Read,
+            JMP => OpType::Implicit,
 
             JSR => OpType::Stack,
             KIL => OpType::Read,
@@ -288,6 +295,7 @@ impl ToTokens for OpType {
             OpType::Write => quote!(OpType::Write),
             OpType::Branch => quote!(OpType::Branch),
             OpType::Stack => quote!(OpType::Stack),
+            OpType::Implicit => quote!(OpType::Implicit),
         };
         tokens.append_all(tt);
     }
