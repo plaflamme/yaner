@@ -39,6 +39,15 @@ pub enum AddressingMode {
     IdY, // IndirectY
 }
 
+#[allow(unused)]
+enum OpType {
+    Branch,
+    Read,
+    Modify,
+    Write,
+    Stack,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpCode(pub Op, pub AddressingMode);
 
@@ -165,6 +174,8 @@ bitflags!(
     }
 );
 
+#[derive(Default)]
+#[allow(unused)]
 struct NmiLine {
     // state of the NMI line
     line: bool,
@@ -172,22 +183,13 @@ struct NmiLine {
     state: bool,
 }
 
-impl Default for NmiLine {
-    fn default() -> Self {
-        Self {
-            line: false,
-            state: false,
-        }
-    }
-}
-
 pub enum Rw {
     Read,
     Write,
 }
 pub struct CpuTick {
-    rw: Rw,
-    addr: u16,
+    pub rw: Rw,
+    pub addr: u16,
 }
 
 pub struct Cpu {
@@ -198,10 +200,13 @@ pub struct Cpu {
     sp: Cell<u8>,
     pc: Cell<u16>,
 
+    #[allow(unused)]
     // /NMI line - edge sensitive - high to low
     nmi_line: Cell<NmiLine>,
+    #[allow(unused)]
     // IRQ line - level sensitive
     irq_line: Cell<bool>,
+    #[allow(unused)]
     // /RESET line - held low to reset CPU
     rst_line: Cell<bool>,
 
@@ -292,129 +297,160 @@ impl Cpu {
             };
         }
 
+        macro_rules! abs {
+            (OpType::Stack, $op: expr) => {{ todo!() }};
+            (OpType::Read, $op: expr) => {{ todo!() }};
+            (OpType::Modify, $op: expr) => {{ todo!() }};
+            (OpType::Write, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! abs_indexed {
+            ($index: expr) => {{
+                let addr_lo = next_pc!();
+                let addr_hi = next_pc!() as u16;
+                let (addr_lo_oops, oops) = addr_lo.overflowing_add($index);
+                let addr = addr_hi | addr_lo_oops as u16;
+                let value = read!(addr);
+                let addr = (addr_hi | addr_lo as u16).wrapping_add($index as u16);
+                (addr, value, oops)
+            }};
+
+            //  #   address  R/W description
+            // --- --------- --- ------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch low byte of address, increment PC
+            //  3     PC      R  fetch high byte of address,
+            //                   add index register to low address byte,
+            //                   increment PC
+            //  4  address+I* R  read from effective address,
+            //                   fix the high byte of effective address
+            //  5+ address+I  R  re-read from effective address
+            //
+            //  Notes: I denotes either index register (X or Y).
+            //
+            //        * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100.
+            //
+            //        + This cycle will be executed only if the effective address
+            //          was invalid during cycle #4, i.e. page boundary was crossed.
+            (OpType::Read, $op: expr, $index: expr) => {{
+                let (addr, value, oops) = abs_indexed!($index);
+                if oops {
+                    ReadOperation::operate(&$op, self, read!(addr));
+                } else {
+                    ReadOperation::operate(&$op, self, value);
+                }
+            }};
+            //  #   address  R/W description
+            // --- --------- --- ------------------------------------------
+            //  1    PC       R  fetch opcode, increment PC
+            //  2    PC       R  fetch low byte of address, increment PC
+            //  3    PC       R  fetch high byte of address,
+            //                   add index register X to low address byte,
+            //                   increment PC
+            //  4  address+X* R  read from effective address,
+            //                   fix the high byte of effective address
+            //  5  address+X  R  re-read from effective address
+            //  6  address+X  W  write the value back to effective address,
+            //                   and do the operation on it
+            //  7  address+X  W  write the new value to effective address
+            //
+            // Notes: * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100.
+            (OpType::Modify, $op: expr, $index: expr) => {
+                let (addr, _, _) = abs_indexed!($index);
+                let value = read!(addr);
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            };
+            //  #   address  R/W description
+            // --- --------- --- ------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch low byte of address, increment PC
+            //  3     PC      R  fetch high byte of address,
+            //                   add index register to low address byte,
+            //                   increment PC
+            //  4  address+I* R  read from effective address,
+            //                   fix the high byte of effective address
+            //  5  address+I  W  write to effective address
+            //
+            // Notes: I denotes either index register (X or Y).
+            //
+            //        * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100. Because
+            //          the processor cannot undo a write to an invalid
+            //          address, it always reads from the address first.
+            (OpType::Write, $op: expr, $index: expr) => {
+                let (addr, _, _) = abs_indexed!($index);
+                write!(addr, $op.operate(self));
+            };
+        }
+
+        macro_rules! zp {
+            (OpType::Read, $op: expr) => {{ todo!() }};
+            (OpType::Modify, $op: expr) => {{ todo!() }};
+            (OpType::Write, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! imp {
+            (OpType::Read, $op: expr) => {{ todo!() }};
+            (OpType::Modify, $op: expr) => {{ todo!() }};
+            (OpType::Write, $op: expr) => {{ todo!() }};
+            (OpType::Stack, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! imm {
+            (OpType::Read, $op: expr) => {{ todo!() }};
+            (OpType::Modify, $op: expr) => {{ todo!() }};
+            (OpType::Write, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! ind {
+            (OpType::Read, $op: expr) => {{ todo!() }};
+            (OpType::Modify, $op: expr) => {{ todo!() }};
+            (OpType::Write, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! ind_indexed {
+            ($index: expr, OpType::Read, $op: expr) => {{ todo!() }};
+            ($index: expr, OpType::Modify, $op: expr) => {{ todo!() }};
+            ($index: expr, OpType::Write, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! rel {
+            (OpType::Branch, $op: expr) => {{ todo!() }};
+        }
+
+        macro_rules! zp_indexed {
+            ($index: expr) => {{
+                let addr = next_pc!();
+                read!(addr as u16);
+                let addr = addr.wrapping_add($index) as u16;
+                let value = read!(addr);
+                (addr, value)
+            }};
+            ($index: expr, OpType::Read, $op: expr) => {{
+                let (_, value) = zp_indexed!($index);
+                ReadOperation::operate(&$op, self, value);
+            }};
+            ($index: expr, OpType::Modify, $op: expr) => {
+                let (addr, value) = zp_indexed!($index);
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            };
+            ($index: expr, OpType::Write, $op: expr) => {
+                let (addr, _) = zp_indexed!($index);
+                write!(addr, $op.operate(self));
+            };
+        }
+
         #[coroutine]
         move || {
             loop {
-                let OpCode(op, mode) = OpCode::decode(next_pc!());
-                macro_rules! zp_indexed {
-                    ( $index: expr ) => {{
-                        let addr = next_pc!();
-                        read!(addr as u16);
-                        let addr = addr.wrapping_add($index) as u16;
-                        let value = read!(addr);
-
-                        match op.implementation() {
-                            OpImpl::Read(r) => {
-                                //  #   address  R/W description
-                                // --- --------- --- ------------------------------------------
-                                //  1     PC      R  fetch opcode, increment PC
-                                //  2     PC      R  fetch address, increment PC
-                                //  3   address   R  read from address, add index register to it
-                                //  4  address+I* R  read from effective address
-                                //  Notes: I denotes either index register (X or Y).
-                                //
-                                //        * The high byte of the effective address is always zero,
-                                //          i.e. page boundary crossings are not handled.
-                                r.operate(self, value);
-                            }
-                            OpImpl::Modify(m) => {
-                                //  #   address  R/W description
-                                // --- --------- --- ---------------------------------------------
-                                //  1     PC      R  fetch opcode, increment PC
-                                //  2     PC      R  fetch address, increment PC
-                                //  3   address   R  read from address, add index register X to it
-                                //  4  address+X* R  read from effective address
-                                //  5  address+X* W  write the value back to effective address,
-                                //                   and do the operation on it
-                                //  6  address+X* W  write the new value to effective address
-                                //
-                                // Note: * The high byte of the effective address is always zero,
-                                //         i.e. page boundary crossings are not handled.
-                                write!(addr, value);
-                                let (_, value) = m.modify(self, addr, value);
-                                write!(addr, value);
-                            }
-                            OpImpl::Write(w) => {
-                                //  #   address  R/W description
-                                // --- --------- --- -------------------------------------------
-                                //  1     PC      R  fetch opcode, increment PC
-                                //  2     PC      R  fetch address, increment PC
-                                //  3   address   R  read from address, add index register to it
-                                //  4  address+I* W  write to effective address
-                                //
-                                // Notes: I denotes either index register (X or Y).
-                                //
-                                //        * The high byte of the effective address is always zero,
-                                //          i.e. page boundary crossings are not handled.}
-                                write!(addr, w.operate(self));
-                            }
-                            _ => panic!("operation {:?} not supported in Zero Page X mode", op),
-                        }
-                    }};
-                }
-
-                match mode {
-                    AddressingMode::Imp => todo!(),
-                    AddressingMode::Acc => {
-                        //  #  address R/W description
-                        // --- ------- --- -----------------------------------------------
-                        //  1    PC     R  fetch opcode, increment PC
-                        //  2    PC     R  read next instruction byte (and throw it away)
-                        read!(self.pc.get());
-                        match op.implementation() {
-                            OpImpl::Modify(m) => {
-                                self.acc.update(|acc| m.operate(self, acc));
-                            }
-                            _ => panic!("operation {:?} not supported in Accumulator mode", op),
-                        }
-                    }
-                    AddressingMode::Imm => todo!(),
-                    AddressingMode::Zp0 => {
-                        let addr = next_pc!() as u16;
-                        let value = read!(addr);
-                        match op.implementation() {
-                            OpImpl::Read(r) => {
-                                //  #   address  R/W description
-                                // --- --------- --- ------------------------------------------
-                                //  1     PC      R  fetch opcode, increment PC
-                                //  2     PC      R  fetch address, increment PC
-                                //  3   address   R  read from effective address
-                                r.operate(self, value);
-                            }
-                            OpImpl::Modify(m) => {
-                                //  #  address R/W description
-                                // --- ------- --- ------------------------------------------
-                                //  1    PC     R  fetch opcode, increment PC
-                                //  2    PC     R  fetch address, increment PC
-                                //  3  address  R  read from effective address
-                                //  4  address  W  write the value back to effective address,
-                                //                 and do the operation on it
-                                //  5  address  W  write the new value to effective address
-                                write!(addr, value);
-                                let (_, result) = m.modify(self, addr, value);
-                                write!(addr, result);
-                            }
-                            OpImpl::Write(w) => {
-                                //  #  address R/W description
-                                // --- ------- --- ------------------------------------------
-                                //  1    PC     R  fetch opcode, increment PC
-                                //  2    PC     R  fetch address, increment PC
-                                //  3  address  W  write register to effective address
-                                write!(addr, w.operate(self));
-                            }
-                            _ => panic!("operation {:?} not supported in Zero Page mode", op),
-                        }
-                    }
-                    AddressingMode::ZpX => zp_indexed!(self.x.get()),
-                    AddressingMode::ZpY => zp_indexed!(self.y.get()),
-                    AddressingMode::Rel => todo!(),
-                    AddressingMode::Abs => todo!(),
-                    AddressingMode::AbX => todo!(),
-                    AddressingMode::AbY => todo!(),
-                    AddressingMode::Ind => todo!(),
-                    AddressingMode::IdX => todo!(),
-                    AddressingMode::IdY => todo!(),
-                }
+                let opcode = next_pc!();
+                include!(concat!(env!("OUT_DIR"), "/out.rs"));
             }
         }
     }
@@ -443,29 +479,4 @@ trait ReadOperation {
 
 trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
-}
-
-enum OpImpl {
-    Read(&'static dyn ReadOperation),
-    Modify(&'static dyn ModifyOperation),
-    Write(&'static dyn WriteOperation),
-    Implicit(&'static dyn ImplicitOperation),
-}
-
-impl Op {
-    fn implementation(&self) -> OpImpl {
-        use Op::*;
-        use operations::*;
-
-        match self {
-            ADC => OpImpl::Read(&adc),
-            AND => OpImpl::Read(&and),
-            ASL => OpImpl::Modify(&asl),
-            LDA => OpImpl::Read(&lda),
-            STA => OpImpl::Write(&sta),
-            TAX => OpImpl::Implicit(&tax),
-            TAY => OpImpl::Implicit(&tay),
-            _ => unimplemented!(),
-        }
-    }
 }

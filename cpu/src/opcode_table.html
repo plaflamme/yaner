@@ -1,0 +1,328 @@
+<table>
+    <tbody>
+        <tr>
+            <th></th>
+            <th>+00</th>
+            <th>+01</th>
+            <th>+02</th>
+            <th>+03</th>
+            <th>+04</th>
+            <th>+05</th>
+            <th>+06</th>
+            <th>+07</th>
+            <th>+08</th>
+            <th>+09</th>
+            <th>+0A</th>
+            <th>+0B</th>
+            <th>+0C</th>
+            <th>+0D</th>
+            <th>+0E</th>
+            <th>+0F</th>
+            <th>+10</th>
+            <th>+11</th>
+            <th>+12</th>
+            <th>+13</th>
+            <th>+14</th>
+            <th>+15</th>
+            <th>+16</th>
+            <th>+17</th>
+            <th>+18</th>
+            <th>+19</th>
+            <th>+1A</th>
+            <th>+1B</th>
+            <th>+1C</th>
+            <th>+1D</th>
+            <th>+1E</th>
+            <th>+1F
+            </th>
+        </tr>
+        <tr valign="top">
+            <td>00</td>
+            <td style="background:#FCC">BRK<br /></td>
+            <td style="background:#CFC">ORA<br />(d,x)</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>SLO</b><br />(d,x)</td>
+            <td style="background:#FCC"><b>NOP</b><br />d</td>
+            <td style="background:#CFC">ORA<br />d</td>
+            <td style="background:#CCF">ASL<br />d</td>
+            <td style="background:#DDD"><b>SLO</b><br />d</td>
+            <td style="background:#FCC">PHP<br /></td>
+            <td style="background:#CFC">ORA<br />#i</td>
+            <td style="background:#CCF">ASL<br /></td>
+            <td style="background:#DDD"><b>ANC</b><br />#i</td>
+            <td style="background:#FCC"><b>NOP</b><br />a</td>
+            <td style="background:#CFC">ORA<br />a</td>
+            <td style="background:#CCF">ASL<br />a</td>
+            <td style="background:#DDD"><b>SLO</b><br />a</td>
+            <td style="background:#FCC">BPL<br />*+d</td>
+            <td style="background:#CFC">ORA<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>SLO</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">ORA<br />d,x</td>
+            <td style="background:#CCF">ASL<br />d,x</td>
+            <td style="background:#DDD"><b>SLO</b><br />d,x</td>
+            <td style="background:#FCC">CLC<br /></td>
+            <td style="background:#CFC">ORA<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>SLO</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">ORA<br />a,x</td>
+            <td style="background:#CCF">ASL<br />a,x</td>
+            <td style="background:#DDD"><b>SLO</b><br />a,x
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>20</td>
+            <td style="background:#FCC">JSR<br />a</td>
+            <td style="background:#CFC">AND<br />(d,x)</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>RLA</b><br />(d,x)</td>
+            <td style="background:#FCC">BIT<br />d</td>
+            <td style="background:#CFC">AND<br />d</td>
+            <td style="background:#CCF">ROL<br />d</td>
+            <td style="background:#DDD"><b>RLA</b><br />d</td>
+            <td style="background:#FCC">PLP<br /></td>
+            <td style="background:#CFC">AND<br />#i</td>
+            <td style="background:#CCF">ROL<br /></td>
+            <td style="background:#DDD"><b>ANC</b><br />#i</td>
+            <td style="background:#FCC">BIT<br />a</td>
+            <td style="background:#CFC">AND<br />a</td>
+            <td style="background:#CCF">ROL<br />a</td>
+            <td style="background:#DDD"><b>RLA</b><br />a</td>
+            <td style="background:#FCC">BMI<br />*+d</td>
+            <td style="background:#CFC">AND<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>RLA</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">AND<br />d,x</td>
+            <td style="background:#CCF">ROL<br />d,x</td>
+            <td style="background:#DDD"><b>RLA</b><br />d,x</td>
+            <td style="background:#FCC">SEC<br /></td>
+            <td style="background:#CFC">AND<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>RLA</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">AND<br />a,x</td>
+            <td style="background:#CCF">ROL<br />a,x</td>
+            <td style="background:#DDD"><b>RLA</b><br />a,x
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>40</td>
+            <td style="background:#FCC">RTI<br /></td>
+            <td style="background:#CFC">EOR<br />(d,x)</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>SRE</b><br />(d,x)</td>
+            <td style="background:#FCC"><b>NOP</b><br />d</td>
+            <td style="background:#CFC">EOR<br />d</td>
+            <td style="background:#CCF">LSR<br />d</td>
+            <td style="background:#DDD"><b>SRE</b><br />d</td>
+            <td style="background:#FCC">PHA<br /></td>
+            <td style="background:#CFC">EOR<br />#i</td>
+            <td style="background:#CCF">LSR<br /></td>
+            <td style="background:#DDD"><b>ALR</b><br />#i</td>
+            <td style="background:#FCC">JMP<br />a</td>
+            <td style="background:#CFC">EOR<br />a</td>
+            <td style="background:#CCF">LSR<br />a</td>
+            <td style="background:#DDD"><b>SRE</b><br />a</td>
+            <td style="background:#FCC">BVC<br />*+d</td>
+            <td style="background:#CFC">EOR<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>SRE</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">EOR<br />d,x</td>
+            <td style="background:#CCF">LSR<br />d,x</td>
+            <td style="background:#DDD"><b>SRE</b><br />d,x</td>
+            <td style="background:#FCC">CLI<br /></td>
+            <td style="background:#CFC">EOR<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>SRE</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">EOR<br />a,x</td>
+            <td style="background:#CCF">LSR<br />a,x</td>
+            <td style="background:#DDD"><b>SRE</b><br />a,x
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>60</td>
+            <td style="background:#FCC">RTS<br /></td>
+            <td style="background:#CFC">ADC<br />(d,x)</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>RRA</b><br />(d,x)</td>
+            <td style="background:#FCC"><b>NOP</b><br />d</td>
+            <td style="background:#CFC">ADC<br />d</td>
+            <td style="background:#CCF">ROR<br />d</td>
+            <td style="background:#DDD"><b>RRA</b><br />d</td>
+            <td style="background:#FCC">PLA<br /></td>
+            <td style="background:#CFC">ADC<br />#i</td>
+            <td style="background:#CCF">ROR<br /></td>
+            <td style="background:#DDD"><b>ARR</b><br />#i</td>
+            <td style="background:#FCC">JMP<br />(a)</td>
+            <td style="background:#CFC">ADC<br />a</td>
+            <td style="background:#CCF">ROR<br />a</td>
+            <td style="background:#DDD"><b>RRA</b><br />a</td>
+            <td style="background:#FCC">BVS<br />*+d</td>
+            <td style="background:#CFC">ADC<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>RRA</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">ADC<br />d,x</td>
+            <td style="background:#CCF">ROR<br />d,x</td>
+            <td style="background:#DDD"><b>RRA</b><br />d,x</td>
+            <td style="background:#FCC">SEI<br /></td>
+            <td style="background:#CFC">ADC<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>RRA</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">ADC<br />a,x</td>
+            <td style="background:#CCF">ROR<br />a,x</td>
+            <td style="background:#DDD"><b>RRA</b><br />a,x
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>80</td>
+            <td style="background:#FCC"><b>NOP</b><br />#i</td>
+            <td style="background:#CFC">STA<br />(d,x)</td>
+            <td style="background:#CCF"><b>NOP</b><br />#i</td>
+            <td style="background:#DDD"><b>SAX</b><br />(d,x)</td>
+            <td style="background:#FCC">STY<br />d</td>
+            <td style="background:#CFC">STA<br />d</td>
+            <td style="background:#CCF">STX<br />d</td>
+            <td style="background:#DDD"><b>SAX</b><br />d</td>
+            <td style="background:#FCC">DEY<br /></td>
+            <td style="background:#CFC"><b>NOP</b><br />#i</td>
+            <td style="background:#CCF">TXA<br /></td>
+            <td style="background:#DDD"><b>XAA</b><br />#i</td>
+            <td style="background:#FCC">STY<br />a</td>
+            <td style="background:#CFC">STA<br />a</td>
+            <td style="background:#CCF">STX<br />a</td>
+            <td style="background:#DDD"><b>SAX</b><br />a</td>
+            <td style="background:#FCC">BCC<br />*+d</td>
+            <td style="background:#CFC">STA<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>AHX</b><br />(d),y</td>
+            <td style="background:#FCC">STY<br />d,x</td>
+            <td style="background:#CFC">STA<br />d,x</td>
+            <td style="background:#CCF">STX<br />d,y</td>
+            <td style="background:#DDD"><b>SAX</b><br />d,y</td>
+            <td style="background:#FCC">TYA<br /></td>
+            <td style="background:#CFC">STA<br />a,y</td>
+            <td style="background:#CCF">TXS<br /></td>
+            <td style="background:#DDD"><b>TAS</b><br />a,y</td>
+            <td style="background:#FCC"><b>SHY</b><br />a,x</td>
+            <td style="background:#CFC">STA<br />a,x</td>
+            <td style="background:#CCF"><b>SHX</b><br />a,y</td>
+            <td style="background:#DDD"><b>AHX</b><br />a,y
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>A0</td>
+            <td style="background:#FCC">LDY<br />#i</td>
+            <td style="background:#CFC">LDA<br />(d,x)</td>
+            <td style="background:#CCF">LDX<br />#i</td>
+            <td style="background:#DDD"><b>LAX</b><br />(d,x)</td>
+            <td style="background:#FCC">LDY<br />d</td>
+            <td style="background:#CFC">LDA<br />d</td>
+            <td style="background:#CCF">LDX<br />d</td>
+            <td style="background:#DDD"><b>LAX</b><br />d</td>
+            <td style="background:#FCC">TAY<br /></td>
+            <td style="background:#CFC">LDA<br />#i</td>
+            <td style="background:#CCF">TAX<br /></td>
+            <td style="background:#DDD"><b>LAX</b><br />#i</td>
+            <td style="background:#FCC">LDY<br />a</td>
+            <td style="background:#CFC">LDA<br />a</td>
+            <td style="background:#CCF">LDX<br />a</td>
+            <td style="background:#DDD"><b>LAX</b><br />a</td>
+            <td style="background:#FCC">BCS<br />*+d</td>
+            <td style="background:#CFC">LDA<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>LAX</b><br />(d),y</td>
+            <td style="background:#FCC">LDY<br />d,x</td>
+            <td style="background:#CFC">LDA<br />d,x</td>
+            <td style="background:#CCF">LDX<br />d,y</td>
+            <td style="background:#DDD"><b>LAX</b><br />d,y</td>
+            <td style="background:#FCC">CLV<br /></td>
+            <td style="background:#CFC">LDA<br />a,y</td>
+            <td style="background:#CCF">TSX<br /></td>
+            <td style="background:#DDD"><b>LAS</b><br />a,y</td>
+            <td style="background:#FCC">LDY<br />a,x</td>
+            <td style="background:#CFC">LDA<br />a,x</td>
+            <td style="background:#CCF">LDX<br />a,y</td>
+            <td style="background:#DDD"><b>LAX</b><br />a,y
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>C0</td>
+            <td style="background:#FCC">CPY<br />#i</td>
+            <td style="background:#CFC">CMP<br />(d,x)</td>
+            <td style="background:#CCF"><b>NOP</b><br />#i</td>
+            <td style="background:#DDD"><b>DCP</b><br />(d,x)</td>
+            <td style="background:#FCC">CPY<br />d</td>
+            <td style="background:#CFC">CMP<br />d</td>
+            <td style="background:#CCF">DEC<br />d</td>
+            <td style="background:#DDD"><b>DCP</b><br />d</td>
+            <td style="background:#FCC">INY<br /></td>
+            <td style="background:#CFC">CMP<br />#i</td>
+            <td style="background:#CCF">DEX<br /></td>
+            <td style="background:#DDD"><b>AXS</b><br />#i</td>
+            <td style="background:#FCC">CPY<br />a</td>
+            <td style="background:#CFC">CMP<br />a</td>
+            <td style="background:#CCF">DEC<br />a</td>
+            <td style="background:#DDD"><b>DCP</b><br />a</td>
+            <td style="background:#FCC">BNE<br />*+d</td>
+            <td style="background:#CFC">CMP<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>DCP</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">CMP<br />d,x</td>
+            <td style="background:#CCF">DEC<br />d,x</td>
+            <td style="background:#DDD"><b>DCP</b><br />d,x</td>
+            <td style="background:#FCC">CLD<br /></td>
+            <td style="background:#CFC">CMP<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>DCP</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">CMP<br />a,x</td>
+            <td style="background:#CCF">DEC<br />a,x</td>
+            <td style="background:#DDD"><b>DCP</b><br />a,x
+            </td>
+        </tr>
+        <tr valign="top">
+            <td>E0</td>
+            <td style="background:#FCC">CPX<br />#i</td>
+            <td style="background:#CFC">SBC<br />(d,x)</td>
+            <td style="background:#CCF"><b>NOP</b><br />#i</td>
+            <td style="background:#DDD"><b>ISC</b><br />(d,x)</td>
+            <td style="background:#FCC">CPX<br />d</td>
+            <td style="background:#CFC">SBC<br />d</td>
+            <td style="background:#CCF">INC<br />d</td>
+            <td style="background:#DDD"><b>ISC</b><br />d</td>
+            <td style="background:#FCC">INX<br /></td>
+            <td style="background:#CFC">SBC<br />#i</td>
+            <td style="background:#CCF">NOP<br /></td>
+            <td style="background:#DDD"><b>SBC</b><br />#i</td>
+            <td style="background:#FCC">CPX<br />a</td>
+            <td style="background:#CFC">SBC<br />a</td>
+            <td style="background:#CCF">INC<br />a</td>
+            <td style="background:#DDD"><b>ISC</b><br />a</td>
+            <td style="background:#FCC">BEQ<br />*+d</td>
+            <td style="background:#CFC">SBC<br />(d),y</td>
+            <td style="background:#CCF"><b>STP</b><br /></td>
+            <td style="background:#DDD"><b>ISC</b><br />(d),y</td>
+            <td style="background:#FCC"><b>NOP</b><br />d,x</td>
+            <td style="background:#CFC">SBC<br />d,x</td>
+            <td style="background:#CCF">INC<br />d,x</td>
+            <td style="background:#DDD"><b>ISC</b><br />d,x</td>
+            <td style="background:#FCC">SED<br /></td>
+            <td style="background:#CFC">SBC<br />a,y</td>
+            <td style="background:#CCF"><b>NOP</b><br /></td>
+            <td style="background:#DDD"><b>ISC</b><br />a,y</td>
+            <td style="background:#FCC"><b>NOP</b><br />a,x</td>
+            <td style="background:#CFC">SBC<br />a,x</td>
+            <td style="background:#CCF">INC<br />a,x</td>
+            <td style="background:#DDD"><b>ISC</b><br />a,x
+            </td>
+        </tr>
+    </tbody>
+</table>
