@@ -26,7 +26,7 @@ pub enum Op {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddressingMode {
-    Imp, // Implicit
+    Imp, // Implied
     Acc, // Accumulator
     Imm, // Immediate
     Zp0, // ZeroPage
@@ -626,21 +626,23 @@ impl Cpu {
             };
         }
 
+        macro_rules! acc {
+            ($op: expr) => {{
+                let value = self.acc.get();
+                let (_, value) = $op.modify(self, 0, value);
+                self.acc.set(value);
+            }};
+        }
+
         macro_rules! imp {
             //  #  address R/W description
             // --- ------- --- -----------------------------------------------
             //  1    PC     R  fetch opcode, increment PC
             //  2    PC     R  read next instruction byte (and throw it away)
-            (OpType::Read, $op: expr) => {{
+            ($op: expr) => {{
                 let value = read!(self.pc.get());
                 $op.operate(self, value);
             }};
-            (OpType::Modify, $op: expr) => {{
-                let value = self.acc.get();
-                let (_, value) = $op.modify(self, 0, value);
-                self.acc.set(value);
-            }};
-            (OpType::Stack, $op: expr) => {{ $op }};
         }
 
         macro_rules! zp {
@@ -995,6 +997,7 @@ impl Cpu {
                 if let Some(state) = self.delay_intr_flag.take() {
                     self.set_flag(Flags::I, state);
                 }
+
                 include!(concat!(env!("OUT_DIR"), "/out.rs"));
             }
         }

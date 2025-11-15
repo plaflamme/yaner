@@ -106,7 +106,8 @@ impl ToTokens for Op {
 #[derive(Debug, Clone, Copy, Default, EnumString)]
 pub enum AddressingMode {
     #[default]
-    Imp, // Implicit from the op, things like RTS or BRK
+    Imp, // Implied from the op, things like RTS or BRK
+    Acc, // Accumulator, like implied, but the A register is what's implied
     #[strum(serialize = "imm")]
     Imm,
     #[strum(serialize = "zp")]
@@ -139,7 +140,7 @@ struct OpCode {
 
 impl ToTokens for OpCode {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let mode = OpType::from_op(self.op);
+        let op_type = OpType::from_op(self.op);
         let op = self.op;
 
         if matches!(op, Op::KIL) {
@@ -148,18 +149,25 @@ impl ToTokens for OpCode {
             return;
         }
         let tt = match self.mode {
-            AddressingMode::Abs => quote!(abs!(#mode, #op)),
-            AddressingMode::AbX => quote!(abs_indexed!(#mode, #op, self.x.get())),
-            AddressingMode::AbY => quote!(abs_indexed!(#mode, #op, self.y.get())),
-            AddressingMode::Zp0 => quote!(zp!(#mode, #op)),
-            AddressingMode::ZpX => quote!(zp_indexed!(self.x.get(), #mode, #op)),
-            AddressingMode::ZpY => quote!(zp_indexed!(self.y.get(), #mode, #op)),
-            AddressingMode::Imp => quote!(imp!(#mode, #op)),
-            AddressingMode::Imm => quote!(imm!(#mode, #op)),
-            AddressingMode::Rel => quote!(rel!(#mode, #op)),
-            AddressingMode::Ind => quote!(ind!(#mode, #op)),
-            AddressingMode::IdX => quote!(ind_indexed_x!(#mode, #op)),
-            AddressingMode::IdY => quote!(ind_indexed_y!(#mode, #op)),
+            AddressingMode::Acc => quote!(acc!(#op)),
+            AddressingMode::Abs => quote!(abs!(#op_type, #op)),
+            AddressingMode::AbX => quote!(abs_indexed!(#op_type, #op, self.x.get())),
+            AddressingMode::AbY => quote!(abs_indexed!(#op_type, #op, self.y.get())),
+            AddressingMode::Zp0 => quote!(zp!(#op_type, #op)),
+            AddressingMode::ZpX => quote!(zp_indexed!(self.x.get(), #op_type, #op)),
+            AddressingMode::ZpY => quote!(zp_indexed!(self.y.get(), #op_type, #op)),
+            AddressingMode::Imp => {
+                if matches!(op_type, OpType::Stack) {
+                    quote!(#op)
+                } else {
+                    quote!(imp!(#op))
+                }
+            }
+            AddressingMode::Imm => quote!(imm!(#op_type, #op)),
+            AddressingMode::Rel => quote!(rel!(#op_type, #op)),
+            AddressingMode::Ind => quote!(ind!(#op_type, #op)),
+            AddressingMode::IdX => quote!(ind_indexed_x!(#op_type, #op)),
+            AddressingMode::IdY => quote!(ind_indexed_y!(#op_type, #op)),
         };
         tokens.append_all(tt);
     }
@@ -310,11 +318,17 @@ fn parse_opcode(opcode: &str) -> Result<OpCode, Box<dyn std::error::Error>> {
         _ => panic!("unexpeced input {}", opcode),
     };
 
+    let op = Op::from_str(op_str)?;
+    let mode = addr_str.and_then(|s| AddressingMode::from_str(s).ok());
+
     Ok(OpCode {
-        op: Op::from_str(op_str)?,
-        mode: match addr_str {
-            Some(addr) => AddressingMode::from_str(addr).ok().unwrap_or_default(),
-            None => AddressingMode::Imp,
+        op,
+        mode: match mode {
+            Some(mode) => mode,
+            None => match op {
+                Op::ASL | Op::LSR | Op::ROL | Op::ROR => AddressingMode::Acc,
+                _ => AddressingMode::Imp,
+            },
         },
     })
 }
