@@ -1021,6 +1021,7 @@ mod test {
 
     #[test]
     fn klaus_6502_functional_test() {
+        // let mut pc_freq_map = std::collections::HashMap::new();
         let mut ram = [0; 0x1000A];
         let pgr = std::fs::read("../roms/6502_functional_test.bin").expect("rom is present");
 
@@ -1037,21 +1038,22 @@ mod test {
         loop {
             if same_pc_counter == 0 {
                 let opcode = OpCode::decode(ram[last_active_pc as usize]);
-                println!("0x{last_active_pc:X} {opcode:?} {cpu:?}");
+                // println!("0x{last_active_pc:X} {opcode:?} {cpu:?}");
             }
 
             // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L13374-L13377
-            if last_active_pc == 0x3469 {
+            if last_active_pc == 0x3699 || last_active_pc == 0x369c {
+                println!("Hit {last_active_pc:X} --> success!");
                 break;
             }
             match Pin::new(&mut cpu_routine).resume(()) {
                 CoroutineState::Yielded(CpuTick { rw, addr }) => match rw {
                     Rw::Read => {
-                        println!("      Read {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
+                        // println!("      Read {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
                         cpu.io_bus.set(ram[addr as usize])
                     }
                     Rw::Write => {
-                        println!("      Writ {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
+                        // println!("      Writ {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
                         ram[addr as usize] = cpu.io_bus.get()
                     }
                 },
@@ -1064,6 +1066,9 @@ mod test {
                 same_pc_counter += 1;
             } else {
                 last_active_pc = cpu.active_pc.get();
+                if last_active_pc == 0x400 {
+                    panic!("loop!");
+                }
                 same_pc_counter = 0;
             }
 
