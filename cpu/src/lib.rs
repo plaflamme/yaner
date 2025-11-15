@@ -940,7 +940,7 @@ impl Cpu {
             //
             //        * The high byte of the effective address is always zero,
             //          i.e. page boundary crossings are not handled.
-            ($index: expr, OpType::Read, $op: expr) => {{
+            (OpType::Read, $op: expr, $index: expr) => {{
                 let (_, value) = zp_indexed!($index);
                 $op.operate(self, value);
             }};
@@ -956,7 +956,7 @@ impl Cpu {
             //
             // Note: * The high byte of the effective address is always zero,
             //         i.e. page boundary crossings are not handled.
-            ($index: expr, OpType::Modify, $op: expr) => {
+            (OpType::Modify, $op: expr, $index: expr) => {
                 let (addr, value) = zp_indexed!($index);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
@@ -973,7 +973,7 @@ impl Cpu {
             //
             //        * The high byte of the effective address is always zero,
             //          i.e. page boundary crossings are not handled.
-            ($index: expr, OpType::Write, $op: expr) => {
+            (OpType::Write, $op: expr, $index: expr) => {
                 let (addr, _) = zp_indexed!($index);
                 write!(addr, $op.operate(self));
             };

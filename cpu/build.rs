@@ -154,8 +154,8 @@ impl ToTokens for OpCode {
             AddressingMode::AbX => quote!(abs_indexed!(#op_type, #op, self.x.get())),
             AddressingMode::AbY => quote!(abs_indexed!(#op_type, #op, self.y.get())),
             AddressingMode::Zp0 => quote!(zp!(#op_type, #op)),
-            AddressingMode::ZpX => quote!(zp_indexed!(self.x.get(), #op_type, #op)),
-            AddressingMode::ZpY => quote!(zp_indexed!(self.y.get(), #op_type, #op)),
+            AddressingMode::ZpX => quote!(zp_indexed!(#op_type, #op, self.x.get())),
+            AddressingMode::ZpY => quote!(zp_indexed!(#op_type, #op, self.y.get())),
             AddressingMode::Imp => {
                 if matches!(op_type, OpType::Stack) {
                     quote!(#op)
