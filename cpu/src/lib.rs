@@ -214,36 +214,53 @@ pub struct Cpu {
     rst_line: Cell<bool>,
 
     // Use to delay setting the `I` flag by one instrcution
-    delay_intr_flag: Cell<Option<Flags>>,
+    delay_intr_flag: Cell<Option<bool>>,
     // The PC of the currently executing instruction
     active_pc: Cell<u16>,
 
     io_bus: Cell<u8>,
 }
 
+impl std::fmt::Debug for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "a: {:X} x:{:X} y:{:X} sp:{:X} pc:{:X} bus:{:X} p:{:X} ",
+            self.acc.get(),
+            self.x.get(),
+            self.y.get(),
+            self.sp.get(),
+            self.pc.get(),
+            self.io_bus.get(),
+            self.flags.get().bits()
+        )?;
+        bitflags::parser::to_writer(&self.flags.get(), f)
+    }
+}
+
 impl Default for Cpu {
     fn default() -> Self {
-        Cpu::new()
+        Cpu::new(0x400) // TODO
     }
 }
 
 impl Cpu {
     // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
-    fn new() -> Self {
+    fn new(pc: u16) -> Self {
         Cpu {
             acc: Cell::new(0),
             x: Cell::new(0),
             y: Cell::new(0),
             flags: Cell::new(Flags::I),
             sp: Cell::new(0xFD),
-            pc: Cell::new(0),
+            pc: Cell::new(pc),
 
             nmi_line: Cell::default(),
             irq_line: Cell::new(false),
             rst_line: Cell::new(false),
 
             delay_intr_flag: Cell::default(),
-            active_pc: Cell::default(),
+            active_pc: Cell::new(pc),
 
             io_bus: Cell::new(0),
         }
@@ -281,10 +298,11 @@ impl Cpu {
         }
         macro_rules! write {
             ( $addr: expr, $value: expr ) => {{
+                let addr = $addr;
                 self.io_bus.set($value);
                 yield CpuTick {
                     rw: Rw::Write,
-                    addr: $addr,
+                    addr,
                 };
             }};
         }
@@ -334,9 +352,7 @@ impl Cpu {
                 // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
                 // HIJACK: probably here?
 
-                let mut p = self.flags.get();
-                p.insert(Flags::B | Flags::U);
-                push!(p.bits());
+                push!((self.flags.get() | Flags::B | Flags::U).bits());
 
                 let pcl = read!(0xFFFE);
                 self.set_flag(Flags::I, true);
@@ -376,10 +392,12 @@ impl Cpu {
         //  6  $0100,S  R  pull PCH from stack
         macro_rules! rti {
             () => {{
-                let _ = next_pc!();
+                let _ = read!(self.pc.get());
                 read!(self.sp.get() as u16);
                 let p = pop!();
-                self.flags.set(Flags::from_bits_truncate(p) | Flags::U);
+                let mut flags = Flags::from_bits_truncate(p) | Flags::U;
+                flags.remove(Flags::B); // This can't ever be "set" in the actual register
+                self.flags.set(flags);
                 let pcl = pop!();
                 let pch = pop!();
                 self.pc.set((pch as u16) << 8 | pcl as u16)
@@ -396,7 +414,7 @@ impl Cpu {
         //  6    PC     R  increment PC
         macro_rules! rts {
             () => {{
-                let _ = next_pc!();
+                let _ = read!(self.pc.get());
                 read!(self.sp.get() as u16);
                 let pcl = pop!();
                 let pch = pop!();
@@ -412,7 +430,7 @@ impl Cpu {
         //  3  $0100,S  W  push register on stack, decrement S
         macro_rules! pha {
             () => {{
-                let _ = next_pc!();
+                let _ = read!(self.pc.get());
                 push!(self.acc.get());
             }};
         }
@@ -421,11 +439,11 @@ impl Cpu {
         // --- ------- --- -----------------------------------------------
         //  1    PC     R  fetch opcode, increment PC
         //  2    PC     R  read next instruction byte (and throw it away)
-        //  3  $0100,S  W  pull register from stack, increment S
+        //  3  $0100,S  W  push register on stack, decrement S
         macro_rules! php {
             () => {{
-                let _ = next_pc!();
-                push!((self.flags.get() | Flags::B).bits());
+                let _ = read!(self.pc.get());
+                push!((self.flags.get() | Flags::B | Flags::U).bits());
             }};
         }
 
@@ -437,9 +455,10 @@ impl Cpu {
         //  4  $0100,S  R  pull register from stack
         macro_rules! pla {
             () => {{
-                let _ = next_pc!();
+                let _ = read!(self.pc.get());
                 read!(self.sp.get() as u16);
                 self.acc.set(pop!());
+                self.set_flags_from_acc();
             }};
         }
 
@@ -451,19 +470,19 @@ impl Cpu {
         //  4  $0100,S  R  pull register from stack
         macro_rules! plp {
             () => {{
-                let _ = next_pc!();
+                let _ = read!(self.pc.get());
                 read!(self.sp.get() as u16);
-                let p = pop!();
+                let flags = Flags::from_bits_truncate(pop!());
+                self.set_flag(Flags::U, true);
+                self.set_flag(Flags::C, flags.contains(Flags::C));
+                self.set_flag(Flags::Z, flags.contains(Flags::Z));
+                self.set_flag(Flags::D, flags.contains(Flags::D));
+                self.set_flag(Flags::V, flags.contains(Flags::V));
+                self.set_flag(Flags::N, flags.contains(Flags::N));
 
-                let mut flags = Flags::from_bits_truncate(p);
-                flags.remove(Flags::B);
-                flags.insert(Flags::U); // this must always be 1
-
-                // Note that the effect of changing I is delayed one instruction because the flag is changed after IRQ is polled, delaying the effect until IRQ is polled in the next instruction like with CLI and SEI.
-                if flags.contains(Flags::I){
-                self.delay_intr_flag.set(Some(Flags::I));
-                flags.remove(Flags::I);}
-                self.flags.set(flags);
+                // Note that the effect of changing I is delayed one instruction because the flag is changed after IRQ is polled,
+                // delaying the effect until IRQ is polled in the next instruction like with CLI and SEI.
+                self.delay_intr_flag.set(Some(flags.contains(Flags::I)));
             }};
         }
 
@@ -529,9 +548,9 @@ impl Cpu {
                 let addr_lo = next_pc!();
                 let addr_hi = next_pc!() as u16;
                 let (addr_lo_oops, oops) = addr_lo.overflowing_add($index);
-                let addr = addr_hi | addr_lo_oops as u16;
+                let addr = (addr_hi << 8) | addr_lo_oops as u16;
                 let value = read!(addr);
-                let addr = (addr_hi | addr_lo as u16).wrapping_add($index as u16);
+                let addr = ((addr_hi << 8) | addr_lo as u16).wrapping_add($index as u16);
                 (addr, value, oops)
             }};
 
@@ -608,8 +627,12 @@ impl Cpu {
         }
 
         macro_rules! imp {
+            //  #  address R/W description
+            // --- ------- --- -----------------------------------------------
+            //  1    PC     R  fetch opcode, increment PC
+            //  2    PC     R  read next instruction byte (and throw it away)
             (OpType::Read, $op: expr) => {{
-                let value = next_pc!();
+                let value = read!(self.pc.get());
                 $op.operate(self, value);
             }};
             (OpType::Modify, $op: expr) => {{
@@ -692,12 +715,13 @@ impl Cpu {
             }};
         }
 
-        macro_rules! ind_indexed {
-            ($index: expr) => {{
+        macro_rules! ind_indexed_x {
+            () => {{
                 let ptr = next_pc!();
                 read!(ptr as u16);
-                let addr_lo = read!(ptr.wrapping_add($index) as u16) as u16;
-                let addr_hi = read!(ptr.wrapping_add($index).wrapping_add(1) as u16) as u16;
+                let ptr = ptr.wrapping_add(self.x.get());
+                let addr_lo = read!(ptr as u16) as u16;
+                let addr_hi = read!(ptr.wrapping_add(1) as u16) as u16;
                 let addr = (addr_hi << 8) | addr_lo;
                 let value = read!(addr);
                 (addr, value)
@@ -714,8 +738,8 @@ impl Cpu {
             //
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
-            ($index: expr, OpType::Read, $op: expr) => {{
-                let (_, value) = ind_indexed!($index);
+            (OpType::Read, $op: expr) => {{
+                let (_, value) = ind_indexed_x!();
                 $op.operate(self, value);
             }};
 
@@ -733,8 +757,8 @@ impl Cpu {
             //
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
-            ($index: expr, OpType::Modify, $op: expr) => {{
-                let (addr, value) = ind_indexed!($index);
+            (OpType::Modify, $op: expr) => {{
+                let (addr, value) = ind_indexed_x!();
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
                 write!(addr, value);
@@ -750,8 +774,100 @@ impl Cpu {
             //
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
-            ($index: expr, OpType::Write, $op: expr) => {{
-                let (addr, _) = ind_indexed!($index);
+            (OpType::Write, $op: expr) => {{
+                let (addr, _) = ind_indexed_x!();
+                write!(addr, $op.operate(self));
+            }};
+        }
+
+        macro_rules! ind_indexed_y {
+            () => {{
+                let ptr = next_pc!();
+                let addr_lo = read!(ptr as u16);
+                let addr_hi = read!(ptr.wrapping_add(1) as u16);
+
+                let (addr_lo, carry) = addr_lo.overflowing_add(self.y.get());
+                let addr = (addr_hi as u16) << 8 | addr_lo as u16;
+                let value = read!(addr);
+
+                if carry {
+                    let addr_hi = addr_hi.wrapping_add(1);
+                    let addr = (addr_hi as u16) << 8 | addr_lo as u16;
+                    let value = read!((addr_hi as u16) << 8 | addr_lo as u16);
+                    (addr, value)
+                } else {
+                    (addr, value)
+                }
+            }};
+
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  fetch effective address low
+            //  4   pointer+1   R  fetch effective address high,
+            //                     add Y to low byte of effective address
+            //  5   address+Y*  R  read from effective address,
+            //                     fix high byte of effective address
+            //  6+  address+Y   R  read from effective address
+            //
+            // Notes: The effective address is always fetched from zero page,
+            //        i.e. the zero page boundary crossing is not handled.
+            //
+            //        * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100.
+            //
+            //        + This cycle will be executed only if the effective address
+            //          was invalid during cycle #5, i.e. page boundary was crossed.
+            (OpType::Read, $op: expr) => {{
+                let (_, value) = ind_indexed_y!();
+                $op.operate(self, value);
+            }};
+
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  fetch effective address low
+            //  4   pointer+1   R  fetch effective address high,
+            //                     add Y to low byte of effective address
+            //  5   address+Y*  R  read from effective address,
+            //                     fix high byte of effective address
+            //  6   address+Y   R  read from effective address
+            //  7   address+Y   W  write the value back to effective address,
+            //                     and do the operation on it
+            //  8   address+Y   W  write the new value to effective address
+            //
+            // Notes: The effective address is always fetched from zero page,
+            //        i.e. the zero page boundary crossing is not handled.
+            //
+            //        * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100.
+            (OpType::Modify, $op: expr) => {{
+                let (addr, value) = ind_indexed_y!();
+                write!(addr, value);
+                let (addr, value) = $op.modify(self, addr, value);
+                write!(addr, value);
+            }};
+
+            //  #    address   R/W description
+            // --- ----------- --- ------------------------------------------
+            //  1      PC       R  fetch opcode, increment PC
+            //  2      PC       R  fetch pointer address, increment PC
+            //  3    pointer    R  fetch effective address low
+            //  4   pointer+1   R  fetch effective address high,
+            //                     add Y to low byte of effective address
+            //  5   address+Y*  R  read from effective address,
+            //                     fix high byte of effective address
+            //  6   address+Y   W  write to effective address
+            //
+            // Notes: The effective address is always fetched from zero page,
+            //        i.e. the zero page boundary crossing is not handled.
+            //
+            //        * The high byte of the effective address may be invalid
+            //          at this time, i.e. it may be smaller by $100.
+            (OpType::Write, $op: expr) => {{
+                let (addr, _) = ind_indexed_y!();
                 write!(addr, $op.operate(self));
             }};
         }
@@ -812,16 +928,49 @@ impl Cpu {
                 let value = read!(addr);
                 (addr, value)
             }};
+            //  #   address  R/W description
+            // --- --------- --- ------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch address, increment PC
+            //  3   address   R  read from address, add index register to it
+            //  4  address+I* R  read from effective address
+            //  Notes: I denotes either index register (X or Y).
+            //
+            //        * The high byte of the effective address is always zero,
+            //          i.e. page boundary crossings are not handled.
             ($index: expr, OpType::Read, $op: expr) => {{
                 let (_, value) = zp_indexed!($index);
                 $op.operate(self, value);
             }};
+            //  #   address  R/W description
+            // --- --------- --- ---------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch address, increment PC
+            //  3   address   R  read from address, add index register X to it
+            //  4  address+X* R  read from effective address
+            //  5  address+X* W  write the value back to effective address,
+            //                   and do the operation on it
+            //  6  address+X* W  write the new value to effective address
+            //
+            // Note: * The high byte of the effective address is always zero,
+            //         i.e. page boundary crossings are not handled.
             ($index: expr, OpType::Modify, $op: expr) => {
                 let (addr, value) = zp_indexed!($index);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
                 write!(addr, value);
             };
+            //  #   address  R/W description
+            // --- --------- --- -------------------------------------------
+            //  1     PC      R  fetch opcode, increment PC
+            //  2     PC      R  fetch address, increment PC
+            //  3   address   R  read from address, add index register to it
+            //  4  address+I* W  write to effective address
+            //
+            // Notes: I denotes either index register (X or Y).
+            //
+            //        * The high byte of the effective address is always zero,
+            //          i.e. page boundary crossings are not handled.
             ($index: expr, OpType::Write, $op: expr) => {
                 let (addr, _) = zp_indexed!($index);
                 write!(addr, $op.operate(self));
@@ -842,8 +991,9 @@ impl Cpu {
 
                 // TODO: IRQ, NMI, RST
 
-                if let Some(delayed) = self.delay_intr_flag.take() {
-                    self.flags.update(|f| f | delayed);
+                // NOTE: I believe this must be done one **whole** instruction later. Not sure.
+                if let Some(state) = self.delay_intr_flag.take() {
+                    self.set_flag(Flags::I, state);
                 }
                 include!(concat!(env!("OUT_DIR"), "/out.rs"));
             }
@@ -860,51 +1010,64 @@ mod test {
         pin::Pin,
     };
 
+    use crate::OpCode;
+
     use super::Cpu;
     use super::CpuTick;
     use super::Rw;
 
     #[test]
     fn klaus_6502_functional_test() {
-        let mut ram = [0; 0x10000];
+        let mut ram = [0; 0x1000A];
         let pgr = std::fs::read("../roms/6502_functional_test.bin").expect("rom is present");
 
         // Assembler was configured to start at 0
         // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L620
         ram[0x0000..pgr.len()].copy_from_slice(&pgr);
 
-        let cpu = Cpu::new();
         // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L115
-        cpu.pc.set(0x400);
+        let cpu = Cpu::new(0x400);
 
         let mut cpu_routine = cpu.run();
+        let mut last_active_pc = cpu.active_pc.get();
         let mut same_pc_counter = 0;
         loop {
-            let active_pc = cpu.active_pc.get();
+            if same_pc_counter == 0 {
+                let opcode = OpCode::decode(ram[last_active_pc as usize]);
+                println!("0x{last_active_pc:X} {opcode:?} {cpu:?}");
+            }
+
             // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L13374-L13377
-            if active_pc == 0x3469 {
+            if last_active_pc == 0x3469 {
                 break;
             }
             match Pin::new(&mut cpu_routine).resume(()) {
                 CoroutineState::Yielded(CpuTick { rw, addr }) => match rw {
-                    Rw::Read => cpu.io_bus.set(ram[addr as usize]),
-                    Rw::Write => ram[addr as usize] = cpu.io_bus.get(),
+                    Rw::Read => {
+                        println!("      Read {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
+                        cpu.io_bus.set(ram[addr as usize])
+                    }
+                    Rw::Write => {
+                        println!("      Writ {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
+                        ram[addr as usize] = cpu.io_bus.get()
+                    }
                 },
                 CoroutineState::Complete(_) => {
-                    panic!("cpu stopped, PC was ${active_pc}");
+                    panic!("cpu stopped, PC was ${last_active_pc}");
                 }
             }
 
-            if cpu.active_pc.get() == active_pc {
+            if cpu.active_pc.get() == last_active_pc {
                 same_pc_counter += 1;
             } else {
+                last_active_pc = cpu.active_pc.get();
                 same_pc_counter = 0;
             }
 
-            if same_pc_counter == 100 {
+            if same_pc_counter == 10 {
                 panic!(
                     "
-Stuck at PC 0x{active_pc:X}
+Stuck at PC 0x{last_active_pc:X}
 Go here and look up the value: https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst
 It should indicate the error condition.
                     "

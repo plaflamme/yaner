@@ -158,8 +158,8 @@ impl ToTokens for OpCode {
             AddressingMode::Imm => quote!(imm!(#mode, #op)),
             AddressingMode::Rel => quote!(rel!(#mode, #op)),
             AddressingMode::Ind => quote!(ind!(#mode, #op)),
-            AddressingMode::IdX => quote!(ind_indexed!(self.x.get(), #mode, #op)),
-            AddressingMode::IdY => quote!(ind_indexed!(self.y.get(), #mode, #op)),
+            AddressingMode::IdX => quote!(ind_indexed_x!(#mode, #op)),
+            AddressingMode::IdY => quote!(ind_indexed_y!(#mode, #op)),
         };
         tokens.append_all(tt);
     }

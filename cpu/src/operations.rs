@@ -103,13 +103,12 @@ pub struct AdcResult {
     v: bool,
 }
 fn do_adc(a: u8, b: u8, c: u8) -> AdcResult {
-    let (v1, o1) = a.overflowing_add(b);
-    let (v2, o2) = v1.overflowing_add(c);
-
+    let (r, o1) = a.overflowing_add(b);
+    let (r, o2) = r.overflowing_add(c);
     AdcResult {
-        r: v2,
-        c: o1 | o2,
-        v: (b ^ v2) & (a ^ v2) & 0x80 != 0,
+        r,
+        c: o1 || o2,
+        v: (b ^ r) & (a ^ r) & 0x80 != 0,
     }
 }
 
