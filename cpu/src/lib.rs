@@ -1017,20 +1017,20 @@ mod test {
     use super::CpuTick;
     use super::Rw;
 
-    #[test]
-    fn klaus_6502_functional_test() {
-        // Program's STDIN/OUT addresses
+    fn klaus_test(name: &str) {
+        // Program's STDIN/OUT addresses, see report.i65
         const STDOUT_ADDR: u16 = 0xF001;
         const STDIN_ADDR: u16 = 0xF004;
         // Program start address
         const PRG_START: u16 = 0x400;
 
         let mut ram = [0; 0x10000];
-        let pgr =
-            std::fs::read("../roms/6502_65C02_functional_tests/bin_files/6502_functional_test.bin")
-                .expect("rom is present");
+        let pgr = std::fs::read(format!(
+            "../roms/6502_65C02_functional_tests/bin_files/{name}.bin"
+        ))
+        .expect("rom is present");
 
-        // Assembler was configured to start at 0
+        // Assembler was configured to put the zero_page as 0
         ram[0x0000..pgr.len()].copy_from_slice(&pgr);
 
         let cpu = Cpu::new(PRG_START);
@@ -1064,5 +1064,15 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn klaus_6502_functional_test() {
+        klaus_test("6502_functional_test");
+    }
+
+    #[test]
+    fn klaus_6502_interrupt_test() {
+        klaus_test("6502_interrupt_test");
     }
 }
