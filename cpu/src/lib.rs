@@ -1013,73 +1013,55 @@ mod test {
         pin::Pin,
     };
 
-    use crate::OpCode;
-
     use super::Cpu;
     use super::CpuTick;
     use super::Rw;
 
     #[test]
     fn klaus_6502_functional_test() {
-        // let mut pc_freq_map = std::collections::HashMap::new();
-        let mut ram = [0; 0x1000A];
-        let pgr = std::fs::read("../roms/6502_functional_test.bin").expect("rom is present");
+        // Program's STDIN/OUT addresses
+        const STDOUT_ADDR: u16 = 0xF001;
+        const STDIN_ADDR: u16 = 0xF004;
+        // Program start address
+        const PRG_START: u16 = 0x400;
+
+        let mut ram = [0; 0x10000];
+        let pgr =
+            std::fs::read("../roms/6502_65C02_functional_tests/bin_files/6502_functional_test.bin")
+                .expect("rom is present");
 
         // Assembler was configured to start at 0
-        // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L620
         ram[0x0000..pgr.len()].copy_from_slice(&pgr);
 
-        // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L115
-        let cpu = Cpu::new(0x400);
-
+        let cpu = Cpu::new(PRG_START);
         let mut cpu_routine = cpu.run();
-        let mut last_active_pc = cpu.active_pc.get();
-        let mut same_pc_counter = 0;
+        let mut stdout = String::new();
         loop {
-            if same_pc_counter == 0 {
-                let opcode = OpCode::decode(ram[last_active_pc as usize]);
-                // println!("0x{last_active_pc:X} {opcode:?} {cpu:?}");
-            }
-
-            // https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst#L13374-L13377
-            if last_active_pc == 0x3699 || last_active_pc == 0x369c {
-                println!("Hit {last_active_pc:X} --> success!");
-                break;
-            }
             match Pin::new(&mut cpu_routine).resume(()) {
                 CoroutineState::Yielded(CpuTick { rw, addr }) => match rw {
                     Rw::Read => {
-                        // println!("      Read {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
-                        cpu.io_bus.set(ram[addr as usize])
+                        cpu.io_bus.set(ram[addr as usize]);
+                        if addr == STDIN_ADDR {
+                            // program is waiting for input, so it stopped; successfully or not
+                            if stdout.contains("All tests completed, press R to repeat") {
+                                break;
+                            }
+                            panic!("Tests failed. Program output was:{stdout}")
+                        }
                     }
                     Rw::Write => {
-                        // println!("      Writ {addr:X} -> {:X} - {cpu:?}", ram[addr as usize]);
-                        ram[addr as usize] = cpu.io_bus.get()
+                        ram[addr as usize] = cpu.io_bus.get();
+                        if addr == STDOUT_ADDR {
+                            let c = ram[STDOUT_ADDR as usize] as char;
+                            // uncomment to see output during testing with `cargo test -- --nocapture`
+                            // print!("{c}");
+                            stdout.push(c);
+                        }
                     }
                 },
                 CoroutineState::Complete(_) => {
-                    panic!("cpu stopped, PC was ${last_active_pc}");
+                    panic!("cpu stopped, PC was 0x{:X}", cpu.active_pc.get());
                 }
-            }
-
-            if cpu.active_pc.get() == last_active_pc {
-                same_pc_counter += 1;
-            } else {
-                last_active_pc = cpu.active_pc.get();
-                if last_active_pc == 0x400 {
-                    panic!("loop!");
-                }
-                same_pc_counter = 0;
-            }
-
-            if same_pc_counter == 10 {
-                panic!(
-                    "
-Stuck at PC 0x{last_active_pc:X}
-Go here and look up the value: https://github.com/Klaus2m5/6502_65C02_functional_tests/blob/7954e2db/bin_files/6502_functional_test.lst
-It should indicate the error condition.
-                    "
-                )
             }
         }
     }
