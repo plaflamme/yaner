@@ -177,7 +177,7 @@ bitflags!(
     }
 );
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 #[allow(unused)]
 struct NmiLine {
     // state of the NMI line
@@ -205,7 +205,7 @@ pub struct Cpu {
 
     #[allow(unused)]
     // /NMI line - edge sensitive - high to low
-    nmi_line: Cell<NmiLine>,
+    nmi_line: Cell<bool>,
     #[allow(unused)]
     // IRQ line - level sensitive
     irq_line: Cell<bool>,
@@ -362,6 +362,49 @@ impl Cpu {
             }};
         }
 
+        macro_rules! interrupt {
+            ($flags:expr, nmi: $is_nmi:literal) => {{
+                push!((self.pc.get() >> 8) as u8);
+                push!((self.pc.get() & 0x00FF) as u8);
+
+                // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
+                let (jmp_lo, jmp_hi, hijacked) = if $is_nmi || self.nmi_line.get() {
+                    (0xFFFA, 0xFFFB, !$is_nmi)
+                } else {
+                    (0xFFFE, 0xFFFF, false)
+                };
+
+                push!(($flags | Flags::U).bits());
+
+                let pcl = read!(jmp_lo);
+                self.set_flag(Flags::I, true);
+                let pch = read!(jmp_hi);
+                self.pc.set((pch as u16) << 8 | pcl as u16);
+
+                if $is_nmi || hijacked {
+                    self.nmi_line.set(false);
+                } else {
+                    self.irq_line.set(false);
+                }
+            }};
+        }
+
+        macro_rules! irq {
+            () => {
+                read!(self.pc.get());
+                read!(self.pc.get());
+                interrupt!(self.flags.get() - Flags::B, nmi: false);
+            };
+        }
+
+        macro_rules! nmi {
+            () => {
+                read!(self.pc.get());
+                read!(self.pc.get());
+                interrupt!(self.flags.get() - Flags::B, nmi: true);
+            };
+        }
+
         //  #  address R/W description
         // --- ------- --- -----------------------------------------------
         //  1    PC     R  fetch opcode, increment PC
@@ -376,18 +419,7 @@ impl Cpu {
         macro_rules! brk {
             () => {{
                 let _ = next_pc!();
-                push!((self.pc.get() >> 8) as u8);
-                push!((self.pc.get() & 0x00FF) as u8);
-
-                // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
-                // HIJACK: probably here?
-
-                push!((self.flags.get() | Flags::B | Flags::U).bits());
-
-                let pcl = read!(0xFFFE);
-                self.set_flag(Flags::I, true);
-                let pch = read!(0xFFFF);
-                self.pc.set((pch as u16) << 8 | pcl as u16)
+                interrupt!(self.flags.get() | Flags::B, nmi: false);
             }};
         }
 
@@ -1020,11 +1052,14 @@ impl Cpu {
             loop {
                 if self.rst_line.get() {
                     rst!();
+                } else if self.nmi_line.get() {
+                    nmi!();
+                } else if self.irq_line.get() && !self.flags.get().contains(Flags::I) {
+                    irq!();
                 }
+
                 self.active_pc.set(self.pc.get());
                 let opcode = next_pc!();
-
-                // TODO: IRQ, NMI, RST
 
                 // NOTE: I believe this must be done one **whole** instruction later. Not sure.
                 if let Some(state) = self.delay_intr_flag.take() {
@@ -1050,10 +1085,20 @@ mod test {
     use super::CpuTick;
     use super::Rw;
 
+    bitflags::bitflags! {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct Pins: u8 {
+            const IRQ = 1 << 0;
+            const NMI = 1 << 1;
+        }
+    }
+
     fn klaus_test(name: &str) {
         // Program's STDIN/OUT addresses, see report.i65
         const STDOUT_ADDR: u16 = 0xF001;
         const STDIN_ADDR: u16 = 0xF004;
+        // For the interrupt test, this is the address where the CPU can write to in order to control the NMI and IRQ pins
+        const FEEDBACK_ADDR: u16 = 0xBFFC;
         // Program start address
         const PRG_START: u16 = 0x400;
 
@@ -1069,6 +1114,7 @@ mod test {
         let cpu = Cpu::new(Some(PRG_START));
         let mut cpu_routine = cpu.run();
         let mut stdout = String::new();
+        let mut feedback_register = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
         loop {
             match Pin::new(&mut cpu_routine).resume(()) {
                 CoroutineState::Yielded(CpuTick { rw, addr }) => match rw {
@@ -1079,7 +1125,7 @@ mod test {
                             if stdout.contains("All tests completed, press R to repeat") {
                                 break;
                             }
-                            panic!("Tests failed. Program output was:{stdout}")
+                            panic!("Tests failed.\nCpu state: {cpu:?}\nProgram output was:{stdout}")
                         }
                     }
                     Rw::Write => {
@@ -1089,6 +1135,19 @@ mod test {
                             // uncomment to see output during testing with `cargo test -- --nocapture`
                             // print!("{c}");
                             stdout.push(c);
+                        }
+
+                        if addr == FEEDBACK_ADDR {
+                            // We should only trigger for the pins that **changed**,
+                            // so we read the value that was written and then remove the current flags from that to found out which ones actually changed
+                            let pins = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
+                            feedback_register = pins - feedback_register;
+                            if feedback_register.contains(Pins::IRQ) {
+                                cpu.irq_line.set(true);
+                            }
+                            if feedback_register.contains(Pins::NMI) {
+                                cpu.nmi_line.set(true);
+                            }
                         }
                     }
                 },
