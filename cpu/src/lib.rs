@@ -212,6 +212,7 @@ pub struct Cpu {
     #[allow(unused)]
     // /RESET line - held low to reset CPU
     rst_line: Cell<bool>,
+    rst_pc: Option<u16>, // Optional PC to use after reset instead of reading it from the reset vector
 
     // Use to delay setting the `I` flag by one instrcution
     delay_intr_flag: Cell<Option<bool>>,
@@ -240,27 +241,27 @@ impl std::fmt::Debug for Cpu {
 
 impl Default for Cpu {
     fn default() -> Self {
-        Cpu::new(0x400) // TODO
+        Cpu::new(None)
     }
 }
 
 impl Cpu {
-    // http://wiki.nesdev.com/w/index.php/CPU_ALL#Power_up_state
-    fn new(pc: u16) -> Self {
+    fn new(rst_pc: Option<u16>) -> Self {
         Cpu {
             acc: Cell::new(0),
             x: Cell::new(0),
             y: Cell::new(0),
             flags: Cell::new(Flags::I),
-            sp: Cell::new(0xFD),
-            pc: Cell::new(pc),
+            sp: Cell::new(0x00),
+            pc: Cell::new(0),
 
             nmi_line: Cell::default(),
             irq_line: Cell::new(false),
-            rst_line: Cell::new(false),
+            rst_line: Cell::new(true),
+            rst_pc,
 
             delay_intr_flag: Cell::default(),
-            active_pc: Cell::new(pc),
+            active_pc: Cell::default(),
 
             io_bus: Cell::new(0),
         }
@@ -321,6 +322,11 @@ impl Cpu {
                 write!(0x0100 | (self.sp.get() as u16), $value);
                 self.sp.update(|sp| sp.wrapping_sub(1));
             };
+            () => {
+                // During RESET, stack pushes are turned into reads
+                read!(0x0100 | (self.sp.get() as u16));
+                self.sp.update(|sp| sp.wrapping_sub(1));
+            };
         }
 
         // https://www.nesdev.org/wiki/Stack
@@ -329,6 +335,30 @@ impl Cpu {
             () => {{
                 self.sp.update(|sp| sp.wrapping_add(1));
                 read!(0x0100 | (self.sp.get() as u16))
+            }};
+        }
+
+        macro_rules! rst {
+            () => {{
+                // https://www.pagetable.com/?p=410
+                read!(0x00FF);
+                read!(0x00FF);
+                read!(0x00FF);
+                self.sp.set(0);
+                self.acc.set(0);
+                self.x.set(0);
+                self.y.set(0);
+                self.flags.set(Flags::U | Flags::I);
+                push!();
+                push!();
+                push!(); // At this point the stack pointer is 0xFD
+                let pc_lo = read!(0xFFFC) as u16;
+                let pc_hi = read!(0xFFFD) as u16;
+                self.pc.set(pc_hi << 8 | pc_lo);
+                if let Some(rst_pc) = self.rst_pc {
+                    self.pc.set(rst_pc);
+                }
+                self.rst_line.set(false);
             }};
         }
 
@@ -988,6 +1018,9 @@ impl Cpu {
         #[coroutine]
         move || {
             loop {
+                if self.rst_line.get() {
+                    rst!();
+                }
                 self.active_pc.set(self.pc.get());
                 let opcode = next_pc!();
 
@@ -1033,7 +1066,7 @@ mod test {
         // Assembler was configured to put the zero_page as 0
         ram[0x0000..pgr.len()].copy_from_slice(&pgr);
 
-        let cpu = Cpu::new(PRG_START);
+        let cpu = Cpu::new(Some(PRG_START));
         let mut cpu_routine = cpu.run();
         let mut stdout = String::new();
         loop {
