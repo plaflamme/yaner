@@ -1,3 +1,6 @@
 [submodule "roms/nes-test-roms"]
 	path = roms/nes-test-roms
 	url = https://github.com/christopherpow/nes-test-roms.git
+[submodule "roms/6502_65C02_functional_tests"]
+	path = roms/6502_65C02_functional_tests
+	url = https://github.com/plaflamme/6502_65C02_functional_tests.git
