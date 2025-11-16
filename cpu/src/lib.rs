@@ -768,9 +768,9 @@ impl Cpu {
             // Note: * The PCH will always be fetched from the same page
             //         than PCL, i.e. page boundary crossing is not handled.
             (OpType::Implicit, operations::jmp) => {{
-                let ptr_lo = next_pc!() as u16;
-                let ptr_hi = next_pc!() as u16;
-                let ptr = (ptr_hi << 8) | ptr_lo;
+                let ptr_lo = next_pc!();
+                let ptr_hi = next_pc!();
+                let ptr = (ptr_hi as u16) << 8 | ptr_lo as u16;
                 let addr_lo = read!(ptr) as u16;
                 let ptr_plus_1 = (ptr & 0xFF00) | ptr_lo.wrapping_add(1) as u16;
                 let addr_hi = read!(ptr_plus_1) as u16;
