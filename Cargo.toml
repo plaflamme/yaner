@@ -9,6 +9,7 @@ authors = ["Philippe Laflamme <philippe.laflamme@gmail.com>"]
 edition = "2024"
 
 [dependencies]
+yaner-cpu = { path = "cpu" }
 structopt = "0.3.4"
 bitflags = "2.4"
 bitregions = "0.2.4"

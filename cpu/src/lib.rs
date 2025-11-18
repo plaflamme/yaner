@@ -177,19 +177,38 @@ bitflags!(
     }
 );
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default)]
 #[allow(unused)]
 struct NmiLine {
-    // state of the NMI line
-    line: bool,
-    // internal flip-flop that stores edge detection on the line
-    state: bool,
+    // state of the NMI line input
+    line: Cell<bool>,
+    // internal state of the NMI line, used to detect false->true edges
+    prev_line: Cell<bool>,
+
+    // whether NMI should occur, this is only reset within the handler
+    need_nmi: Cell<bool>,
+    // when NMI is determined to need to occur, it should only happen for the next instruction
+    // so this flag is set before need_nmi changes
+    prev_need_nmi: Cell<bool>,
 }
 
+impl NmiLine {
+    fn set(&self) {
+        self.line.set(true);
+    }
+
+    fn clear(&self) {
+        self.line.set(false);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum Rw {
     Read,
     Write,
 }
+
+#[derive(Debug, Clone, Copy)]
 pub struct CpuTick {
     pub rw: Rw,
     pub addr: u16,
@@ -205,13 +224,13 @@ pub struct Cpu {
 
     #[allow(unused)]
     // /NMI line - edge sensitive - high to low
-    nmi_line: Cell<bool>,
+    nmi_line: NmiLine,
     #[allow(unused)]
     // IRQ line - level sensitive
     irq_line: Cell<bool>,
     #[allow(unused)]
     // /RESET line - held low to reset CPU
-    rst_line: Cell<bool>,
+    pub rst_line: Cell<bool>,
     rst_pc: Option<u16>, // Optional PC to use after reset instead of reading it from the reset vector
 
     // Use to delay setting the `I` flag by one instrcution
@@ -219,7 +238,7 @@ pub struct Cpu {
     // The PC of the currently executing instruction
     active_pc: Cell<u16>,
 
-    io_bus: Cell<u8>,
+    pub io_bus: Cell<u8>,
 }
 
 impl std::fmt::Debug for Cpu {
@@ -246,7 +265,7 @@ impl Default for Cpu {
 }
 
 impl Cpu {
-    fn new(rst_pc: Option<u16>) -> Self {
+    pub fn new(rst_pc: Option<u16>) -> Self {
         Cpu {
             acc: Cell::new(0),
             x: Cell::new(0),
@@ -255,7 +274,7 @@ impl Cpu {
             sp: Cell::new(0x00),
             pc: Cell::new(0),
 
-            nmi_line: Cell::default(),
+            nmi_line: NmiLine::default(),
             irq_line: Cell::new(false),
             rst_line: Cell::new(true),
             rst_pc,
@@ -264,6 +283,14 @@ impl Cpu {
             active_pc: Cell::default(),
 
             io_bus: Cell::new(0),
+        }
+    }
+
+    pub fn set_nmi(&self, state: bool) {
+        if state {
+            self.nmi_line.set();
+        } else {
+            self.nmi_line.clear();
         }
     }
 
@@ -288,23 +315,48 @@ impl Cpu {
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuTick, Return = ()> + '_ {
+        macro_rules! start_cycle {
+            () => {};
+        }
+        macro_rules! end_cycle {
+            () => {{
+                // pretty much verbatim from Mesen... I should figure out how this actually works and clean this up
+
+                // "The internal signal goes high during φ1 of the cycle that follows the one where the edge is detected,
+                // and stays high until the NMI has been handled. "
+                self.nmi_line.prev_need_nmi.set(self.nmi_line.need_nmi.get());
+
+                // "This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e., during the
+                // second half of each cycle) and raises an internal signal if the input goes from being high during
+                // one cycle to being low during the next"
+                if !self.nmi_line.prev_line.get() && self.nmi_line.line.get() {
+                    self.nmi_line.need_nmi.set(true);
+                }
+                self.nmi_line.prev_line.set(self.nmi_line.line.get());
+            }};
+        }
         macro_rules! read {
             ( $addr: expr ) => {{
+                start_cycle!();
                 yield CpuTick {
                     rw: Rw::Read,
                     addr: $addr,
                 };
-                self.io_bus.get()
+                let value = self.io_bus.get();
+                end_cycle!();
+                value
             }};
         }
         macro_rules! write {
             ( $addr: expr, $value: expr ) => {{
                 let addr = $addr;
+                start_cycle!();
                 self.io_bus.set($value);
                 yield CpuTick {
                     rw: Rw::Write,
                     addr,
                 };
+                end_cycle!();
             }};
         }
         macro_rules! next_pc {
@@ -368,7 +420,7 @@ impl Cpu {
                 push!((self.pc.get() & 0x00FF) as u8);
 
                 // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
-                let (jmp_lo, jmp_hi, hijacked) = if $is_nmi || self.nmi_line.get() {
+                let (jmp_lo, jmp_hi, hijacked) = if $is_nmi || self.nmi_line.need_nmi.get() {
                     (0xFFFA, 0xFFFB, !$is_nmi)
                 } else {
                     (0xFFFE, 0xFFFF, false)
@@ -382,7 +434,7 @@ impl Cpu {
                 self.pc.set((pch as u16) << 8 | pcl as u16);
 
                 if $is_nmi || hijacked {
-                    self.nmi_line.set(false);
+                    self.nmi_line.need_nmi.set(false);
                 } else {
                     self.irq_line.set(false);
                 }
@@ -1056,7 +1108,7 @@ impl Cpu {
             loop {
                 if self.rst_line.get() {
                     rst!();
-                } else if self.nmi_line.get() {
+                } else if self.nmi_line.prev_need_nmi.get() {
                     nmi!();
                 } else if self.irq_line.get() && !self.flags.get().contains(Flags::I) {
                     irq!();
@@ -1072,6 +1124,33 @@ impl Cpu {
 
                 include!(concat!(env!("OUT_DIR"), "/out.rs"));
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CpuState {
+    pub active_pc: u16,
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub flags: Flags,
+    pub sp: u8,
+    pub intr: Option<u16>,
+}
+
+impl CpuState {
+    pub fn new(cpu: &Cpu) -> Self {
+        CpuState {
+            active_pc: cpu.active_pc.get(),
+            pc: cpu.pc.get(),
+            a: cpu.acc.get(),
+            x: cpu.x.get(),
+            y: cpu.y.get(),
+            sp: cpu.sp.get(),
+            flags: cpu.flags.get(),
+            intr: None,
         }
     }
 }
@@ -1145,13 +1224,14 @@ mod test {
                             // We should only trigger for the pins that **changed**,
                             // so we read the value that was written and then remove the current flags from that to found out which ones actually changed
                             let pins = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
-                            feedback_register = pins - feedback_register;
-                            if feedback_register.contains(Pins::IRQ) {
-                                cpu.irq_line.set(true);
+                            let changed_pins = pins ^ feedback_register;
+                            if changed_pins.contains(Pins::IRQ) {
+                                cpu.irq_line.set(pins.contains(Pins::IRQ));
                             }
-                            if feedback_register.contains(Pins::NMI) {
-                                cpu.nmi_line.set(true);
+                            if changed_pins.contains(Pins::NMI) {
+                                cpu.set_nmi(pins.contains(Pins::NMI));
                             }
+                            feedback_register = pins;
                         }
                     }
                 },
