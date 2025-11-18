@@ -791,9 +791,7 @@ impl Cpu {
                 let ptr = ptr.wrapping_add(self.x.get());
                 let addr_lo = read!(ptr as u16) as u16;
                 let addr_hi = read!(ptr.wrapping_add(1) as u16) as u16;
-                let addr = (addr_hi << 8) | addr_lo;
-                let value = read!(addr);
-                (addr, value)
+                (addr_hi << 8) | addr_lo
             }};
 
             //  #    address   R/W description
@@ -808,8 +806,8 @@ impl Cpu {
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
             (OpType::Read, $op: expr) => {{
-                let (_, value) = ind_indexed_x!();
-                $op.operate(self, value);
+                let addr = ind_indexed_x!();
+                $op.operate(self, read!(addr));
             }};
 
             //  #    address   R/W description
@@ -827,7 +825,8 @@ impl Cpu {
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
             (OpType::Modify, $op: expr) => {{
-                let (addr, value) = ind_indexed_x!();
+                let addr = ind_indexed_x!();
+                let value = read!(addr);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
                 write!(addr, value);
@@ -844,7 +843,7 @@ impl Cpu {
             // Note: The effective address is always fetched from zero page,
             //       i.e. the zero page boundary crossing is not handled.
             (OpType::Write, $op: expr) => {{
-                let (addr, _) = ind_indexed_x!();
+                let addr = ind_indexed_x!();
                 write!(addr, $op.operate(self));
             }};
         }
@@ -993,9 +992,7 @@ impl Cpu {
             ($index: expr) => {{
                 let addr = next_pc!();
                 read!(addr as u16);
-                let addr = addr.wrapping_add($index) as u16;
-                let value = read!(addr);
-                (addr, value)
+                addr.wrapping_add($index) as u16
             }};
             //  #   address  R/W description
             // --- --------- --- ------------------------------------------
@@ -1008,7 +1005,8 @@ impl Cpu {
             //        * The high byte of the effective address is always zero,
             //          i.e. page boundary crossings are not handled.
             (OpType::Read, $op: expr, $index: expr) => {{
-                let (_, value) = zp_indexed!($index);
+                let addr = zp_indexed!($index);
+                let value = read!(addr);
                 $op.operate(self, value);
             }};
             //  #   address  R/W description
@@ -1024,7 +1022,8 @@ impl Cpu {
             // Note: * The high byte of the effective address is always zero,
             //         i.e. page boundary crossings are not handled.
             (OpType::Modify, $op: expr, $index: expr) => {
-                let (addr, value) = zp_indexed!($index);
+                let addr = zp_indexed!($index);
+                let value = read!(addr);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
                 write!(addr, value);
@@ -1041,7 +1040,7 @@ impl Cpu {
             //        * The high byte of the effective address is always zero,
             //          i.e. page boundary crossings are not handled.
             (OpType::Write, $op: expr, $index: expr) => {
-                let (addr, _) = zp_indexed!($index);
+                let addr = zp_indexed!($index);
                 write!(addr, $op.operate(self));
             };
         }
