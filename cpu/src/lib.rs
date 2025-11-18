@@ -688,8 +688,13 @@ impl Cpu {
             };
         }
 
+        //  #  address R/W description
+        // --- ------- --- -----------------------------------------------
+        //  1    PC     R  fetch opcode, increment PC
+        //  2    PC     R  read next instruction byte (and throw it away)
         macro_rules! acc {
             ($op: expr) => {{
+                read!(self.pc.get());
                 let value = self.acc.get();
                 let (_, value) = $op.modify(self, 0, value);
                 self.acc.set(value);
