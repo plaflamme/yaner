@@ -913,10 +913,9 @@ impl Cpu {
                 if carry {
                     let addr_hi = addr_hi.wrapping_add(1);
                     let addr = (addr_hi as u16) << 8 | addr_lo as u16;
-                    let value = read!((addr_hi as u16) << 8 | addr_lo as u16);
-                    (addr, value)
+                    (addr, value, carry)
                 } else {
-                    (addr, value)
+                    (addr, value, carry)
                 }
             }};
 
@@ -940,7 +939,8 @@ impl Cpu {
             //        + This cycle will be executed only if the effective address
             //          was invalid during cycle #5, i.e. page boundary was crossed.
             (OpType::Read, $op: expr) => {{
-                let (_, value) = ind_indexed_y!();
+                let (addr, value, carry) = ind_indexed_y!();
+                let value = if carry { read!(addr) } else { value };
                 $op.operate(self, value);
             }};
 
@@ -964,7 +964,8 @@ impl Cpu {
             //        * The high byte of the effective address may be invalid
             //          at this time, i.e. it may be smaller by $100.
             (OpType::Modify, $op: expr) => {{
-                let (addr, value) = ind_indexed_y!();
+                let (addr, _, _) = ind_indexed_y!();
+                let value = read!(addr);
                 write!(addr, value);
                 let (addr, value) = $op.modify(self, addr, value);
                 write!(addr, value);
@@ -987,7 +988,7 @@ impl Cpu {
             //        * The high byte of the effective address may be invalid
             //          at this time, i.e. it may be smaller by $100.
             (OpType::Write, $op: expr) => {{
-                let (addr, _) = ind_indexed_y!();
+                let (addr, _, _) = ind_indexed_y!();
                 write!(addr, $op.operate(self));
             }};
         }

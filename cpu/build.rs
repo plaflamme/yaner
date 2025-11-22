@@ -348,6 +348,8 @@ pub fn main() {
                 )
             })
             .map(|(opcode_value, opcode)| {
+                let opcode_value = proc_macro2::Literal::from_str(&format!("0x{opcode_value:X}u8"))
+                    .expect("hex literal works");
                 quote! {
                     #opcode_value => { #opcode; }
                 }
