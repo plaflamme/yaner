@@ -238,15 +238,12 @@ pub struct Cpu {
     sp: Cell<u8>,
     pc: Cell<u16>,
 
-    #[allow(unused)]
     // /NMI line - edge sensitive - high to low
     nmi_line: NmiLine,
-    #[allow(unused)]
     // IRQ line - level sensitive
     irq_line: Cell<bool>,
-    #[allow(unused)]
     // /RESET line - held low to reset CPU
-    pub rst_line: Cell<bool>,
+    rst_line: Cell<bool>,
     rst_pc: Option<u16>, // Optional PC to use after reset instead of reading it from the reset vector
 
     // Use to delay setting the `I` flag by one instrcution
@@ -308,6 +305,10 @@ impl Cpu {
         } else {
             self.nmi_line.clear();
         }
+    }
+
+    pub fn reset(&self) {
+        self.rst_line.set(true);
     }
 
     fn flag(&self, f: Flags) -> bool {
