@@ -200,6 +200,22 @@ impl NmiLine {
     fn clear(&self) {
         self.line.set(false);
     }
+
+    fn poll(&self) {
+        // pretty much verbatim from Mesen... I should figure out how this actually works and clean this up
+
+        // "The internal signal goes high during φ1 of the cycle that follows the one where the edge is detected,
+        // and stays high until the NMI has been handled. "
+        self.prev_need_nmi.set(self.need_nmi.get());
+
+        // "This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e., during the
+        // second half of each cycle) and raises an internal signal if the input goes from being high during
+        // one cycle to being low during the next"
+        if !self.prev_line.get() && self.line.get() {
+            self.need_nmi.set(true);
+        }
+        self.prev_line.set(self.line.get());
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -320,19 +336,7 @@ impl Cpu {
         }
         macro_rules! end_cycle {
             () => {{
-                // pretty much verbatim from Mesen... I should figure out how this actually works and clean this up
-
-                // "The internal signal goes high during φ1 of the cycle that follows the one where the edge is detected,
-                // and stays high until the NMI has been handled. "
-                self.nmi_line.prev_need_nmi.set(self.nmi_line.need_nmi.get());
-
-                // "This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e., during the
-                // second half of each cycle) and raises an internal signal if the input goes from being high during
-                // one cycle to being low during the next"
-                if !self.nmi_line.prev_line.get() && self.nmi_line.line.get() {
-                    self.nmi_line.need_nmi.set(true);
-                }
-                self.nmi_line.prev_line.set(self.nmi_line.line.get());
+                self.nmi_line.poll();
             }};
         }
         macro_rules! read {
