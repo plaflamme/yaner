@@ -184,12 +184,6 @@ struct NmiLine {
     line: Cell<bool>,
     // internal state of the NMI line, used to detect false->true edges
     prev_line: Cell<bool>,
-
-    // whether NMI should occur, this is only reset within the handler
-    need_nmi: Cell<bool>,
-    // when NMI is determined to need to occur, it should only happen for the next instruction
-    // so this flag is set before need_nmi changes
-    prev_need_nmi: Cell<bool>,
 }
 
 impl NmiLine {
@@ -200,21 +194,19 @@ impl NmiLine {
     fn clear(&self) {
         self.line.set(false);
     }
-
-    fn poll(&self) {
-        // pretty much verbatim from Mesen... I should figure out how this actually works and clean this up
-
-        // "The internal signal goes high during φ1 of the cycle that follows the one where the edge is detected,
-        // and stays high until the NMI has been handled. "
-        self.prev_need_nmi.set(self.need_nmi.get());
-
-        // "This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e., during the
-        // second half of each cycle) and raises an internal signal if the input goes from being high during
-        // one cycle to being low during the next"
-        if !self.prev_line.get() && self.line.get() {
-            self.need_nmi.set(true);
-        }
+    fn poll(&self) -> bool {
+        let polled = !self.prev_line.get() && self.line.get();
         self.prev_line.set(self.line.get());
+        polled
+    }
+}
+
+bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Interrupts: u8 {
+        const RST = 1 << 0;
+        const IRQ = 1 << 1;
+        const NMI = 1 << 2;
     }
 }
 
@@ -240,14 +232,12 @@ pub struct Cpu {
 
     // /NMI line - edge sensitive - high to low
     nmi_line: NmiLine,
-    // IRQ line - level sensitive
-    irq_line: Cell<bool>,
-    // /RESET line - held low to reset CPU
-    rst_line: Cell<bool>,
-    rst_pc: Option<u16>, // Optional PC to use after reset instead of reading it from the reset vector
+    interrupts: Cell<Interrupts>, // Pending interrupts
 
+    rst_pc: Option<u16>, // Optional PC to use after reset instead of reading it from the reset vector
     // Use to delay setting the `I` flag by one instrcution
     delay_intr_flag: Cell<Option<bool>>,
+    delay_nmi: Cell<Option<bool>>,
     // The PC of the currently executing instruction
     active_pc: Cell<u16>,
 
@@ -288,11 +278,11 @@ impl Cpu {
             pc: Cell::new(0),
 
             nmi_line: NmiLine::default(),
-            irq_line: Cell::new(false),
-            rst_line: Cell::new(true),
+            interrupts: Cell::new(Interrupts::RST),
             rst_pc,
 
             delay_intr_flag: Cell::default(),
+            delay_nmi: Cell::default(),
             active_pc: Cell::default(),
 
             io_bus: Cell::new(0),
@@ -307,8 +297,36 @@ impl Cpu {
         }
     }
 
+    pub fn set_irq(&self, state: bool) {
+        if state {
+            self.interrupts.update(|i| i | Interrupts::IRQ);
+        } else {
+            self.interrupts.update(|i| i - Interrupts::IRQ);
+        }
+    }
+
+    // This should be invoked during the end of each cpu cycle (φ2).
+    //
+    // During this, we poll the nmi line. If we notice we should trigger it, we set the `delay_nmi` flag.
+    //
+    // This allows us to also handle φ1, but of the **next** cycle, since we've delayed the signal.
+    fn poll_nmi(&self) {
+        // "The internal signal goes high during φ1 of the cycle that follows the one where the edge is detected,
+        // and stays high until the NMI has been handled."
+        if let Some(true) = self.delay_nmi.take() {
+            self.interrupts.update(|i| i | Interrupts::NMI);
+        }
+
+        // "This edge detector polls the status of the NMI line during φ2 of each CPU cycle (i.e., during the
+        // second half of each cycle) and raises an internal signal if the input goes from being high during
+        // one cycle to being low during the next"
+        if self.nmi_line.poll() {
+            self.delay_nmi.set(Some(true));
+        }
+    }
+
     pub fn reset(&self) {
-        self.rst_line.set(true);
+        self.interrupts.update(|intr| intr | Interrupts::RST);
     }
 
     fn flag(&self, f: Flags) -> bool {
@@ -337,7 +355,7 @@ impl Cpu {
         }
         macro_rules! end_cycle {
             () => {{
-                self.nmi_line.poll();
+                self.poll_nmi();
             }};
         }
         macro_rules! read {
@@ -415,20 +433,23 @@ impl Cpu {
                 if let Some(rst_pc) = self.rst_pc {
                     self.pc.set(rst_pc);
                 }
-                self.rst_line.set(false);
+                self.interrupts.set(Interrupts::empty());
             }};
         }
 
         macro_rules! interrupt {
-            ($flags:expr, nmi: $is_nmi:literal) => {{
+            ($flags:expr, $intr:expr) => {{
                 push!((self.pc.get() >> 8) as u8);
                 push!((self.pc.get() & 0x00FF) as u8);
 
                 // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
-                let (jmp_lo, jmp_hi, hijacked) = if $is_nmi || self.nmi_line.need_nmi.get() {
-                    (0xFFFA, 0xFFFB, !$is_nmi)
+                let is_nmi =
+                    $intr == Interrupts::NMI || self.interrupts.get().contains(Interrupts::NMI);
+
+                let (jmp_lo, jmp_hi) = if is_nmi {
+                    (0xFFFA, 0xFFFB)
                 } else {
-                    (0xFFFE, 0xFFFF, false)
+                    (0xFFFE, 0xFFFF)
                 };
 
                 push!(($flags | Flags::U).bits());
@@ -437,12 +458,13 @@ impl Cpu {
                 self.set_flag(Flags::I, true);
                 let pch = read!(jmp_hi);
                 self.pc.set((pch as u16) << 8 | pcl as u16);
-
-                if $is_nmi || hijacked {
-                    self.nmi_line.need_nmi.set(false);
-                } else {
-                    self.irq_line.set(false);
-                }
+                self.interrupts.update(|i| {
+                    if is_nmi {
+                        i - Interrupts::NMI
+                    } else {
+                        i - $intr
+                    }
+                });
             }};
         }
 
@@ -450,7 +472,7 @@ impl Cpu {
             () => {
                 read!(self.pc.get());
                 read!(self.pc.get());
-                interrupt!(self.flags.get() - Flags::B, nmi: false);
+                interrupt!(self.flags.get() - Flags::B, Interrupts::IRQ);
             };
         }
 
@@ -458,7 +480,21 @@ impl Cpu {
             () => {
                 read!(self.pc.get());
                 read!(self.pc.get());
-                interrupt!(self.flags.get() - Flags::B, nmi: true);
+                interrupt!(self.flags.get() - Flags::B, Interrupts::NMI);
+            };
+        }
+
+        macro_rules! process_interrupts {
+            () => {
+                let pending = self.interrupts.get();
+                if pending.contains(Interrupts::RST) {
+                    rst!();
+                } else if pending.contains(Interrupts::NMI) {
+                    nmi!();
+                } else if pending.contains(Interrupts::IRQ) && !self.flags.get().contains(Flags::I)
+                {
+                    irq!();
+                }
             };
         }
 
@@ -476,7 +512,7 @@ impl Cpu {
         macro_rules! brk {
             () => {{
                 let _ = next_pc!();
-                interrupt!(self.flags.get() | Flags::B, nmi: false);
+                interrupt!(self.flags.get() | Flags::B, Interrupts::IRQ);
             }};
         }
 
@@ -1112,13 +1148,7 @@ impl Cpu {
         #[coroutine]
         move || {
             loop {
-                if self.rst_line.get() {
-                    rst!();
-                } else if self.nmi_line.prev_need_nmi.get() {
-                    nmi!();
-                } else if self.irq_line.get() && !self.flags.get().contains(Flags::I) {
-                    irq!();
-                }
+                process_interrupts!();
 
                 self.active_pc.set(self.pc.get());
                 let opcode = next_pc!();
@@ -1232,7 +1262,7 @@ mod test {
                             let pins = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
                             let changed_pins = pins ^ feedback_register;
                             if changed_pins.contains(Pins::IRQ) {
-                                cpu.irq_line.set(pins.contains(Pins::IRQ));
+                                cpu.set_irq(pins.contains(Pins::IRQ));
                             }
                             if changed_pins.contains(Pins::NMI) {
                                 cpu.set_nmi(pins.contains(Pins::NMI));
