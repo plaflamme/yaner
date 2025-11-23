@@ -10,16 +10,6 @@ pub(super) trait ImplicitOperation {
     fn run(&self, cpu: &Cpu);
 }
 
-// Implicit operations still read, but they don't use the value
-impl<T> ReadOperation for T
-where
-    T: ImplicitOperation,
-{
-    fn operate(&self, cpu: &Cpu, _value: u8) {
-        self.run(cpu);
-    }
-}
-
 pub(super) trait ModifyOperation {
     // this includes addr because TAS, SHX and SHY operate on the high byte of the target address
     //   instead of the value
