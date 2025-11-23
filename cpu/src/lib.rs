@@ -48,6 +48,7 @@ enum OpType {
     Stack,
     Implicit,
 }
+
 impl OpType {
     fn from_op(op: Op) -> Self {
         use Op::*;
@@ -327,7 +328,14 @@ pub enum Rw {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum Phi {
+    Start,
+    End,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct CpuTick {
+    pub phi: Phi,
     pub rw: Rw,
     pub addr: u16,
 }
@@ -467,22 +475,27 @@ impl Cpu {
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuTick, Return = ()> + '_ {
         macro_rules! cycle {
-            ($cycle:expr) => {{
+            ($rw:expr, $addr:expr) => {{
                 self.start_cycle();
-                yield $cycle;
+                yield CpuTick {
+                    phi: Phi::Start,
+                    rw: $rw,
+                    addr: $addr,
+                };
                 self.end_cycle();
+                yield CpuTick {
+                    phi: Phi::End,
+                    rw: $rw,
+                    addr: $addr,
+                };
             }};
         }
         macro_rules! dma {
             ($addr:expr) => {{
-                cycle! {
-                    CpuTick { rw: Rw::Read, addr: $addr }
-                }
+                cycle!(Rw::Read, $addr);
 
                 for addr_lo in 0x00..=0xFF {
-                    cycle! {
-                        CpuTick { rw: Rw::Read, addr: $addr | addr_lo }
-                    };
+                    cycle!(Rw::Read, $addr | addr_lo);
 
                     // 0x2004 is OAMDATA
                     write!(0x2004, self.io_bus.get());
@@ -498,9 +511,7 @@ impl Cpu {
                 if let Some(addr) = self.dma_latch.take() {
                     dma!((addr as u16) << 8);
                 }
-                cycle! {
-                    CpuTick { rw: Rw::Read, addr }
-                }
+                cycle!(Rw::Read, addr);
                 self.io_bus.get()
             }};
         }
@@ -508,9 +519,7 @@ impl Cpu {
             ( $addr: expr, $value: expr ) => {{
                 let addr = $addr;
                 self.io_bus.set($value);
-                cycle! {
-                    CpuTick { rw: Rw::Write, addr }
-                }
+                cycle!(Rw::Write, addr);
             }};
         }
         macro_rules! next_pc {
@@ -1054,6 +1063,8 @@ mod test {
         pin::Pin,
     };
 
+    use crate::Phi;
+
     use super::Cpu;
     use super::CpuTick;
     use super::Rw;
@@ -1090,42 +1101,44 @@ mod test {
         let mut feedback_register = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
         loop {
             match Pin::new(&mut cpu_routine).resume(()) {
-                CoroutineState::Yielded(tick @ CpuTick { rw, addr }) => {
-                    println!("{tick:?}");
-                    match rw {
-                        Rw::Read => {
-                            cpu.io_bus.set(ram[addr as usize]);
-                            if addr == STDIN_ADDR {
-                                // program is waiting for input, so it stopped; successfully or not
-                                if stdout.contains("All tests completed, press R to repeat") {
-                                    break;
+                CoroutineState::Yielded(CpuTick { phi, rw, addr }) => {
+                    if matches!(phi, Phi::Start) {
+                        match rw {
+                            Rw::Read => {
+                                cpu.io_bus.set(ram[addr as usize]);
+                                if addr == STDIN_ADDR {
+                                    // program is waiting for input, so it stopped; successfully or not
+                                    if stdout.contains("All tests completed, press R to repeat") {
+                                        break;
+                                    }
+                                    panic!(
+                                        "Tests failed.\nCpu state: {cpu:?}\nProgram output was:{stdout}"
+                                    )
                                 }
-                                panic!(
-                                    "Tests failed.\nCpu state: {cpu:?}\nProgram output was:{stdout}"
-                                )
                             }
-                        }
-                        Rw::Write => {
-                            ram[addr as usize] = cpu.io_bus.get();
-                            if addr == STDOUT_ADDR {
-                                let c = ram[STDOUT_ADDR as usize] as char;
-                                // uncomment to see output during testing with `cargo test -- --nocapture`
-                                // print!("{c}");
-                                stdout.push(c);
-                            }
+                            Rw::Write => {
+                                ram[addr as usize] = cpu.io_bus.get();
+                                if addr == STDOUT_ADDR {
+                                    let c = ram[STDOUT_ADDR as usize] as char;
+                                    // uncomment to see output during testing with `cargo test -- --nocapture`
+                                    // print!("{c}");
+                                    stdout.push(c);
+                                }
 
-                            if addr == FEEDBACK_ADDR {
-                                // We should only trigger for the pins that **changed**,
-                                // so we read the value that was written and then remove the current flags from that to found out which ones actually changed
-                                let pins = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
-                                let changed_pins = pins ^ feedback_register;
-                                if changed_pins.contains(Pins::IRQ) {
-                                    cpu.set_irq(pins.contains(Pins::IRQ));
+                                if addr == FEEDBACK_ADDR {
+                                    // We should only trigger for the pins that **changed**,
+                                    // so we read the value that was written and then remove the current flags from that to found out which ones actually changed
+                                    let pins =
+                                        Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
+                                    let changed_pins = pins ^ feedback_register;
+                                    if changed_pins.contains(Pins::IRQ) {
+                                        cpu.set_irq(pins.contains(Pins::IRQ));
+                                    }
+                                    if changed_pins.contains(Pins::NMI) {
+                                        cpu.set_nmi(pins.contains(Pins::NMI));
+                                    }
+                                    feedback_register = pins;
                                 }
-                                if changed_pins.contains(Pins::NMI) {
-                                    cpu.set_nmi(pins.contains(Pins::NMI));
-                                }
-                                feedback_register = pins;
                             }
                         }
                     }
