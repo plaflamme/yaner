@@ -2,9 +2,13 @@
 
 mod common;
 
+use common::blargg::read_zero_terminated_string;
 use common::blargg::run_blargg_test;
+use common::run_test;
 use common::run_test_frames;
 use test_case::test_case;
+
+use crate::common::Eval;
 
 #[test_case("01-basics")]
 #[test_case("02-implied")]
@@ -36,14 +40,16 @@ fn instr_misc(case: &str) {
 
 #[test]
 fn cpu_timing_test() {
-    run_test_frames(
+    run_test(
         "roms/nes-test-roms/cpu_timing_test6/cpu_timing_test.nes",
         None,
-        640,
+        |nes| match nes.cpu.pc {
+            0xEA5A => Eval::Halt, // address of infinite loop when test ends
+            _ => Eval::Continue,
+        },
         |nes| {
-            // NOTE: these were shown to be different when the test fails. It's not documented anywhere though...
-            assert_eq!(nes.cpu_bus.read_u8(0x0000), 0x60);
-            assert_eq!(nes.cpu_bus.read_u8(0x0001), 0xE6);
+            let output = read_zero_terminated_string(nes.ppu_bus, 0x2102);
+            assert_eq!(output.trim(), "PASSED");
         },
     );
 }

@@ -10,13 +10,13 @@ use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
-use crate::cpu::opcode::OpCode;
 use crate::cpu::Cpu;
+use crate::cpu::opcode::OpCode;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, NesCycle};
-use crate::ppu::reg::{PpuMask, PpuStatus};
 use crate::ppu::PpuCycle;
+use crate::ppu::reg::{PpuMask, PpuStatus};
 
 fn format_bitflags<F: bitflags::Flags>(f: F) -> String {
     use std::fmt::Write;
@@ -214,7 +214,7 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 
 // TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
 fn prg_rom(f: &mut Frame<'_>, state: &NesState, addr_space: &dyn AddressSpace, chunk: Rect) {
-    let start = 0x8000;
+    let start = state.cpu.pc.saturating_sub(16);
 
     let mut items = Vec::new();
     let mut addr = start;
@@ -231,7 +231,7 @@ fn prg_rom(f: &mut Frame<'_>, state: &NesState, addr_space: &dyn AddressSpace, c
         items.push(ListItem::new(instr));
 
         addr = addr.saturating_add(1).saturating_add(operand.1 as u16);
-        if addr >= 0xFFFE {
+        if addr >= state.cpu.pc.saturating_add(16) {
             break;
         }
     }
@@ -312,7 +312,22 @@ fn sprite_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
 fn cycles(f: &mut Frame<'_>, app_state: &AppState, chunk: Rect) {
     let mut items = Vec::new();
     for cycle in app_state.cycles.iter() {
-        items.push(ListItem::new(format!("{cycle:?}")));
+        let line = match cycle {
+            NesCycle::PowerUp => "PowerUp".to_owned(),
+            NesCycle::Cpu(yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phi, rw, addr })) => {
+                format!("Cpu({phi:?} {rw:?}@0x{addr:X})")
+            }
+            NesCycle::Cpu(yaner_cpu::CpuEvent::Cycle) => {
+                format!("Cpu(op)")
+            }
+
+            NesCycle::Ppu(ppu_cycle) => match ppu_cycle {
+                PpuCycle::Tick { nmi: true } => format!("PPU(NMI)"),
+                PpuCycle::Tick { nmi: _ } => format!("PPU(dot)"),
+                PpuCycle::Frame => format!("PPU(frame)"),
+            },
+        };
+        items.push(ListItem::new(line.to_string()));
     }
 
     let mut state = ListState::default();
@@ -629,6 +644,27 @@ impl Debugger {
                             if (opcode == 0x8C || opcode == 0x8D || opcode == 0x8E) // STY, STA, STX
                                 && d.cpu_bus.read_u16(d.cpu.pc + 1) == 0x2001
                             {
+                                break;
+                            }
+                        }
+                    }
+                    Key::F(10) => {
+                        let active_pc = self.stepper.nes().debug().cpu.pc;
+                        let opcode = self.stepper.nes().debug().cpu_bus.read_u8(active_pc);
+                        match yaner_cpu::OpCode::decode(opcode) {
+                            yaner_cpu::OpCode(yaner_cpu::Op::JSR, _) => {
+                                let return_pc = active_pc + 3;
+                                self.stepper
+                                    .step_until(|nes, _| nes.debug().cpu.pc == return_pc)?;
+                            }
+                            _ => self.stepper.step_cpu().map(|_| ())?,
+                        }
+                    }
+                    Key::Char('M') => {
+                        let breakpoints = [0x0200];
+                        loop {
+                            self.stepper.step_cpu()?;
+                            if breakpoints.contains(&self.stepper.nes().debug().cpu.pc) {
                                 break;
                             }
                         }

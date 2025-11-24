@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use crate::common::Eval;
 use yaner::memory::AddressSpace;
 
-fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
+pub fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
     let mut str_vec = Vec::new();
     let mut v = addr_space.read_u8(str_addr);

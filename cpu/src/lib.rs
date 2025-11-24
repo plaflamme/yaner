@@ -1108,7 +1108,7 @@ mod test {
         let mut feedback_register = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
         loop {
             match Pin::new(&mut cpu_routine).resume(()) {
-                CoroutineState::Yielded(CpuTick { phi, rw, addr }) => {
+                CoroutineState::Yielded(CpuEvent::Tick(CpuTick { phi, rw, addr })) => {
                     if matches!(phi, Phi::Start) {
                         match rw {
                             Rw::Read => {
@@ -1150,6 +1150,7 @@ mod test {
                         }
                     }
                 }
+                CoroutineState::Yielded(CpuEvent::Cycle) => (),
                 CoroutineState::Complete(_) => {
                     panic!("cpu stopped, PC was 0x{:X}", cpu.active_pc.get());
                 }

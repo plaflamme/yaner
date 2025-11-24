@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
-use yaner::cartridge::Cartridge;
-use yaner::nes::debug::NesState;
-use yaner::nes::Nes;
 use yaner::Reset;
+use yaner::cartridge::Cartridge;
+use yaner::nes::Nes;
+use yaner::nes::debug::NesState;
 
 pub mod blargg;
 

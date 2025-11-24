@@ -4,11 +4,13 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 use ouroboros::self_referencing;
+use yaner_cpu::CpuEvent;
 
 use crate::Reset;
 use crate::cartridge::Cartridge;
-use crate::cpu::{Cpu, CpuBus, CpuCycle, IoRegisters};
+use crate::cpu::{CpuBus, IoRegisters};
 use crate::input::Joypad;
+use crate::memory::AddressSpace;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 
 pub mod debug;
@@ -27,7 +29,6 @@ pub struct Clocks {
 impl Clocks {
     fn tick_cpu(&self) {
         self.cpu_cycles.update(|c| c.wrapping_add(1));
-        self.ppu_cycles.update(|c| c.wrapping_add(1));
     }
 
     fn tick_ppu(&self) {
@@ -42,13 +43,13 @@ impl Clocks {
 #[derive(Debug)]
 pub enum NesCycle {
     PowerUp,
-    // NOTE: CpuCycle::OpComplete is yielded once the CPU/PPU are aligned
-    Cpu(CpuCycle),
+    Cpu(yaner_cpu::CpuEvent),
     Ppu(PpuCycle),
 }
 
 pub struct Nes {
-    pub cpu: Cpu,
+    pub cpu: yaner_cpu::Cpu,
+    pub cpu_bus: CpuBus,
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
@@ -71,7 +72,8 @@ impl Nes {
         let cpu_bus = CpuBus::new(io_registers, ppu_mem_registers, mapper.clone());
 
         Nes {
-            cpu: Cpu::new(cpu_bus, start_at),
+            cpu: yaner_cpu::Cpu::new(start_at),
+            cpu_bus,
             ppu,
             clocks: Clocks::default(),
             input1,
@@ -93,31 +95,53 @@ impl Nes {
         // From what I understand, the PPU detects 0 -> 1 transitions on the master clock while
         // the cpu detects 1 -> 0 transitions.
         // This effectively means that they're always off by one master clock tick which is represented here.
-        let ppu_offset = 1;
+        let ppu_offset = 0;
 
         self.clocks.cpu_master_clock.set(12);
         #[coroutine]
         move || {
             yield NesCycle::PowerUp;
             loop {
-                let cpu_tick = match Pin::new(&mut cpu).resume(()) {
-                    CoroutineState::Yielded(cycle) => match cycle {
-                        CpuCycle::Phi1(clock_ticks) => {
-                            self.clocks.cpu_master_clock.update(|c| c + clock_ticks);
-                            yield NesCycle::Cpu(cycle);
-                            None
+                match Pin::new(&mut cpu).resume(()) {
+                    CoroutineState::Yielded(
+                        cycle @ yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phi, rw, addr }),
+                    ) => {
+                        if matches!(phi, yaner_cpu::Phi::Start) {
+                            match rw {
+                                yaner_cpu::Rw::Read => {
+                                    let value = self.cpu_bus.read_u8(addr);
+                                    self.clocks.cpu_master_clock.update(|c| c + 5);
+                                    self.cpu.io_bus.set(value);
+                                    yield NesCycle::Cpu(cycle);
+                                }
+                                yaner_cpu::Rw::Write => {
+                                    self.clocks.cpu_master_clock.update(|c| c + 7);
+                                    self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
+                                    yield NesCycle::Cpu(cycle);
+                                }
+                            }
+                        } else {
+                            match rw {
+                                yaner_cpu::Rw::Read => {
+                                    self.clocks.cpu_master_clock.update(|c| c + 7);
+                                    self.clocks.tick_cpu();
+                                    yield NesCycle::Cpu(cycle);
+                                }
+                                yaner_cpu::Rw::Write => {
+                                    self.clocks.cpu_master_clock.update(|c| c + 5);
+                                    self.clocks.tick_cpu();
+                                    yield NesCycle::Cpu(cycle);
+                                }
+                            }
                         }
-                        CpuCycle::Tick(clock_ticks) => {
-                            self.clocks.cpu_master_clock.update(|c| c + clock_ticks);
-                            self.clocks.tick_cpu();
-                            yield NesCycle::Cpu(cycle);
-                            None
-                        }
-                        CpuCycle::OpComplete(_, _) => Some(cycle),
-                        CpuCycle::Halt => break,
-                    },
+                    }
+                    CoroutineState::Yielded(c) => yield NesCycle::Cpu(c),
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
+
+                if let Some(addr) = self.cpu_bus.io_regsiters.dma_latch() {
+                    self.cpu.dma_latch.set(Some(addr));
+                }
 
                 while self.clocks.ppu_master_clock.get() + ppu_stride
                     <= (self.clocks.cpu_master_clock.get() - ppu_offset)
@@ -125,7 +149,9 @@ impl Nes {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
                             match cycle {
-                                PpuCycle::Tick { nmi } => self.cpu.bus.set_nmi_line(nmi),
+                                PpuCycle::Tick { nmi } => {
+                                    self.cpu.set_nmi(nmi);
+                                }
                                 PpuCycle::Frame => self.clocks.tick_frame(),
                             }
                             self.clocks.tick_ppu();
@@ -145,15 +171,8 @@ impl Nes {
                     if self.clocks.ppu_cycles.get().is_multiple_of(3_221_590) {
                         // TODO: this should remember when each bit was last set to 1
                         // TODO: this should just happen as a side effect of ticking the ppu
-                        self.cpu.bus.ppu_registers.decay_open_bus()
+                        self.cpu_bus.ppu_registers.decay_open_bus()
                     }
-                }
-
-                // When we tick the CPU, the PPU hasn't caught up yet.
-                // So in order for the consumer to know when this alignment occurs, we yield OpComplete
-                //   after the ppu has caught up. OpComplete, isn't a "real" CPU tick.
-                if let Some(op @ CpuCycle::OpComplete(_, _)) = cpu_tick {
-                    yield NesCycle::Cpu(op)
                 }
             }
         }
@@ -199,11 +218,11 @@ impl Steps {
         } else {
             let cycle = self.with_steps_mut(|s| Pin::new(s).resume(()));
             match cycle {
-                CoroutineState::Yielded(cycle @ NesCycle::Cpu(CpuCycle::Halt)) => {
-                    self.with_halted_mut(|h| *h = true);
+                CoroutineState::Yielded(cycle) => {
+                    let state = self.nes().debug();
+                    log::trace!("{:?}", state.cpu);
                     Ok(cycle)
                 }
-                CoroutineState::Yielded(cycle) => Ok(cycle),
                 CoroutineState::Complete(_) => Err(StepperError::Halted),
             }
         }
@@ -242,17 +261,18 @@ impl Steps {
         loop {
             match self.step()? {
                 NesCycle::Ppu(cycle) => break Ok(cycle),
-                NesCycle::Cpu(CpuCycle::Halt) => break Err(StepperError::Halted),
+                // NesCycle::Cpu(CpuCycle::Halt) => break Err(StepperError::Halted),
                 _ => (),
             }
         }
     }
 
-    pub fn step_cpu(&mut self) -> Result<CpuCycle, StepperError> {
+    pub fn step_cpu(&mut self) -> Result<yaner_cpu::CpuEvent, StepperError> {
         loop {
             match self.step()? {
-                NesCycle::Cpu(cycle @ CpuCycle::OpComplete(_, _)) => break Ok(cycle),
-                NesCycle::Cpu(CpuCycle::Halt) => break Ok(CpuCycle::Halt),
+                NesCycle::Cpu(cycle @ CpuEvent::Cycle) => {
+                    break Ok(cycle);
+                }
                 _ => (),
             }
         }

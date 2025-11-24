@@ -1,4 +1,3 @@
-use crate::cpu::debug::CpuState;
 use crate::memory::AddressSpace;
 use crate::ppu::debug::PpuState;
 
@@ -11,7 +10,7 @@ pub struct ClockState {
 }
 // TODO: expose address spaces (read only?)
 pub struct NesState<'a> {
-    pub cpu: CpuState,
+    pub cpu: yaner_cpu::CpuState,
     pub ppu: PpuState<'a>,
     pub clocks: ClockState,
 
@@ -26,7 +25,7 @@ pub struct NesState<'a> {
 impl<'a> NesState<'a> {
     pub fn new(nes: &'a super::Nes) -> Self {
         NesState {
-            cpu: CpuState::new(&nes.cpu),
+            cpu: yaner_cpu::CpuState::new(&nes.cpu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
                 cpu_master_clock: nes.clocks.cpu_master_clock.get(),
@@ -36,11 +35,11 @@ impl<'a> NesState<'a> {
                 ppu_frames: nes.clocks.ppu_frames.get(),
             },
 
-            cpu_bus: &nes.cpu.bus,
+            cpu_bus: &nes.cpu_bus,
             ppu_bus: &nes.ppu.bus,
-            ram: &nes.cpu.bus.ram,
+            ram: &nes.cpu_bus.ram,
             vram: &nes.ppu.bus.vram,
-            prg_rom: &nes.cpu.bus, // TODO: use mapper directly
+            prg_rom: &nes.cpu_bus, // TODO: use mapper directly
             chr_rom: &nes.ppu.bus, // TODO: use mapper directly
         }
     }
