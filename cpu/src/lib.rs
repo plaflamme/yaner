@@ -334,6 +334,12 @@ pub enum Phi {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum CpuEvent {
+    Cycle,
+    Tick(CpuTick),
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct CpuTick {
     pub phi: Phi,
     pub rw: Rw,
@@ -473,21 +479,21 @@ impl Cpu {
         self.poll_nmi();
     }
 
-    pub fn run(&self) -> impl Coroutine<Yield = CpuTick, Return = ()> + '_ {
+    pub fn run(&self) -> impl Coroutine<Yield = CpuEvent, Return = ()> + '_ {
         macro_rules! cycle {
             ($rw:expr, $addr:expr) => {{
                 self.start_cycle();
-                yield CpuTick {
+                yield CpuEvent::Tick(CpuTick {
                     phi: Phi::Start,
                     rw: $rw,
                     addr: $addr,
-                };
+                });
                 self.end_cycle();
-                yield CpuTick {
+                yield CpuEvent::Tick(CpuTick {
                     phi: Phi::End,
                     rw: $rw,
                     addr: $addr,
-                };
+                });
             }};
         }
         macro_rules! dma {
@@ -793,6 +799,7 @@ impl Cpu {
                 process_interrupts!();
 
                 self.active_pc.set(self.pc.get());
+                yield CpuEvent::Cycle;
                 let opcode = next_pc!();
 
                 let OpCode(op, mode) = OpCode::decode(opcode);
@@ -1063,7 +1070,7 @@ mod test {
         pin::Pin,
     };
 
-    use crate::Phi;
+    use crate::{CpuEvent, Phi};
 
     use super::Cpu;
     use super::CpuTick;
