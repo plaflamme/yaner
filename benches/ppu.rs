@@ -21,8 +21,10 @@ fn ppu_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("ppu-throughput");
     group.throughput(Throughput::Elements(frames));
 
-    let cart =
-        Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
+    let cart = Cartridge::try_from(
+        Path::new("roms/nes-test-roms/spritecans-2011/spritecans.nes").to_owned(),
+    )
+    .unwrap();
     let nes = Nes::new(cart);
     let mut stepper = nes.steps();
 
