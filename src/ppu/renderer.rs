@@ -176,8 +176,8 @@ impl Renderer {
     fn cycle_sprites(
         &self,
         registers: &Registers,
-        oam_ram: &dyn AddressSpace,
-        bus: &dyn AddressSpace,
+        oam_ram: &impl AddressSpace,
+        bus: &impl AddressSpace,
         pre_render: bool,
     ) {
         let dot = self.dot.get();
@@ -295,7 +295,7 @@ impl Renderer {
         }
     }
 
-    fn render_pixel(&self, registers: &Registers, bus: &dyn AddressSpace, dot: u16) {
+    fn render_pixel(&self, registers: &Registers, bus: &impl AddressSpace, dot: u16) {
         // NOTE: on the second tick, we draw pixel 0
         // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
         let pixel = dot - 2;
@@ -312,16 +312,18 @@ impl Renderer {
                 bg_color
             };
 
-            let pixel_index = pixel + sl * 256;
+            let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
+
             let s: &Cell<[Pixel]> = &self.frame_pixels;
             let pixels = s.as_slice_of_cells();
-            let pixel_value = Pixel(bus.read_u8(pixel_color.address()));
+
+            let pixel_index = pixel + sl * 256;
             pixels[pixel_index as usize].set(pixel_value);
         }
     }
 
     // determines the color of the current pixel, shifts registers
-    fn cycle_pixel(&self, registers: &Registers, bus: &dyn AddressSpace) {
+    fn cycle_pixel(&self, registers: &Registers, bus: &impl AddressSpace) {
         match self.dot.get() {
             // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
             //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
@@ -335,7 +337,7 @@ impl Renderer {
 
     // implements the VRAM nametable, attribute and pattern fetches.
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
-    fn cycle_bg(&self, registers: &Registers, bus: &dyn AddressSpace, pre_render: bool) {
+    fn cycle_bg(&self, registers: &Registers, bus: &impl AddressSpace, pre_render: bool) {
         match self.dot.get() {
             dot @ 2..=256 | dot @ 322..=337 => {
                 match dot % 8 {
@@ -435,8 +437,8 @@ impl Renderer {
     pub(super) fn run<'a>(
         &'a self,
         registers: &'a Registers,
-        bus: &'a dyn AddressSpace,
-        oam_ram: &'a dyn AddressSpace,
+        bus: &'a impl AddressSpace,
+        oam_ram: &'a impl AddressSpace,
     ) -> impl Coroutine<Yield = PpuCycle, Return = ()> + 'a {
         let mut odd_frame = false;
         #[coroutine]
