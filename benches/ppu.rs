@@ -1,8 +1,9 @@
 #![feature(coroutines, coroutine_trait)]
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use std::convert::TryFrom;
 use std::path::Path;
+use std::time::Duration;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::{Nes, Steps};
@@ -16,20 +17,20 @@ fn run(stepper: &mut Steps, frames: u64) {
 }
 
 fn ppu_benchmark(c: &mut Criterion) {
+    let frames = 600;
     let mut group = c.benchmark_group("ppu-throughput");
-    for frames in [100, 200] {
-        group.throughput(Throughput::Elements(frames));
+    group.throughput(Throughput::Elements(frames));
 
-        let cart =
-            Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
-        let nes = Nes::new(cart);
-        let mut stepper = nes.steps();
+    let cart =
+        Cartridge::try_from(Path::new("roms/nes-test-roms/other/snow.nes").to_owned()).unwrap();
+    let nes = Nes::new(cart);
+    let mut stepper = nes.steps();
 
-        // group.sample_size(10);
-        group.bench_function(format!("{}", frames), |b| {
-            b.iter(|| run(&mut stepper, frames))
-        });
-    }
+    group.measurement_time(Duration::from_secs(60));
+    group.sample_size(10);
+    group.bench_function(format!("{frames}"), |b| {
+        b.iter(|| run(&mut stepper, frames))
+    });
     group.finish();
 }
 
