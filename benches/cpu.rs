@@ -1,67 +1,55 @@
 #![feature(coroutines, coroutine_trait)]
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use std::convert::TryFrom;
-use std::path::Path;
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use pprof::criterion::{Output, PProfProfiler};
+use std::ops::{Coroutine, CoroutineState};
+use std::time::Duration;
+use yaner_cpu::{Cpu, CpuEvent, CpuTick, Phi, Rw};
 
-use yaner::cartridge::Cartridge;
-use yaner::nes::Nes;
-
-#[macro_use]
-extern crate yaner;
-
-fn run(nes: &yaner::nes::Nes) {
-    consume_generator!(nes.cpu.run(), {
-        let state = nes.debug();
-        if state.cpu_bus.read_u8(0x6001) == 0xDE
-            && state.cpu_bus.read_u8(0x6002) == 0xB0
-            && state.cpu_bus.read_u8(0x6003) == 0x61
-        {
-            match state.cpu_bus.read_u8(0x6000) {
-                0x80 => (),
-                _ => break,
-            }
+fn run(ram: &mut [u8], cycles: u64) {
+    const PRG_START: u16 = 0x400;
+    let cpu = Cpu::new(Some(PRG_START));
+    let mut cpu_routine = cpu.run();
+    for _ in 0..cycles {
+        let cpu_routine = std::pin::Pin::new(&mut cpu_routine);
+        match cpu_routine.resume(()) {
+            CoroutineState::Yielded(CpuEvent::Tick(CpuTick {
+                phi: Phi::Start,
+                rw: Rw::Read,
+                addr,
+            })) => cpu.io_bus.set(ram[addr as usize]),
+            CoroutineState::Yielded(CpuEvent::Tick(CpuTick {
+                phi: Phi::Start,
+                rw: Rw::Write,
+                addr,
+            })) => ram[addr as usize] = cpu.io_bus.get(),
+            CoroutineState::Complete(_) => panic!("cpu stopped"),
+            _ => (),
         }
-    });
-}
-
-fn criterion_benchmark(c: &mut Criterion) {
-    let carts = vec![
-        "01-basics.nes",
-        "02-implied.nes",
-        "03-immediate.nes",
-        "04-zero_page.nes",
-        "05-zp_xy.nes",
-        "06-absolute.nes",
-        "07-abs_xy.nes",
-        "08-ind_x.nes",
-        "09-ind_y.nes",
-        "10-branches.nes",
-        "11-stack.nes",
-        "12-jmp_jsr.nes",
-        "13-rts.nes",
-        "14-rti.nes",
-        "15-brk.nes",
-        "16-special.nes",
-    ];
-
-    for &cart_name in carts.iter() {
-        let cart = Cartridge::try_from(
-            Path::new(&format!(
-                "roms/nes-test-roms/instr_test-v5/rom_singles/{}",
-                cart_name
-            ))
-            .to_owned(),
-        )
-        .unwrap();
-        let nes = Nes::new(cart);
-        c.bench_with_input(
-            BenchmarkId::new("instr-test-v5", cart_name),
-            &nes,
-            |b, nes| b.iter(|| run(nes)),
-        );
     }
 }
 
-criterion_group!(benches, criterion_benchmark);
+fn cpu_benchmark(c: &mut Criterion) {
+    let cycles = 1_000_000;
+    let mut group = c.benchmark_group("cpu-throughput");
+    group.throughput(Throughput::Elements(cycles));
+
+    let pgr = std::fs::read("roms/6502_65C02_functional_tests/bin_files/6502_functional_test.bin")
+        .expect("rom is present");
+
+    group.measurement_time(Duration::from_secs(60));
+    group.bench_with_input(format!("{cycles}"), &pgr, |b, pgr| {
+        let mut ram = [0; 0x10000];
+        ram[0x0000..pgr.len()].copy_from_slice(pgr);
+        b.iter(|| run(&mut ram, cycles));
+    });
+    group.finish();
+}
+
+criterion_group!(
+    name = benches;
+    // Run with `cargo bench -- --profile-time <time>`
+    config = Criterion::default().with_profiler(PProfProfiler::new(1000, Output::Flamegraph(None)));
+    targets = cpu_benchmark
+);
 criterion_main!(benches);
