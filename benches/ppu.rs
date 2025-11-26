@@ -1,10 +1,10 @@
 #![feature(coroutines, coroutine_trait)]
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use pprof::criterion::{Output, PProfProfiler};
 use std::convert::TryFrom;
 use std::path::Path;
 use std::time::Duration;
-
 use yaner::cartridge::Cartridge;
 use yaner::nes::{Nes, Steps};
 
@@ -34,5 +34,10 @@ fn ppu_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, ppu_benchmark);
+criterion_group!(
+    name = benches;
+    // Run with `cargo bench -- --profile-time <time>`
+    config = Criterion::default().with_profiler(PProfProfiler::new(1000, Output::Flamegraph(None)));
+    targets = ppu_benchmark
+);
 criterion_main!(benches);

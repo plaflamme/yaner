@@ -218,11 +218,7 @@ impl Steps {
         } else {
             let cycle = self.with_steps_mut(|s| Pin::new(s).resume(()));
             match cycle {
-                CoroutineState::Yielded(cycle) => {
-                    let state = self.nes().debug();
-                    log::trace!("{:?}", state.cpu);
-                    Ok(cycle)
-                }
+                CoroutineState::Yielded(cycle) => Ok(cycle),
                 CoroutineState::Complete(_) => Err(StepperError::Halted),
             }
         }
