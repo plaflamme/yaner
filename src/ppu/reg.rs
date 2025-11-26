@@ -7,19 +7,27 @@ bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuCtrl: u8 {
+        /// Low bit of base nametable address
         const N_LO = 1 << 0;
+        /// High bit of base nametable address
         const N_HI = 1 << 1;
-        const N = Self::N_LO.bits() | Self::N_HI.bits(); // Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+        /// Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+        const N = Self::N_LO.bits() | Self::N_HI.bits();
 
-        const I = 1 << 2; // VRAM address increment
+        // VRAM address increment
+        const I = 1 << 2;
 
-        const S = 1 << 3; // Sprite pattern table address
+        /// Sprite pattern table address
+        const S = 1 << 3;
 
-
-        const B = 1 << 4; // Background pattern table
-        const H = 1 << 5; // Sprite size (0: 8x8 pixels; 1: 8x16 pixels)
-        const P = 1 << 6; // PPU master/slave select
-        const V = 1 << 7; // Generate an NMI at the start of the vertical blanking interval
+        /// Background pattern table
+        const B = 1 << 4;
+        /// Sprite size (0: 8x8 pixels; 1: 8x16 pixels)
+        const H = 1 << 5;
+        /// PPU master/slave select
+        const P = 1 << 6;
+        /// Generate an NMI at the start of the vertical blanking interval
+        const V = 1 << 7;
     }
 }
 
@@ -38,11 +46,7 @@ impl PpuCtrl {
 
     pub fn vram_inc_step(&self) -> u16 {
         // (0: add 1, going across; 1: add 32, going down)
-        if self.contains(PpuCtrl::I) {
-            32
-        } else {
-            1
-        }
+        if self.contains(PpuCtrl::I) { 32 } else { 1 }
     }
 
     pub fn bg_pattern_table_address(&self) -> u16 {
@@ -64,11 +68,7 @@ impl PpuCtrl {
     }
 
     pub fn sprite_height(&self) -> u8 {
-        if self.large_sprites() {
-            16
-        } else {
-            8
-        }
+        if self.large_sprites() { 16 } else { 8 }
     }
 
     pub fn large_sprites(&self) -> bool {
@@ -80,15 +80,23 @@ bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuMask: u8 {
-        const GREYSCALE = 1 << 0; // Greyscale
-        const m = 1 << 1; // 1: Show background in leftmost 8 pixels of screen, 0: Hide
-        const M = 1 << 2; // 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
-        const b = 1 << 3; // Show background
+        /// Greyscale
+        const GREYSCALE = 1 << 0;
+        /// 1: Show background in leftmost 8 pixels of screen, 0: Hide
+        const m = 1 << 1;
+        /// 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
+        const M = 1 << 2;
+        /// Show background
+        const b = 1 << 3;
 
-        const s = 1 << 4; // Show sprites
-        const R = 1 << 5; // Emphasize red
-        const G = 1 << 6; // Emphasize green
-        const B = 1 << 7; // Emphasize blue
+        /// Show sprites
+        const s = 1 << 4;
+        /// Emphasize red
+        const R = 1 << 5;
+        /// Emphasize green
+        const G = 1 << 6;
+        /// Emphasize blue
+        const B = 1 << 7;
     }
 }
 
@@ -108,9 +116,12 @@ bitflags! {
     // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuStatus: u8 {
-        const O = 1 << 5; // Sprite overflow
-        const S = 1 << 6; // Sprite 0 Hit
-        const V = 1 << 7; // vblank
+        /// Sprite overflow
+        const O = 1 << 5;
+        /// Sprite 0 Hit
+        const S = 1 << 6;
+        /// vblank
+        const V = 1 << 7;
     }
 }
 
@@ -164,15 +175,17 @@ impl Registers {
     // See writes to $2005 here http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
     pub fn write_scroll(&self, value: u8) {
         if self.addr_latch.get() {
-            // t: CBA..HG FED..... = d: HGFEDCBA
+            // t: FGH..AB CDE..... <- d: ABCDEFGH
+            // w:                  <- 0
             self.t_addr.update(|mut t| {
                 t.set_fine_y(value & 0b0000_0111);
                 t.set_coarse_y(value >> 3);
                 t
             });
         } else {
-            // t: ....... ...HGFED = d: HGFED...
-            // x:              CBA = d: .....CBA
+            // t: ....... ...ABCDE <- d: ABCDE...
+            // x:              FGH <- d: .....FGH
+            // w:                  <- 1
             self.fine_x.set(value & 0b0000_0111);
             self.t_addr.update(|mut t| {
                 t.set_coarse_x(value >> 3);
@@ -188,13 +201,19 @@ impl Registers {
     pub fn write_addr(&self, value: u8) {
         let u16_value = value as u16;
         if self.addr_latch.get() {
-            // t: ....... HGFEDCBA = d: HGFEDCBA
-            // v                   = t
+            // t: ....... ABCDEFGH <- d: ABCDEFGH
+            // w:                  <- 0
+            // (wait 1 to 1.5 dots after the write completes)
+            // v: <...all bits...> <- t: <...all bits...>
             self.t_addr.update(|v| (v & 0xFF00u16) | u16_value);
+
+            // TODO: sounds like this should be delayed?
             self.v_addr.set(self.t_addr.get());
         } else {
-            // t: .FEDCBA ........ = d: ..FEDCBA
-            // t: X...... ........ = 0
+            // t: .CDEFGH ........ <- d: ..CDEFGH
+            //        <unused>     <- d: AB......
+            // t: Z...... ........ <- 0 (bit Z is cleared)
+            // w:                  <- 1
             self.t_addr
                 .update(|v| (v & 0x80FFu16) | ((u16_value & 0x003F) << 8));
         }

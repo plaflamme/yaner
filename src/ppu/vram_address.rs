@@ -4,10 +4,10 @@ use bitregions::bitregions;
 
 bitregions! {
     pub VramAddress u16 {
-        FINE_Y: 0b111_00_00000_00000, // Fine y scroll
+        FINE_Y:    0b111_00_00000_00000, // Fine y scroll
         NAMETABLE: 0b000_11_00000_00000, // Nametable select
-        COARSE_Y: 0b000_00_11111_00000, // Coarse y scroll
-        COARSE_X: 0b000_00_00000_11111, // Coarse x scroll
+        COARSE_Y:  0b000_00_11111_00000, // Coarse y scroll
+        COARSE_X:  0b000_00_00000_11111, // Coarse x scroll
     }
 }
 

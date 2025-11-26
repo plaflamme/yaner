@@ -158,8 +158,6 @@ impl Renderer {
     pub(super) fn ppustatus_read(&self, _: &mut PpuStatus) {
         // NOTE: previously, this would do something on dots 0, 1 and 2 (as per the statements above)
         // But it turns out that this is sufficient.
-        // It's probably because "one PPU clock before" means
-        // "right before the PPU clock that would set it"
         if let (241, 1) = (self.scanline.get(), self.dot.get()) {
             self.suppress_vbl.set(true);
         }
