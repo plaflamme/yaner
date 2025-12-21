@@ -104,9 +104,9 @@ impl Nes {
             loop {
                 match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(
-                        cycle @ yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phi, rw, addr }),
+                        cycle @ yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phase, rw, addr }),
                     ) => {
-                        if matches!(phi, yaner_cpu::Phi::Start) {
+                        if matches!(phase, yaner_cpu::Phase::One) {
                             match rw {
                                 yaner_cpu::Rw::Read => {
                                     let value = self.cpu_bus.read_u8(addr);

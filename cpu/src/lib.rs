@@ -1,5 +1,5 @@
 #![feature(coroutines, coroutine_trait)]
-use std::{cell::Cell, ops::Coroutine};
+use std::{cell::Cell, fmt::Display, ops::Coroutine};
 
 use bitflags::bitflags;
 
@@ -328,9 +328,18 @@ pub enum Rw {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Phi {
-    Start,
-    End,
+pub enum Phase {
+    One, // φ1
+    Two, // φ2
+}
+
+impl Display for Phase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Phase::One => write!(f, "φ1"),
+            Phase::Two => write!(f, "φ2"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -341,7 +350,7 @@ pub enum CpuEvent {
 
 #[derive(Debug, Clone, Copy)]
 pub struct CpuTick {
-    pub phi: Phi,
+    pub phase: Phase,
     pub rw: Rw,
     pub addr: u16,
 }
@@ -484,13 +493,13 @@ impl Cpu {
             ($rw:expr, $addr:expr) => {{
                 self.start_cycle();
                 yield CpuEvent::Tick(CpuTick {
-                    phi: Phi::Start,
+                    phase: Phase::One,
                     rw: $rw,
                     addr: $addr,
                 });
                 self.end_cycle();
                 yield CpuEvent::Tick(CpuTick {
-                    phi: Phi::End,
+                    phase: Phase::Two,
                     rw: $rw,
                     addr: $addr,
                 });
@@ -1070,7 +1079,7 @@ mod test {
         pin::Pin,
     };
 
-    use crate::{CpuEvent, Phi};
+    use crate::{CpuEvent, Phase};
 
     use super::Cpu;
     use super::CpuTick;
@@ -1108,8 +1117,8 @@ mod test {
         let mut feedback_register = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
         loop {
             match Pin::new(&mut cpu_routine).resume(()) {
-                CoroutineState::Yielded(CpuEvent::Tick(CpuTick { phi, rw, addr })) => {
-                    if matches!(phi, Phi::Start) {
+                CoroutineState::Yielded(CpuEvent::Tick(CpuTick { phase, rw, addr })) => {
+                    if matches!(phase, Phase::One) {
                         match rw {
                             Rw::Read => {
                                 cpu.io_bus.set(ram[addr as usize]);

@@ -4,7 +4,7 @@ use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use pprof::criterion::{Output, PProfProfiler};
 use std::ops::{Coroutine, CoroutineState};
 use std::time::Duration;
-use yaner_cpu::{Cpu, CpuEvent, CpuTick, Phi, Rw};
+use yaner_cpu::{Cpu, CpuEvent, CpuTick, Phase, Rw};
 
 fn run(ram: &mut [u8], cycles: u64) {
     const PRG_START: u16 = 0x400;
@@ -14,12 +14,12 @@ fn run(ram: &mut [u8], cycles: u64) {
         let cpu_routine = std::pin::Pin::new(&mut cpu_routine);
         match cpu_routine.resume(()) {
             CoroutineState::Yielded(CpuEvent::Tick(CpuTick {
-                phi: Phi::Start,
+                phase: Phase::One,
                 rw: Rw::Read,
                 addr,
             })) => cpu.io_bus.set(ram[addr as usize]),
             CoroutineState::Yielded(CpuEvent::Tick(CpuTick {
-                phi: Phi::Start,
+                phase: Phase::One,
                 rw: Rw::Write,
                 addr,
             })) => ram[addr as usize] = cpu.io_bus.get(),

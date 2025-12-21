@@ -314,8 +314,8 @@ fn cycles(f: &mut Frame<'_>, app_state: &AppState, chunk: Rect) {
     for cycle in app_state.cycles.iter() {
         let line = match cycle {
             NesCycle::PowerUp => "PowerUp".to_owned(),
-            NesCycle::Cpu(yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phi, rw, addr })) => {
-                format!("Cpu({phi:?} {rw:?}@0x{addr:X})")
+            NesCycle::Cpu(yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phase, rw, addr })) => {
+                format!("Cpu({phase} {rw:?}@0x{addr:X})")
             }
             NesCycle::Cpu(yaner_cpu::CpuEvent::Cycle) => {
                 format!("Cpu(op)")
