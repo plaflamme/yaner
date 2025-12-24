@@ -157,7 +157,7 @@ impl OpType {
             TXS => OpType::Read,
 
             TYA => OpType::Read,
-            XAA => OpType::Read, // TODO: not implemented
+            XAA => OpType::Read,
         }
     }
 }
@@ -1030,7 +1030,7 @@ impl Cpu {
                     Op::SLO => run!(OpType::Modify, operations::slo),
                     Op::SRE => run!(OpType::Modify, operations::sre),
                     Op::TAS => run!(OpType::Modify, operations::tas),
-                    Op::XAA => run!(OpType::Implicit, operations::xaa),
+                    Op::XAA => run!(OpType::Read, operations::xaa),
                     Op::KIL => kil!(),
                 }
 

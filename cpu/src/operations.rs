@@ -277,6 +277,15 @@ impl ReadOperation for ldy {
     }
 }
 
+pub struct xaa;
+impl ReadOperation for xaa {
+    fn operate(&self, cpu: &Cpu, value: u8) {
+        // A:=X&#{imm}
+        txa.run(cpu);
+        and.operate(cpu, value);
+    }
+}
+
 pub struct ahx;
 impl ModifyOperation for ahx {
     fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
@@ -636,12 +645,5 @@ impl ImplicitOperation for tya {
     fn run(&self, cpu: &Cpu) {
         cpu.acc.set(cpu.y.get());
         cpu.set_flags_from_acc();
-    }
-}
-
-pub struct xaa;
-impl ImplicitOperation for xaa {
-    fn run(&self, _cpu: &Cpu) {
-        todo!()
     }
 }
