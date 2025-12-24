@@ -27,9 +27,19 @@ macro_rules! consume_generator {
 
 macro_rules! invalid_address {
     ($addr:expr) => {{
-        panic!("accessed invalid address at 0x{:02X?}", $addr);
+        #[cfg(debug_assertions)]
+        {
+            panic!("accessed invalid address at 0x{:02X?}", $addr);
+        }
     }};
-    ($addr:expr, $reason:literal) => {{
-        panic!("accessed invalid address at 0x{:02X?} : {}", $addr, $reason);
+    ($addr:expr, $value:expr) => {{
+        #[cfg(debug_assertions)]
+        {
+            panic!("accessed invalid address at 0x{:02X?}", $addr);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            $value
+        }
     }};
 }

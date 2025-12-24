@@ -612,7 +612,7 @@ mod test {
                 0x2000..=0x23BF => self.nametable,
                 0x23C0..=0x23F8 => self.attribute,
                 0x3F00..=0x3FFF => self.palette,
-                _ => invalid_address!(addr),
+                _ => invalid_address!(addr, 0),
             }
         }
 

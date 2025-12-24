@@ -47,7 +47,7 @@ impl AddressSpace for NROM {
             0x8000..=0xBFFF => self.prg_rom.read_u8(BankSelect::First, addr - 0x8000),
             // 0xC000..=0xFFFF - Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128).
             0xC000..=0xFFFF => self.prg_rom.read_u8(BankSelect::Last, addr - 0xC000),
-            _ => invalid_address!(addr),
+            _ => invalid_address!(addr, 0),
         }
     }
 

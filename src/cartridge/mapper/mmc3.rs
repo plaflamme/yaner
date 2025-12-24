@@ -1,8 +1,8 @@
+use crate::cartridge::NametableMirroring;
 /// https://www.nesdev.org/wiki/MMC3
 ///
 use crate::cartridge::mapper::{BankSelect, Switched};
 use crate::cartridge::rom::RomData;
-use crate::cartridge::NametableMirroring;
 use crate::memory::{AddressSpace, Dyn};
 use bitregions::bitregions;
 use std::cell::Cell;
@@ -80,7 +80,7 @@ impl AddressSpace for MMC3 {
                 .read_u8(BankSelect::Index(self.read_register(6)), addr - 0x8000),
             (0x8000..=0x9FFF, true) => self.prg_rom.read_u8(BankSelect::Back(1), addr - 0x8000),
 
-            _ => invalid_address!(addr),
+            _ => invalid_address!(addr, 0),
         }
     }
 

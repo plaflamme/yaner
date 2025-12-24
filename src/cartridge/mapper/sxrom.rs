@@ -183,7 +183,7 @@ impl AddressSpace for SxROM {
             0xC000..=0xFFFF => self
                 .prg_rom
                 .read_u8(self.prg_bank_select(BankAddr::High), addr - 0xC000),
-            _ => invalid_address!(addr),
+            _ => invalid_address!(addr, 0),
         }
     }
 

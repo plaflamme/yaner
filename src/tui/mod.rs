@@ -12,6 +12,7 @@ use termion::raw::IntoRawMode;
 
 use crate::cpu::Cpu;
 use crate::cpu::opcode::OpCode;
+use crate::input::JoypadButtons;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
 use crate::nes::{Nes, NesCycle};
@@ -573,12 +574,14 @@ impl AppState {
 
 // TODO: implement debugger state here.
 pub struct Debugger {
+    input1: std::rc::Rc<crate::input::Joypad>,
     stepper: crate::nes::Steps,
 }
 
 impl Debugger {
     pub fn new(nes: Nes) -> Self {
         Debugger {
+            input1: nes.input1.clone(),
             stepper: nes.steps(),
         }
     }
@@ -647,6 +650,9 @@ impl Debugger {
                                 break;
                             }
                         }
+                    }
+                    Key::Char('S') => {
+                        self.input1.update(JoypadButtons::Start);
                     }
                     Key::F(10) => {
                         let active_pc = self.stepper.nes().debug().cpu.pc;

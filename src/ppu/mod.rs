@@ -150,7 +150,7 @@ impl AddressSpace for PpuBus {
             0x0000..=0x1FFF => self.mapper.borrow().read_u8(addr),
             0x2000..=0x3EFF => self.vram.read_u8(self.nametable_mirroring(addr)),
             0x3F00..=0x3FFF => self.palette.read_u8(self.palette_mirroring(addr)),
-            _ => invalid_address!(addr),
+            _ => invalid_address!(addr, 0),
         }
     }
 
@@ -257,7 +257,7 @@ impl AddressSpace for PpuRegisters {
                 self.open_bus.set(result);
                 result
             }
-            _ => invalid_address!(addr),
+            _ => invalid_address!(addr, 0),
         }
     }
 
