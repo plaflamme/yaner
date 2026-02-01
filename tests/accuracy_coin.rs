@@ -6,35 +6,54 @@ mod common;
 use yaner_cpu::OpCode;
 
 use crate::common::run_test_with_steps;
-use std::assert_matches;
+use std::{assert_matches, collections::HashMap, path::PathBuf};
+use test_case::test_case;
 
-enum SuiteTest {
-    CpuBehaviour(CpuBehaviour),
+struct AccuracyCoin {
+    listing: HashMap<String, u16>,
 }
-impl SuiteTest {
-    fn suite_pointer(&self) -> u16 {
-        match self {
-            SuiteTest::CpuBehaviour(_) => 0x8228,
-        }
+
+impl AccuracyCoin {
+    fn new(root: impl Into<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
+        let fns = root.into().join("AccuracyCoin.fns");
+        let fns = std::fs::read_to_string(fns)?;
+        let listing = fns
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.starts_with(";"))
+            .map(|l| {
+                let parse = || -> Result<(String, u16), Box<dyn std::error::Error>> {
+                    let (fns, addr) = l.split_once("=").ok_or(format!("Invalid line {l}"))?;
+                    let addr = u16::from_str_radix(addr.trim().trim_start_matches('$'), 16)?;
+                    Ok((fns.trim().to_string(), addr))
+                };
+                parse()
+            })
+            .collect::<Result<HashMap<String, u16>, Box<dyn std::error::Error>>>()?;
+
+        Ok(Self { listing })
     }
-    fn exec_addr(&self) -> u16 {
-        match self {
-            SuiteTest::CpuBehaviour(test) => *test as u16,
-        }
+
+    fn addr(&self, label: &str) -> Result<u16, String> {
+        self.listing
+            .get(label)
+            .copied()
+            .ok_or_else(|| format!("Cannot find address of label {label}"))
     }
-}
-#[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum CpuBehaviour {
-    RomNotWritable = 0xA14C,
-    RamMirroring = 0xA003,
 }
 
 #[allow(non_upper_case_globals)]
-fn run_accuracy_coin_test(test: SuiteTest) {
-    const NMI_Routine: u16 = 0xF6C4;
-    const ReadController1: u16 = 0xF90E;
-    const RunTest: u16 = 0xF972;
+#[allow(non_snake_case)]
+fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let accuracy_coin = AccuracyCoin::new("roms/AccuracyCoin")?;
+    let suite_pointer = accuracy_coin.addr(suite)?;
+    let test_exec_pointer = accuracy_coin.addr(test)?;
+
+    let NMI_Routine = accuracy_coin.addr("NMI_Routine")?;
+    let ReadController1 = accuracy_coin.addr("ReadController1")?;
+    let RunTest = accuracy_coin.addr("RunTest")?;
+
+    // TODO: read out of .asm
     const controller_New: u16 = 0x0019;
     const suitePointer: u16 = 0x05;
     // Address of pointer to test to run
@@ -63,7 +82,7 @@ fn run_accuracy_coin_test(test: SuiteTest) {
                         // Check our assumption before setting the breakpoint
                         assert_matches!(
                             nes_state.active_op(),
-                            (OpCode(yaner_cpu::Op::JSR, _), ReadController1)
+                            (OpCode(yaner_cpu::Op::JSR, _), addr) if addr == ReadController1
                         );
                         breakpoint = Some(nes_state.cpu.active_pc + 3);
                     } else if let Some(bp) = breakpoint
@@ -77,11 +96,11 @@ fn run_accuracy_coin_test(test: SuiteTest) {
                         //   * since this is used for indexing info suitePointer*Lists, we have to adjust where we write the test to run below
                         nes_state.ram.write_u8(menuCursorYPos, 1);
                         // Suite to run
-                        nes_state.ram.write_u16(suitePointer, test.suite_pointer());
+                        nes_state.ram.write_u16(suitePointer, suite_pointer);
                         // Test within suite to run
                         nes_state
                             .ram
-                            .write_u16(suiteExecPointerList + 2, test.exec_addr());
+                            .write_u16(suiteExecPointerList + 2, test_exec_pointer);
                         // Where to write the test result
                         nes_state.ram.write_u16(suitePointerList + 2, ResultAddr);
 
@@ -90,7 +109,9 @@ fn run_accuracy_coin_test(test: SuiteTest) {
                     }
                 }
                 State::Running => {
-                    if let (OpCode(yaner_cpu::Op::JSR, _), RunTest) = nes_state.active_op() {
+                    if let (OpCode(yaner_cpu::Op::JSR, _), addr) = nes_state.active_op()
+                        && addr == RunTest
+                    {
                         breakpoint = Some(nes_state.cpu.active_pc + 3);
                     } else if let Some(bp) = breakpoint
                         && nes_state.cpu.active_pc == bp
@@ -115,14 +136,18 @@ fn run_accuracy_coin_test(test: SuiteTest) {
             assert_eq!(nes_state.ram.read_u8(ResultAddr), 1)
         },
     );
+    Ok(())
 }
 
-#[test]
-fn test_rom_not_writable() {
-    run_accuracy_coin_test(SuiteTest::CpuBehaviour(CpuBehaviour::RomNotWritable));
-}
-
-#[test]
-fn test_ram_mirroring() {
-    run_accuracy_coin_test(SuiteTest::CpuBehaviour(CpuBehaviour::RamMirroring));
+#[test_case("TEST_ROMnotWritable")]
+#[test_case("TEST_RamMirroring")]
+#[test_case("Test_ProgramCounter_Wraparound")]
+#[test_case("TEST_DecimalFlag")]
+#[test_case("TEST_BFlag")]
+#[test_case("TEST_DummyReads")]
+#[test_case("TEST_DummyWrites")]
+#[test_case("TEST_OpenBus")]
+#[test_case("TEST_AllNOPs")]
+fn test_cpu_behaviour(test: &str) -> Result<(), Box<dyn std::error::Error>> {
+    run_accuracy_coin_test("Suite_CPUBehavior", test)
 }

@@ -654,6 +654,9 @@ impl Debugger {
                     Key::Char('S') => {
                         self.input1.update(JoypadButtons::Start);
                     }
+                    Key::Char('a') => {
+                        self.input1.update(JoypadButtons::A);
+                    }
                     Key::F(10) => {
                         let active_pc = self.stepper.nes().debug().cpu.pc;
                         let opcode = self.stepper.nes().debug().cpu_bus.read_u8(active_pc);
