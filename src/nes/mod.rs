@@ -54,6 +54,7 @@ pub struct Nes {
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
     pub input2: Rc<Joypad>,
+    pub mapper: Rc<RefCell<Box<dyn crate::cartridge::Mapper>>>,
     // TODO: apu
 }
 
@@ -78,6 +79,7 @@ impl Nes {
             clocks: Clocks::default(),
             input1,
             input2,
+            mapper,
         }
     }
 

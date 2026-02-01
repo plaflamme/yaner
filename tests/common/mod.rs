@@ -16,9 +16,10 @@ pub enum Eval {
     Halt,     // test should stop
 }
 
-pub fn run_test(
+pub fn run_test_with_steps(
     rom_path: impl Into<PathBuf>,
     start_at: Option<u16>,
+    mut step: impl FnMut(&mut yaner::nes::Steps) -> Result<(), yaner::nes::StepperError>,
     mut eval: impl FnMut(&NesState) -> Eval,
     assert: impl FnOnce(&NesState),
 ) {
@@ -26,7 +27,7 @@ pub fn run_test(
     {
         let mut stepper = Nes::new_with_pc(cart, start_at).steps();
         loop {
-            stepper.step_frame().unwrap();
+            step(&mut stepper).unwrap();
             match eval(&stepper.nes().debug()) {
                 Eval::Continue => (),
                 Eval::Reset => stepper.reset(),
@@ -35,6 +36,21 @@ pub fn run_test(
         }
         assert(&stepper.nes().debug());
     }
+}
+
+pub fn run_test(
+    rom_path: impl Into<PathBuf>,
+    start_at: Option<u16>,
+    eval: impl FnMut(&NesState) -> Eval,
+    assert: impl FnOnce(&NesState),
+) {
+    run_test_with_steps(
+        rom_path,
+        start_at,
+        |steps| steps.step_frame().map(|_| ()),
+        eval,
+        assert,
+    )
 }
 
 // runs a test for a specific number of frames

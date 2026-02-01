@@ -1,3 +1,5 @@
+use yaner_cpu::OpCode;
+
 use crate::memory::AddressSpace;
 use crate::ppu::debug::PpuState;
 
@@ -42,5 +44,12 @@ impl<'a> NesState<'a> {
             prg_rom: &nes.cpu_bus, // TODO: use mapper directly
             chr_rom: &nes.ppu.bus, // TODO: use mapper directly
         }
+    }
+
+    // TODO: handle different arg sizes (0,1,2) by looking at AddressingMode
+    pub fn active_op(&self) -> (OpCode, u16) {
+        let op_code = OpCode::decode(self.prg_rom.read_u8(self.cpu.active_pc));
+        let arg = self.prg_rom.read_u16(self.cpu.active_pc.saturating_add(1));
+        (op_code, arg)
     }
 }

@@ -4,3 +4,7 @@
 [submodule "roms/6502_65C02_functional_tests"]
 	path = roms/6502_65C02_functional_tests
 	url = https://github.com/plaflamme/6502_65C02_functional_tests.git
+[submodule "roms/AccuracyCoin"]
+	path = roms/AccuracyCoin
+	url = https://github.com/plaflamme/AccuracyCoin.git
+	branch = nix-build
