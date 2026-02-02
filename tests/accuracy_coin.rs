@@ -13,6 +13,7 @@ use test_case::test_case;
 struct AccuracyCoin {
     root: PathBuf,
     listing: HashMap<String, u16>,
+    labels: HashMap<u16, String>,
 }
 
 impl AccuracyCoin {
@@ -33,8 +34,16 @@ impl AccuracyCoin {
                 parse()
             })
             .collect::<Result<HashMap<String, u16>, Box<dyn std::error::Error>>>()?;
+        let labels = listing
+            .iter()
+            .map(|(k, &v)| (v, k.clone()))
+            .collect::<HashMap<u16, String>>();
 
-        Ok(Self { root, listing })
+        Ok(Self {
+            root,
+            listing,
+            labels,
+        })
     }
 
     fn addr(&self, label: &str) -> Result<u16, String> {
@@ -42,6 +51,10 @@ impl AccuracyCoin {
             .get(label)
             .copied()
             .ok_or_else(|| format!("Cannot find address of label {label}"))
+    }
+
+    fn label(&self, addr: u16) -> Option<&str> {
+        self.labels.get(&addr).map(|s| s.as_str())
     }
 
     fn rom(&self) -> PathBuf {
@@ -76,11 +89,20 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
     }
     let mut state = State::Setup;
     let mut breakpoint: Option<u16> = None;
+    let mut last_label = "N/A".to_string();
     run_test_with_steps(
         accuracy_coin.rom(),
         None,
         |steps| steps.step_cpu().map(|_| ()),
         |nes_state| {
+            if let Some(label) = accuracy_coin.label(nes_state.cpu.pc)
+                && label != last_label
+            {
+                // TODO: how do I enable this from the command line?
+                log::debug!("Reached label: {}", label);
+                // TODO: count instead of skipping
+                last_label = label.to_string();
+            }
             match state {
                 State::Setup => {
                     if nes_state.cpu.active_pc == NMI_Routine {
@@ -138,7 +160,10 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
             ; 5 = "SKIP"
             ; bits 0 and 1 hold the results. Bits 3+ hold error codes for printing what failed.
             */
-            assert_eq!(nes_state.ram.read_u8(ResultAddr), 1)
+            let result = nes_state.ram.read_u8(ResultAddr);
+            if result != 1 {
+                panic!("Test {test} failed with error code: {}", result >> 2);
+            }
         },
     );
     Ok(())
