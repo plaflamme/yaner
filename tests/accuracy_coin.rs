@@ -1,4 +1,5 @@
 #![feature(assert_matches)]
+#![allow(non_upper_case_globals, non_snake_case)]
 
 #[allow(unused)]
 mod common;
@@ -139,15 +140,235 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-#[test_case("TEST_ROMnotWritable")]
-#[test_case("TEST_RamMirroring")]
-#[test_case("Test_ProgramCounter_Wraparound")]
-#[test_case("TEST_DecimalFlag")]
-#[test_case("TEST_BFlag")]
-#[test_case("TEST_DummyReads")]
-#[test_case("TEST_DummyWrites")]
-#[test_case("TEST_OpenBus")]
-#[test_case("TEST_AllNOPs")]
-fn test_cpu_behaviour(test: &str) -> Result<(), Box<dyn std::error::Error>> {
-    run_accuracy_coin_test("Suite_CPUBehavior", test)
+macro_rules! test_suite {
+    ($suite_name: ident, $($test_name: ident $(=> $more:tt)?),+) => {
+
+        $(
+            const $test_name: &str = stringify!($test_name);
+        )+
+
+        $(#[test_case($test_name $( => $more )? )])+
+        fn $suite_name(test: &str) -> Result<(), Box<dyn std::error::Error>> {
+            run_accuracy_coin_test(stringify!($suite_name), test)
+        }
+    };
+}
+
+test_suite! {
+    Suite_CPUBehavior,
+    TEST_ROMnotWritable,
+    TEST_RamMirroring,
+    Test_ProgramCounter_Wraparound,
+    TEST_DecimalFlag,
+    TEST_BFlag => panics,
+    TEST_DummyReads, // TODO
+    TEST_DummyWrites,
+    TEST_OpenBus => panics,
+    TEST_AllNOPs => panics
+}
+
+test_suite! {
+    Suite_CPUInstructions,
+    TEST_AddrMode_AbsIndex,
+    TEST_AddrMode_ZPgIndex,
+    TEST_AddrMode_Indirect,
+    TEST_AddrMode_IndIndeX,
+    TEST_AddrMode_IndIndeY,
+    TEST_AddrMode_Relative
+}
+
+test_suite! {
+    Suite_UnofficialOps_SLO,
+    TEST_SLO_03,
+    TEST_SLO_07,
+    TEST_SLO_0F,
+    TEST_SLO_13,
+    TEST_SLO_17,
+    TEST_SLO_1B,
+    TEST_SLO_1F
+}
+
+test_suite! {
+    Suite_UnofficialOps_RLA,
+    TEST_RLA_23,
+    TEST_RLA_27,
+    TEST_RLA_2F,
+    TEST_RLA_33,
+    TEST_RLA_37,
+    TEST_RLA_3B,
+    TEST_RLA_3F
+}
+
+test_suite! {
+    Suite_UnofficialOps_SRE,
+    TEST_SRE_43,
+    TEST_SRE_47,
+    TEST_SRE_4F,
+    TEST_SRE_53,
+    TEST_SRE_57,
+    TEST_SRE_5B,
+    TEST_SRE_5F
+}
+
+test_suite! {
+    Suite_UnofficialOps_RRA,
+    TEST_RRA_63,
+    TEST_RRA_67,
+    TEST_RRA_6F,
+    TEST_RRA_73,
+    TEST_RRA_77,
+    TEST_RRA_7B,
+    TEST_RRA_7F
+}
+
+test_suite! {
+    Suite_UnofficialOps__AX,
+    TEST_SAX_83,
+    TEST_SAX_87,
+    TEST_SAX_8F,
+    TEST_SAX_97,
+    TEST_LAX_A3,
+    TEST_LAX_A7,
+    TEST_LAX_AF,
+    TEST_LAX_B3,
+    TEST_LAX_B7,
+    TEST_LAX_BF
+}
+
+test_suite! {
+    Suite_UnofficialOps_DCP,
+    TEST_DCP_C3,
+    TEST_DCP_C7,
+    TEST_DCP_CF,
+    TEST_DCP_D3,
+    TEST_DCP_D7,
+    TEST_DCP_DB,
+    TEST_DCP_DF
+}
+
+test_suite! {
+    Suite_UnofficialOps_ISC,
+    TEST_ISC_E3,
+    TEST_ISC_E7,
+    TEST_ISC_EF,
+    TEST_ISC_F3,
+    TEST_ISC_F7,
+    TEST_ISC_FB,
+    TEST_ISC_FF
+}
+
+test_suite! {
+    Suite_UnofficialOps_SH_,
+    TEST_SHA_93 => panics,
+    TEST_SHA_9F => panics,
+    TEST_SHS_9B => panics,
+    TEST_SHY_9C => panics,
+    TEST_SHX_9E => panics,
+    TEST_LAE_BB
+}
+
+test_suite! {
+    Suite_UnofficialOps_Immediates,
+    TEST_ANC_0B,
+    TEST_ANC_2B,
+    TEST_ASR_4B,
+    TEST_ARR_6B,
+    TEST_ANE_8B,
+    TEST_LXA_AB,
+    TEST_AXS_CB,
+    TEST_SBC_EB
+}
+
+test_suite! {
+    Suite_CPUInterrupts,
+    TEST_IFlagLatency => panics,
+    TEST_NmiAndBrk => panics,
+    TEST_NmiAndIrq => panics
+}
+
+test_suite! {
+    Suite_DMATests,
+    TEST_DMA_Plus_OpenBus => panics,
+    TEST_DMA_Plus_2002R => panics,
+    TEST_DMA_Plus_2007R => panics,
+    TEST_DMA_Plus_2007W => panics,
+    TEST_DMA_Plus_4015R => panics,
+    TEST_DMA_Plus_4016R => panics,
+    TEST_DMABusConflict => panics,
+    TEST_DMCDMAPlusOAMDMA => panics,
+    TEST_ExplicitDMAAbort => panics,
+    TEST_ImplicitDMAAbort => panics
+}
+
+test_suite! {
+    Suite_APUTiming,
+    TEST_APULengthCounter => panics,
+    TEST_APULengthTable => panics,
+    TEST_FrameCounterIRQ => panics,
+    TEST_FrameCounter4Step => panics,
+    TEST_FrameCounter5Step => panics,
+    TEST_DeltaModulationChannel => panics,
+    TEST_APURegActivation => panics,
+    TEST_ControllerStrobing => panics,
+    TEST_ControllerClocking => panics
+}
+
+test_suite! {
+    Suite_PowerOnState,
+    TEST_PowerOnState_PPU_ResetFlag => panics,
+    TEST_PowerOnState_CPU_RAM,
+    TEST_PowerOnState_CPU_Registers,
+    TEST_PowerOnState_PPU_RAM,
+    TEST_PowerOnState_PPU_Palette
+}
+
+test_suite! {
+    Suite_PPUBehavior,
+    TEST_CHRROMIsNotWritable,
+    TEST_PPURegMirroring,
+    TEST_PPU_Open_Bus,
+    TEST_PPUReadBuffer,
+    TEST_PaletteRAMQuirks => panics,
+    TEST_RenderingFlagBehavior,
+    TEST_Rendering2007Read => panics
+}
+
+test_suite! {
+    Suite_PPUTiming,
+    TEST_VBlank_Beginning,
+    TEST_VBlank_End,
+    TEST_NMI_Control,
+    TEST_NMI_Timing,
+    TEST_NMI_Suppression,
+    TEST_NMI_VBL_End,
+    TEST_NMI_Disabled_VBL_Start
+}
+
+test_suite! {
+    Suite_SpriteZeroHits,
+    TEST_SprOverflow_Behavior,
+    TEST_Sprite0Hit_Behavior => panics,
+    TEST_SuddenlyResizeSprite => panics,
+    TEST_ArbitrarySpriteZero => panics,
+    TEST_MisalignedOAM_Behavior => panics,
+    TEST_Address2004_Behavior => panics,
+    TEST_OAM_Corruption => panics,
+    TEST_INC4014 => panics
+}
+
+test_suite! {
+    Suite_PPUMisc,
+    TEST_AttributesAsTiles,
+    TEST_tRegisterQuirks,
+    TEST_StaleBGShiftRegisters => panics,
+    TEST_BGSerialIn => panics,
+    TEST_Scanline0Sprites => panics
+}
+
+test_suite! {
+    Suite_CPUBehavior2,
+    TEST_InstructionTiming => panics,
+    TEST_ImpliedDummyRead => panics,
+    // TEST_BranchDummyRead, // TODO: infinite loop
+    TEST_JSREdgeCases => panics
 }
