@@ -29,17 +29,14 @@ macro_rules! invalid_address {
     ($addr:expr) => {{
         #[cfg(debug_assertions)]
         {
-            panic!("accessed invalid address at 0x{:02X?}", $addr);
+            log::debug!("accessed invalid address at 0x{:02X?}", $addr);
         }
     }};
     ($addr:expr, $value:expr) => {{
         #[cfg(debug_assertions)]
         {
-            panic!("accessed invalid address at 0x{:02X?}", $addr);
+            log::debug!("accessed invalid address at 0x{:02X?}", $addr);
         }
-        #[cfg(not(debug_assertions))]
-        {
-            $value
-        }
+        $value
     }};
 }

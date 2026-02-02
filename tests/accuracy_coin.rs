@@ -175,7 +175,7 @@ test_suite! {
     Test_ProgramCounter_Wraparound,
     TEST_DecimalFlag,
     TEST_BFlag => panics,
-    TEST_DummyReads, // TODO
+    TEST_DummyReads,
     TEST_DummyWrites,
     TEST_OpenBus => panics,
     TEST_AllNOPs => panics
