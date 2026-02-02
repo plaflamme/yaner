@@ -11,12 +11,14 @@ use std::{assert_matches, collections::HashMap, path::PathBuf};
 use test_case::test_case;
 
 struct AccuracyCoin {
+    root: PathBuf,
     listing: HashMap<String, u16>,
 }
 
 impl AccuracyCoin {
     fn new(root: impl Into<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
-        let fns = root.into().join("AccuracyCoin.fns");
+        let root = root.into();
+        let fns = root.join("AccuracyCoin.fns");
         let fns = std::fs::read_to_string(fns)?;
         let listing = fns
             .lines()
@@ -32,7 +34,7 @@ impl AccuracyCoin {
             })
             .collect::<Result<HashMap<String, u16>, Box<dyn std::error::Error>>>()?;
 
-        Ok(Self { listing })
+        Ok(Self { root, listing })
     }
 
     fn addr(&self, label: &str) -> Result<u16, String> {
@@ -41,10 +43,12 @@ impl AccuracyCoin {
             .copied()
             .ok_or_else(|| format!("Cannot find address of label {label}"))
     }
+
+    fn rom(&self) -> PathBuf {
+        self.root.join("AccuracyCoin.nes")
+    }
 }
 
-#[allow(non_upper_case_globals)]
-#[allow(non_snake_case)]
 fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::error::Error>> {
     let accuracy_coin = AccuracyCoin::new("roms/AccuracyCoin")?;
     let suite_pointer = accuracy_coin.addr(suite)?;
@@ -73,7 +77,7 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
     let mut state = State::Setup;
     let mut breakpoint: Option<u16> = None;
     run_test_with_steps(
-        "roms/AccuracyCoin/AccuracyCoin.nes",
+        accuracy_coin.rom(),
         None,
         |steps| steps.step_cpu().map(|_| ()),
         |nes_state| {
@@ -139,6 +143,16 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+fn run_accuracy_coin_test_with_timeout(suite: &'static str, test: &'static str) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        run_accuracy_coin_test(suite, test).unwrap();
+        sender.send(()).unwrap();
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(15))
+        .unwrap();
+}
 
 macro_rules! test_suite {
     ($suite_name: ident, $($test_name: ident $(=> $more:tt)?),+) => {
@@ -148,8 +162,8 @@ macro_rules! test_suite {
         )+
 
         $(#[test_case($test_name $( => $more )? )])+
-        fn $suite_name(test: &str) -> Result<(), Box<dyn std::error::Error>> {
-            run_accuracy_coin_test(stringify!($suite_name), test)
+        fn $suite_name(test: &'static str) {
+            run_accuracy_coin_test_with_timeout(stringify!($suite_name), test)
         }
     };
 }
@@ -369,6 +383,6 @@ test_suite! {
     Suite_CPUBehavior2,
     TEST_InstructionTiming => panics,
     TEST_ImpliedDummyRead => panics,
-    // TEST_BranchDummyRead, // TODO: infinite loop
+    TEST_BranchDummyRead => panics,
     TEST_JSREdgeCases => panics
 }
