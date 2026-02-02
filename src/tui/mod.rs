@@ -365,9 +365,9 @@ fn statusbar(
 
     f.render_widget(cpu_block(nes), chunks[0]);
     f.render_widget(ppu_block(nes), chunks[1]);
-    f.render_widget(sprite_block(nes), chunks[2]);
+    // f.render_widget(sprite_block(nes), chunks[2]);
     cycles(f, app_state, chunks[3]);
-    prg_rom(f, nes, addr_space, chunks[4]);
+    prg_rom(f, nes, addr_space, chunks[2]);
 }
 
 struct MemoryBlock<'a> {
@@ -670,10 +670,10 @@ impl Debugger {
                         }
                     }
                     Key::Char('M') => {
-                        let breakpoints = [0x0200];
+                        let breakpoints = [0xAAFE];
                         loop {
                             self.stepper.step_cpu()?;
-                            if breakpoints.contains(&self.stepper.nes().debug().cpu.pc) {
+                            if breakpoints.contains(&self.stepper.nes().cpu.active_pc()) {
                                 break;
                             }
                         }

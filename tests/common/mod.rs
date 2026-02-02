@@ -16,13 +16,13 @@ pub enum Eval {
     Halt,     // test should stop
 }
 
-pub fn run_test_with_steps(
+pub fn run_test_with_steps<T>(
     rom_path: impl Into<PathBuf>,
     start_at: Option<u16>,
     mut step: impl FnMut(&mut yaner::nes::Steps) -> Result<(), yaner::nes::StepperError>,
     mut eval: impl FnMut(&NesState) -> Eval,
-    assert: impl FnOnce(&NesState),
-) {
+    assert: impl FnOnce(&NesState) -> T,
+) -> T {
     let cart = Cartridge::try_from(rom_path.into()).unwrap();
     {
         let mut stepper = Nes::new_with_pc(cart, start_at).steps();
@@ -34,7 +34,7 @@ pub fn run_test_with_steps(
                 Eval::Halt => break,
             }
         }
-        assert(&stepper.nes().debug());
+        assert(&stepper.nes().debug())
     }
 }
 

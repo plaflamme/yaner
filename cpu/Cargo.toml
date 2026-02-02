@@ -4,6 +4,7 @@ edition = "2024"
 
 [dependencies]
 bitflags = "2.4"
+log = "*"
 
 [build-dependencies]
 strum = "*"

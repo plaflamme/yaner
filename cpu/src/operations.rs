@@ -286,13 +286,6 @@ impl ReadOperation for xaa {
     }
 }
 
-pub struct ahx;
-impl ModifyOperation for ahx {
-    fn operate(&self, cpu: &Cpu, v: u8) -> u8 {
-        cpu.acc.get() & cpu.x.get() & v
-    }
-}
-
 // http://obelisk.me.uk/6502/reference.html#ASL
 pub struct asl;
 impl ModifyOperation for asl {

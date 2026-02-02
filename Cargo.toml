@@ -32,6 +32,7 @@ libretro-backend = "0.2"
 criterion = { version = "0.5", features = ["html_reports"] }
 test-case = "3.3.1"
 pprof = { version = "0.15", features = ["criterion", "flamegraph"] }
+env_logger = "0.11"
 
 # Disable benchmarks in the lib and binary modules
 # https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options

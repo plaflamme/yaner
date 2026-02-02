@@ -423,6 +423,10 @@ impl Cpu {
         }
     }
 
+    pub fn active_pc(&self) -> u16 {
+        self.active_pc.get()
+    }
+
     pub fn set_nmi(&self, state: bool) {
         if state {
             self.nmi_line.set();
@@ -507,6 +511,7 @@ impl Cpu {
         }
         macro_rules! dma {
             ($addr:expr) => {{
+                log::debug!("DMA");
                 cycle!(Rw::Read, $addr);
 
                 for addr_lo in 0x00..=0xFF {
@@ -518,6 +523,19 @@ impl Cpu {
                         break;
                     }
                 }
+            }};
+        }
+        macro_rules! read_and_dma {
+            ( $addr: expr ) => {{
+                let addr = $addr;
+                let dma = if let Some(addr) = self.dma_latch.take() {
+                    dma!((addr as u16) << 8);
+                    true
+                } else {
+                    false
+                };
+                cycle!(Rw::Read, addr);
+                (self.io_bus.get(), dma)
             }};
         }
         macro_rules! read {
@@ -812,13 +830,12 @@ impl Cpu {
                 let opcode = next_pc!();
 
                 let OpCode(op, mode) = OpCode::decode(opcode);
-                let op_type: OpType = OpType::from_op(op);
-                let addr = if matches!(op_type, OpType::Stack) {
-                    // JSR is Abs, but not really, because the dummy read is on the stack, not the PC
-                    // So we just let all Stack operations do their whole memory handling
-                    0
-                } else {
-                    match mode {
+                let op_type = OpType::from_op(op);
+
+                let addr = match op {
+                    Op::AHX => 0,
+                    _ if matches!(op_type, OpType::Stack) => 0,
+                    _ => match mode {
                         AddressingMode::Rel => 0,
                         AddressingMode::Imp | AddressingMode::Acc => {
                             read!(self.pc.get());
@@ -887,22 +904,22 @@ impl Cpu {
                             let addr_lo = read!(ptr as u16);
                             let addr_hi = read!(ptr.wrapping_add(1) as u16);
 
-                            let (addr_lo, oops) = addr_lo.overflowing_add(self.y.get());
-                            let addr = (addr_hi as u16) << 8 | addr_lo as u16;
-                            if oops && matches!(op_type, OpType::Read)
+                            let (addr_lo, page_cross) = addr_lo.overflowing_add(self.y.get());
+                            let base_addr = (addr_hi as u16) << 8 | addr_lo as u16;
+                            if page_cross && matches!(op_type, OpType::Read)
                                 || matches!(op_type, OpType::Modify | OpType::Write)
                             {
                                 // Dummy read for modify or write operations or on page cross for reads
-                                read!(addr);
+                                read!(base_addr);
                             }
-                            if oops {
+                            if page_cross {
                                 let addr_hi = addr_hi.wrapping_add(1);
                                 (addr_hi as u16) << 8 | addr_lo as u16
                             } else {
-                                addr
+                                base_addr
                             }
                         }
-                    }
+                    },
                 };
 
                 macro_rules! fetch {
@@ -1012,7 +1029,48 @@ impl Cpu {
                     Op::TXA => run!(OpType::Implicit, operations::txa),
                     Op::TXS => run!(OpType::Implicit, operations::txs),
                     Op::TYA => run!(OpType::Implicit, operations::tya),
-                    Op::AHX => run!(OpType::Modify, operations::ahx),
+                    Op::AHX => {
+                        // AHX {adr} = stores A&X&H into {adr}
+                        // But with a bunch of caveats
+                        let (base_addr_hi, base_addr_lo) = match mode {
+                            AddressingMode::AbY => {
+                                let addr_lo = next_pc!();
+                                let addr_hi = next_pc!();
+                                (addr_hi, addr_lo)
+                            }
+                            AddressingMode::IdY => {
+                                let ptr = next_pc!() as u16;
+                                let addr_lo = read!(ptr);
+                                let addr_hi = read!(ptr.wrapping_add(1));
+                                (addr_hi, addr_lo)
+                            }
+                            _ => panic!("invalid addressing mode for AHX: {mode:?}"),
+                        };
+                        let (a, x, y) = (self.acc.get(), self.x.get(), self.y.get());
+                        let value = a & x;
+                        let (addr_lo, page_cross) = base_addr_lo.overflowing_add(y);
+
+                        // Dummy read
+                        let (_, dma) = read_and_dma!((base_addr_hi as u16) << 8 | addr_lo as u16);
+
+                        let addr_hi = if page_cross {
+                            // When a page is crossed, the address written to is ANDed with the register
+                            base_addr_hi.wrapping_add(1) & value
+                        } else {
+                            base_addr_hi
+                        };
+
+                        let addr = (addr_hi as u16) << 8 | addr_lo as u16;
+                        let h = base_addr_hi.wrapping_add(1);
+
+                        // When a DMA interrupts the instruction right before the dummy read cycle,
+                        // the value written is not ANDed with the MSB of the address
+                        let result = if dma { value } else { value & h };
+                        log::debug!(
+                            "AHX {addr:#04X} = {result:#02X} = {a:#02X} & {x:#02X} [& {h:#02X} (dma={dma})]"
+                        );
+                        write!(addr, result)
+                    }
                     Op::ALR => run!(OpType::Read, operations::alr),
                     Op::ANC => run!(OpType::Read, operations::anc),
                     Op::ARR => run!(OpType::Read, operations::arr),

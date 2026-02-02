@@ -7,8 +7,35 @@ mod common;
 use yaner_cpu::OpCode;
 
 use crate::common::run_test_with_steps;
+use std::sync::Once;
+use std::sync::mpsc::RecvTimeoutError;
 use std::{assert_matches, collections::HashMap, path::PathBuf};
 use test_case::test_case;
+
+#[allow(dead_code)]
+#[derive(Debug)]
+enum Error {
+    Code(u8),
+    Timeout,
+    Panic,
+    Other(String),
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(value: anyhow::Error) -> Self {
+        Self::Other(value.to_string())
+    }
+}
+
+static INIT: Once = Once::new();
+
+fn setup_logging() {
+    INIT.call_once(|| {
+        // Initialize the logger only once
+        // set is_test(true) to ensure logs are captured by the test harness
+        let _ = env_logger::builder().is_test(true).try_init();
+    });
+}
 
 struct AccuracyCoin {
     root: PathBuf,
@@ -17,7 +44,7 @@ struct AccuracyCoin {
 }
 
 impl AccuracyCoin {
-    fn new(root: impl Into<PathBuf>) -> Result<Self, Box<dyn std::error::Error>> {
+    fn new(root: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let root = root.into();
         let fns = root.join("AccuracyCoin.fns");
         let fns = std::fs::read_to_string(fns)?;
@@ -26,14 +53,16 @@ impl AccuracyCoin {
             .map(|l| l.trim())
             .filter(|l| !l.starts_with(";"))
             .map(|l| {
-                let parse = || -> Result<(String, u16), Box<dyn std::error::Error>> {
-                    let (fns, addr) = l.split_once("=").ok_or(format!("Invalid line {l}"))?;
+                let parse = || -> anyhow::Result<(String, u16)> {
+                    let (fns, addr) = l
+                        .split_once("=")
+                        .ok_or(anyhow::format_err!("Invalid line {l}"))?;
                     let addr = u16::from_str_radix(addr.trim().trim_start_matches('$'), 16)?;
                     Ok((fns.trim().to_string(), addr))
                 };
                 parse()
             })
-            .collect::<Result<HashMap<String, u16>, Box<dyn std::error::Error>>>()?;
+            .collect::<anyhow::Result<HashMap<String, u16>>>()?;
         let labels = listing
             .iter()
             .map(|(k, &v)| (v, k.clone()))
@@ -46,11 +75,11 @@ impl AccuracyCoin {
         })
     }
 
-    fn addr(&self, label: &str) -> Result<u16, String> {
+    fn addr(&self, label: &str) -> anyhow::Result<u16> {
         self.listing
             .get(label)
             .copied()
-            .ok_or_else(|| format!("Cannot find address of label {label}"))
+            .ok_or_else(|| anyhow::format_err!("Cannot find address of label {label}"))
     }
 
     fn label(&self, addr: u16) -> Option<&str> {
@@ -61,8 +90,8 @@ impl AccuracyCoin {
         self.root.join("AccuracyCoin.nes")
     }
 }
-
-fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> {
+    setup_logging();
     let accuracy_coin = AccuracyCoin::new("roms/AccuracyCoin")?;
     let suite_pointer = accuracy_coin.addr(suite)?;
     let test_exec_pointer = accuracy_coin.addr(test)?;
@@ -99,7 +128,7 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
                 && label != last_label
             {
                 // TODO: how do I enable this from the command line?
-                log::debug!("Reached label: {}", label);
+                log::debug!("Reached label (0x{:02X}): {}", nes_state.cpu.pc, label);
                 // TODO: count instead of skipping
                 last_label = label.to_string();
             }
@@ -161,33 +190,43 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> Result<(), Box<dyn std::er
             ; bits 0 and 1 hold the results. Bits 3+ hold error codes for printing what failed.
             */
             let result = nes_state.ram.read_u8(ResultAddr);
-            if result != 1 {
-                panic!("Test {test} failed with error code: {}", result >> 2);
+            if result == 1 {
+                Ok(())
+            } else {
+                Err(Error::Code(result >> 2))
             }
         },
-    );
-    Ok(())
+    )
 }
-fn run_accuracy_coin_test_with_timeout(suite: &'static str, test: &'static str) {
+
+fn run_accuracy_coin_test_with_timeout(
+    suite: &'static str,
+    test: &'static str,
+) -> anyhow::Result<(), Error> {
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        run_accuracy_coin_test(suite, test).unwrap();
-        sender.send(()).unwrap();
+        let result = match std::panic::catch_unwind(|| run_accuracy_coin_test(suite, test)) {
+            Ok(result) => result,
+            Err(_) => Err(Error::Panic),
+        };
+        sender.send(result).unwrap();
     });
-    receiver
-        .recv_timeout(std::time::Duration::from_secs(15))
-        .unwrap();
+    match receiver.recv_timeout(std::time::Duration::from_secs(15)) {
+        Ok(result) => result,
+        Err(RecvTimeoutError::Timeout) => Err(Error::Timeout),
+        Err(RecvTimeoutError::Disconnected) => panic!("unexpected panic in test thread"),
+    }
 }
 
 macro_rules! test_suite {
-    ($suite_name: ident, $($test_name: ident $(=> $more:tt)?),+) => {
+    ($suite_name: ident, $($test_name:ident $(=> $matches:pat)?),+) => {
 
         $(
             const $test_name: &str = stringify!($test_name);
         )+
 
-        $(#[test_case($test_name $( => $more )? )])+
-        fn $suite_name(test: &'static str) {
+        $(#[test_case($test_name $( => matches $matches )? )])+
+        fn $suite_name(test: &'static str) -> anyhow::Result<(), Error> {
             run_accuracy_coin_test_with_timeout(stringify!($suite_name), test)
         }
     };
@@ -199,11 +238,11 @@ test_suite! {
     TEST_RamMirroring,
     Test_ProgramCounter_Wraparound,
     TEST_DecimalFlag,
-    TEST_BFlag => panics,
+    TEST_BFlag => Err(_),
     TEST_DummyReads,
     TEST_DummyWrites,
-    TEST_OpenBus => panics,
-    TEST_AllNOPs => panics
+    TEST_OpenBus => Err(_),
+    TEST_AllNOPs => Err(_)
 }
 
 test_suite! {
@@ -298,11 +337,11 @@ test_suite! {
 
 test_suite! {
     Suite_UnofficialOps_SH_,
-    TEST_SHA_93 => panics,
-    TEST_SHA_9F => panics,
-    TEST_SHS_9B => panics,
-    TEST_SHY_9C => panics,
-    TEST_SHX_9E => panics,
+    TEST_SHA_93 => Err(Error::Code(7)), // DMA timing
+    TEST_SHA_9F => Err(Error::Code(7)), // DMA timing
+    TEST_SHS_9B => Err(_),
+    TEST_SHY_9C => Err(_),
+    TEST_SHX_9E => Err(_),
     TEST_LAE_BB
 }
 
@@ -320,41 +359,41 @@ test_suite! {
 
 test_suite! {
     Suite_CPUInterrupts,
-    TEST_IFlagLatency => panics,
-    TEST_NmiAndBrk => panics,
-    TEST_NmiAndIrq => panics
+    TEST_IFlagLatency => Err(_),
+    TEST_NmiAndBrk => Err(_),
+    TEST_NmiAndIrq => Err(_)
 }
 
 test_suite! {
     Suite_DMATests,
-    TEST_DMA_Plus_OpenBus => panics,
-    TEST_DMA_Plus_2002R => panics,
-    TEST_DMA_Plus_2007R => panics,
-    TEST_DMA_Plus_2007W => panics,
-    TEST_DMA_Plus_4015R => panics,
-    TEST_DMA_Plus_4016R => panics,
-    TEST_DMABusConflict => panics,
-    TEST_DMCDMAPlusOAMDMA => panics,
-    TEST_ExplicitDMAAbort => panics,
-    TEST_ImplicitDMAAbort => panics
+    TEST_DMA_Plus_OpenBus => Err(_),
+    TEST_DMA_Plus_2002R => Err(_),
+    TEST_DMA_Plus_2007R => Err(_),
+    TEST_DMA_Plus_2007W => Err(_),
+    TEST_DMA_Plus_4015R => Err(_),
+    TEST_DMA_Plus_4016R => Err(_),
+    TEST_DMABusConflict => Err(_),
+    TEST_DMCDMAPlusOAMDMA => Err(_),
+    TEST_ExplicitDMAAbort => Err(_),
+    TEST_ImplicitDMAAbort => Err(_)
 }
 
 test_suite! {
     Suite_APUTiming,
-    TEST_APULengthCounter => panics,
-    TEST_APULengthTable => panics,
-    TEST_FrameCounterIRQ => panics,
-    TEST_FrameCounter4Step => panics,
-    TEST_FrameCounter5Step => panics,
-    TEST_DeltaModulationChannel => panics,
-    TEST_APURegActivation => panics,
-    TEST_ControllerStrobing => panics,
-    TEST_ControllerClocking => panics
+    TEST_APULengthCounter => Err(_),
+    TEST_APULengthTable => Err(_),
+    TEST_FrameCounterIRQ => Err(_),
+    TEST_FrameCounter4Step => Err(_),
+    TEST_FrameCounter5Step => Err(_),
+    TEST_DeltaModulationChannel => Err(_),
+    TEST_APURegActivation => Err(_),
+    TEST_ControllerStrobing => Err(_),
+    TEST_ControllerClocking => Err(_)
 }
 
 test_suite! {
     Suite_PowerOnState,
-    TEST_PowerOnState_PPU_ResetFlag => panics,
+    TEST_PowerOnState_PPU_ResetFlag => Err(_),
     TEST_PowerOnState_CPU_RAM,
     TEST_PowerOnState_CPU_Registers,
     TEST_PowerOnState_PPU_RAM,
@@ -367,9 +406,9 @@ test_suite! {
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
     TEST_PPUReadBuffer,
-    TEST_PaletteRAMQuirks => panics,
+    TEST_PaletteRAMQuirks => Err(_),
     TEST_RenderingFlagBehavior,
-    TEST_Rendering2007Read => panics
+    TEST_Rendering2007Read => Err(_)
 }
 
 test_suite! {
@@ -386,28 +425,28 @@ test_suite! {
 test_suite! {
     Suite_SpriteZeroHits,
     TEST_SprOverflow_Behavior,
-    TEST_Sprite0Hit_Behavior => panics,
-    TEST_SuddenlyResizeSprite => panics,
-    TEST_ArbitrarySpriteZero => panics,
-    TEST_MisalignedOAM_Behavior => panics,
-    TEST_Address2004_Behavior => panics,
-    TEST_OAM_Corruption => panics,
-    TEST_INC4014 => panics
+    TEST_Sprite0Hit_Behavior => Err(_),
+    TEST_SuddenlyResizeSprite => Err(_),
+    TEST_ArbitrarySpriteZero => Err(_),
+    TEST_MisalignedOAM_Behavior => Err(_),
+    TEST_Address2004_Behavior => Err(_),
+    TEST_OAM_Corruption => Err(_),
+    TEST_INC4014 => Err(_)
 }
 
 test_suite! {
     Suite_PPUMisc,
     TEST_AttributesAsTiles,
     TEST_tRegisterQuirks,
-    TEST_StaleBGShiftRegisters => panics,
-    TEST_BGSerialIn => panics,
-    TEST_Scanline0Sprites => panics
+    TEST_StaleBGShiftRegisters => Err(_),
+    TEST_BGSerialIn => Err(_),
+    TEST_Scanline0Sprites => Err(_)
 }
 
 test_suite! {
     Suite_CPUBehavior2,
-    TEST_InstructionTiming => panics,
-    TEST_ImpliedDummyRead => panics,
-    TEST_BranchDummyRead => panics,
-    TEST_JSREdgeCases => panics
+    TEST_InstructionTiming => Err(_),
+    TEST_ImpliedDummyRead => Err(_),
+    TEST_BranchDummyRead => Err(Error::Timeout),
+    TEST_JSREdgeCases => Err(Error::Code(2))
 }
