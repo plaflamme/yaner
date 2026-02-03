@@ -90,6 +90,39 @@ impl AccuracyCoin {
         self.root.join("AccuracyCoin.nes")
     }
 }
+
+// What's going on here.
+//
+// AccuracyCoin uses menu-driven test selection. You can run individual tests (press A), whole suites (press A at the top)
+// or all of the suites (press start). You can also mark some tests to skip (press B). You can change suites by pressing left/right
+// when highlighting the top of a page.
+//
+// Furthermore, the suites and individual tests are organized in the .asm file as data tables.
+// When a test needs to run, the program will write a JSR instruction to that test in RAM at runtime.
+// Every test is organized to write its result (code) in A which is the written to a pre-determined location in RAM.
+// Each test has its own location, allowing to display a summary table of all test results.
+//
+// Since tests run from a UI, this happens within NMI. That is, the startup NMI routine will check the joypad, the state
+// of the menu, i.e.: which page (X coordinate) and which test (Y coordinate) is highlighted and then it will setup
+// the pointers in RAM for the JSR to occur to that test's code.
+//
+// This test harness hijacks the NMI routine to execute specific tests:
+// * first we wait for the PC to point at NMI_Routine
+// * then we jump over the ReadController1 function which writes the controller button to $controller_New
+// * at this point, we write the test we want to run in the following locations in RAM:
+//   * write the suite's PC to $suitePointer
+//   * write 1 in $menuCursorYPos (as if we're selecting the first test of the suite)
+//   * write the test's PC to $suiteExecPointerList+2 (the +2 is because we're pointing at the 1st test in the suite, the 0th is the suite itself)
+//   * write the address where we want the result to be stored to $suitePointerList+2
+//   * wriate 0x80 to $controller_New, mimics pressing A on the joypad
+// * we let the NMI_Routine continue until RunTest which we jump over
+// * ==> test runs
+// * on RTS, we look at the result in the RAM location specified earlier.
+//   * if the value is 1, this returns Ok(())
+//   * otherwise, this returns Err(Error::Code(result >> 2)), see below
+//
+// NOTE: In order to limit the number of hardcoded constants, we extract the label address we care about
+// out of the listing file (AccuracyCoin.fns) which is parsed at the beginnig of each test.
 fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> {
     setup_logging();
     let accuracy_coin = AccuracyCoin::new("roms/AccuracyCoin")?;
@@ -100,8 +133,8 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
     let ReadController1 = accuracy_coin.addr("ReadController1")?;
     let RunTest = accuracy_coin.addr("RunTest")?;
 
-    // TODO: read out of .asm
-    const controller_New: u16 = 0x0019;
+    // TODO: read these constants out of .asm
+    const controller_New: u16 = 0x19;
     const suitePointer: u16 = 0x05;
     // Address of pointer to test to run
     const suiteExecPointerList: u16 = 0xA0;
@@ -127,7 +160,6 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
             if let Some(label) = accuracy_coin.label(nes_state.cpu.pc)
                 && label != last_label
             {
-                // TODO: how do I enable this from the command line?
                 log::debug!("Reached label (0x{:02X}): {}", nes_state.cpu.pc, label);
                 // TODO: count instead of skipping
                 last_label = label.to_string();
