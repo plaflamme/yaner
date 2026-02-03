@@ -270,11 +270,11 @@ test_suite! {
     TEST_RamMirroring,
     Test_ProgramCounter_Wraparound,
     TEST_DecimalFlag,
-    TEST_BFlag => Err(_),
+    TEST_BFlag => Err(Error::Code(3)), // requires APU
     TEST_DummyReads,
     TEST_DummyWrites,
-    TEST_OpenBus => Err(_),
-    TEST_AllNOPs => Err(_)
+    TEST_OpenBus => Err(Error::Code(1)), // Reading from open bus is not all zeroes.
+    TEST_AllNOPs => Err(Error::Code(2)) // Opcode $0C (NOP Absolute) malfunctioned. - but I think this is dummy read
 }
 
 test_suite! {
@@ -371,9 +371,9 @@ test_suite! {
     Suite_UnofficialOps_SH_,
     TEST_SHA_93 => Err(Error::Code(7)), // DMA timing
     TEST_SHA_9F => Err(Error::Code(7)), // DMA timing
-    TEST_SHS_9B => Err(_),
-    TEST_SHY_9C => Err(_),
-    TEST_SHX_9E => Err(_),
+    TEST_SHS_9B => Err(Error::Code(1)),
+    TEST_SHY_9C => Err(Error::Code(1)),
+    TEST_SHX_9E => Err(Error::Code(1)),
     TEST_LAE_BB
 }
 
@@ -391,41 +391,41 @@ test_suite! {
 
 test_suite! {
     Suite_CPUInterrupts,
-    TEST_IFlagLatency => Err(_),
-    TEST_NmiAndBrk => Err(_),
-    TEST_NmiAndIrq => Err(_)
+    TEST_IFlagLatency => Err(Error::Code(1)),
+    TEST_NmiAndBrk => Err(Error::Code(2)),
+    TEST_NmiAndIrq => Err(Error::Code(1))
 }
 
 test_suite! {
     Suite_DMATests,
-    TEST_DMA_Plus_OpenBus => Err(_),
-    TEST_DMA_Plus_2002R => Err(_),
-    TEST_DMA_Plus_2007R => Err(_),
-    TEST_DMA_Plus_2007W => Err(_),
-    TEST_DMA_Plus_4015R => Err(_),
-    TEST_DMA_Plus_4016R => Err(_),
-    TEST_DMABusConflict => Err(_),
-    TEST_DMCDMAPlusOAMDMA => Err(_),
-    TEST_ExplicitDMAAbort => Err(_),
-    TEST_ImplicitDMAAbort => Err(_)
+    TEST_DMA_Plus_OpenBus => Err(Error::Code(1)),
+    TEST_DMA_Plus_2002R => Err(Error::Code(2)),
+    TEST_DMA_Plus_2007R => Err(Error::Code(2)),
+    TEST_DMA_Plus_2007W => Err(Error::Code(1)),
+    TEST_DMA_Plus_4015R => Err(Error::Code(1)),
+    TEST_DMA_Plus_4016R => Err(Error::Code(1)),
+    TEST_DMABusConflict => Err(Error::Code(2)),
+    TEST_DMCDMAPlusOAMDMA => Err(Error::Code(1)),
+    TEST_ExplicitDMAAbort => Err(Error::Code(1)),
+    TEST_ImplicitDMAAbort => Err(Error::Code(1))
 }
 
 test_suite! {
     Suite_APUTiming,
-    TEST_APULengthCounter => Err(_),
-    TEST_APULengthTable => Err(_),
-    TEST_FrameCounterIRQ => Err(_),
-    TEST_FrameCounter4Step => Err(_),
-    TEST_FrameCounter5Step => Err(_),
-    TEST_DeltaModulationChannel => Err(_),
-    TEST_APURegActivation => Err(_),
-    TEST_ControllerStrobing => Err(_),
-    TEST_ControllerClocking => Err(_)
+    TEST_APULengthCounter => Err(Error::Code(2)),
+    TEST_APULengthTable => Err(Error::Code(1)),
+    TEST_FrameCounterIRQ => Err(Error::Code(1)),
+    TEST_FrameCounter4Step => Err(Error::Code(1)),
+    TEST_FrameCounter5Step => Err(Error::Code(1)),
+    TEST_DeltaModulationChannel => Err(Error::Code(1)),
+    TEST_APURegActivation => Err(Error::Code(1)),
+    TEST_ControllerStrobing => Err(Error::Code(4)),
+    TEST_ControllerClocking => Err(Error::Code(2))
 }
 
 test_suite! {
     Suite_PowerOnState,
-    TEST_PowerOnState_PPU_ResetFlag => Err(_),
+    TEST_PowerOnState_PPU_ResetFlag => Err(Error::Code(0)), // PPU should be unwritable during 1st frame
     TEST_PowerOnState_CPU_RAM,
     TEST_PowerOnState_CPU_Registers,
     TEST_PowerOnState_PPU_RAM,
@@ -438,9 +438,9 @@ test_suite! {
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
     TEST_PPUReadBuffer,
-    TEST_PaletteRAMQuirks => Err(_),
+    TEST_PaletteRAMQuirks => Err(Error::Code(5)), // The values read from Palette RAM should only be 6-bit, with the upper 2 bits being PPU open bus.
     TEST_RenderingFlagBehavior,
-    TEST_Rendering2007Read => Err(_)
+    TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
 }
 
 test_suite! {
@@ -457,28 +457,28 @@ test_suite! {
 test_suite! {
     Suite_SpriteZeroHits,
     TEST_SprOverflow_Behavior,
-    TEST_Sprite0Hit_Behavior => Err(_),
-    TEST_SuddenlyResizeSprite => Err(_),
-    TEST_ArbitrarySpriteZero => Err(_),
-    TEST_MisalignedOAM_Behavior => Err(_),
-    TEST_Address2004_Behavior => Err(_),
-    TEST_OAM_Corruption => Err(_),
-    TEST_INC4014 => Err(_)
+    TEST_Sprite0Hit_Behavior => Err(Error::Code(12)),
+    TEST_SuddenlyResizeSprite => Err(Error::Code(4)),
+    TEST_ArbitrarySpriteZero => Err(Error::Code(2)),
+    TEST_MisalignedOAM_Behavior => Err(Error::Code(1)),
+    TEST_Address2004_Behavior => Err(Error::Code(4)),
+    TEST_OAM_Corruption => Err(Error::Code(2)),
+    TEST_INC4014 => Err(Error::Code(1))
 }
 
 test_suite! {
     Suite_PPUMisc,
     TEST_AttributesAsTiles,
     TEST_tRegisterQuirks,
-    TEST_StaleBGShiftRegisters => Err(_),
-    TEST_BGSerialIn => Err(_),
-    TEST_Scanline0Sprites => Err(_)
+    TEST_StaleBGShiftRegisters => Err(Error::Code(3)), // The background shift registers should not be clocked during H-Blank or F-Blank. After re-enabling rendering, a sprite zero hit should be able to occur entirely on stale background shift register data.
+    TEST_BGSerialIn => Err(Error::Code(2)), // Background shift registers should bring in a 1 into bit 0 when shifted. These can be drawn on screen with carefully timed writes to $2001 to enable/disable rendering to skip reloading the shift registers.
+    TEST_Scanline0Sprites => Err(Error::Code(2)) // A sprite should be able to be drawn at Y=0 via the pre-render scanline's sprite evaluation with stale secondary OAM data.
 }
 
 test_suite! {
     Suite_CPUBehavior2,
-    TEST_InstructionTiming => Err(_),
-    TEST_ImpliedDummyRead => Err(_),
+    TEST_InstructionTiming => Err(Error::Code(1)), // The DMA should update the data bus.
+    TEST_ImpliedDummyRead => Err(Error::Code(2)), // Your emulator did not implement the frame counter interrupt flag properly.
     TEST_BranchDummyRead => Err(Error::Timeout),
-    TEST_JSREdgeCases => Err(Error::Code(2))
+    TEST_JSREdgeCases => Err(Error::Code(2)) // Your emulator has incorrect open bus emulation.
 }
