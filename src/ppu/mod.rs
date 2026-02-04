@@ -239,6 +239,9 @@ impl AddressSpace for PpuRegisters {
             0x2005 => self.open_bus.get(),
             0x2006 => self.open_bus.get(),
             0x2007 => {
+                if !self.ppu.registers.allow_access.get() {
+                    return 0;
+                }
                 let (vram_addr, value) = self.ppu.vram_read_u8();
                 let result = match vram_addr {
                     0..=0x3EFF => self.read_buffer.replace(value),
@@ -264,12 +267,21 @@ impl AddressSpace for PpuRegisters {
     fn write_u8(&self, addr: u16, value: u8) {
         self.open_bus.set(value);
         match addr {
-            0x2000 => self.ppu.write_ctrl(value),
-            0x2001 => self
-                .ppu
-                .registers
-                .mask
-                .set(PpuMask::from_bits_truncate(value)),
+            0x2000 => {
+                if !self.ppu.registers.allow_access.get() {
+                    return;
+                }
+                self.ppu.write_ctrl(value)
+            }
+            0x2001 => {
+                if !self.ppu.registers.allow_access.get() {
+                    return;
+                }
+                self.ppu
+                    .registers
+                    .mask
+                    .set(PpuMask::from_bits_truncate(value))
+            }
             0x2002 => (),
             0x2003 => self.ppu.registers.oam_addr.set(value),
             0x2004 => {
@@ -281,8 +293,18 @@ impl AddressSpace for PpuRegisters {
                     .oam_addr
                     .update(|addr| addr.wrapping_add(1));
             }
-            0x2005 => self.ppu.registers.write_scroll(value),
-            0x2006 => self.ppu.registers.write_addr(value),
+            0x2005 => {
+                if !self.ppu.registers.allow_access.get() {
+                    return;
+                }
+                self.ppu.registers.write_scroll(value)
+            }
+            0x2006 => {
+                if !self.ppu.registers.allow_access.get() {
+                    return;
+                }
+                self.ppu.registers.write_addr(value)
+            }
             0x2007 => self.ppu.vram_write_u8(value),
             _ => invalid_address!(addr),
         }

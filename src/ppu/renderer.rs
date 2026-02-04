@@ -186,6 +186,8 @@ impl Renderer {
                 1 => {
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
+                    // This reset signal is set on reset and cleared at the end of VBlank, by the same signal that clears the VBlank, sprite 0, and overflow flags
+                    registers.allow_access.set(true);
                 }
                 257..=320 => {
                     //"OAMADDR is set to 0 during each of ticks 257-320 (the sprite tile loading interval) of the pre-render and visible scanlines." (When rendering)

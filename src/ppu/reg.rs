@@ -153,6 +153,10 @@ pub struct Registers {
     addr_latch: Cell<bool>, // this is referred to as w in the wiki
 
     pub fine_x: Cell<u8>,
+
+    // Reset signal: clears registers on reset, prevents writes and is cleared with vbl and sprite 0
+    // https://www.nesdev.org/wiki/PPU_power_up_state
+    pub allow_access: Cell<bool>,
 }
 
 impl Registers {

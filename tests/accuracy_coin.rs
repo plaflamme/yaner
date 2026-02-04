@@ -221,10 +221,17 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
             ; 5 = "SKIP"
             ; bits 0 and 1 hold the results. Bits 3+ hold error codes for printing what failed.
             */
-            let result = nes_state.ram.read_u8(ResultAddr);
+            // https://github.com/100thCoin/AccuracyCoin/pull/39
+            let result_addr = if test == "TEST_PowerOnState_PPU_ResetFlag" {
+                0x0360
+            } else {
+                ResultAddr
+            };
+            let result = nes_state.ram.read_u8(result_addr);
             if result == 1 {
                 Ok(())
             } else {
+                log::debug!("{result}");
                 Err(Error::Code(result >> 2))
             }
         },
@@ -425,7 +432,7 @@ test_suite! {
 
 test_suite! {
     Suite_PowerOnState,
-    TEST_PowerOnState_PPU_ResetFlag => Err(Error::Code(0)), // PPU should be unwritable during 1st frame
+    TEST_PowerOnState_PPU_ResetFlag,
     TEST_PowerOnState_CPU_RAM,
     TEST_PowerOnState_CPU_Registers,
     TEST_PowerOnState_PPU_RAM,
