@@ -445,7 +445,7 @@ test_suite! {
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
     TEST_PPUReadBuffer,
-    TEST_PaletteRAMQuirks => Err(Error::Code(5)), // The values read from Palette RAM should only be 6-bit, with the upper 2 bits being PPU open bus.
+    TEST_PaletteRAMQuirks,
     TEST_RenderingFlagBehavior,
     TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
 }

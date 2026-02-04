@@ -253,7 +253,7 @@ impl AddressSpace for PpuRegisters {
                         self.read_buffer.set(self.ppu.bus.vram.read_u8(nt_addr));
 
                         // palette values are 6bits wide
-                        value | self.open_bus.get() & 0b1100_0000
+                        (value & 0b0011_1111) | self.open_bus.get() & 0b1100_0000
                     }
                     _ => 0x00,
                 };
