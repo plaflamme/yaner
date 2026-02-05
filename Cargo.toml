@@ -11,18 +11,18 @@ edition = "2024"
 [dependencies]
 yaner-cpu = { path = "cpu" }
 structopt = "0.3.4"
-bitflags = "2.4"
+bitflags = "2"
 bitregions = "0.2.4"
 nom = "7"
 log = "0.4.8"
-stderrlog = "0.5.4"
-rand = "0.8.5"
+stderrlog = "0.6"
+rand = "0.9"
 ouroboros = "0"
 
 # terminal ui
-ratatui = { version = "0.25", features = ["termion"], default-features = false }
+ratatui = { version = "0.30", features = ["termion"], default-features = false }
 # align with ratatui
-termion = "2"
+termion = "4"
 anyhow = "1.0.32"
 
 # libretro

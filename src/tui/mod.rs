@@ -308,9 +308,9 @@ fn cycles(f: &mut Frame<'_>, app_state: &AppState, chunk: Rect) {
                 format!("Cpu({phase} {rw:?}@0x{addr:X})")
             }
             NesCycle::Ppu(ppu_cycle) => match ppu_cycle {
-                PpuCycle::Tick { nmi: true } => format!("PPU(NMI)"),
-                PpuCycle::Tick { nmi: _ } => format!("PPU(dot)"),
-                PpuCycle::Frame => format!("PPU(frame)"),
+                PpuCycle::Tick { nmi: true } => "PPU(NMI)".to_string(),
+                PpuCycle::Tick { nmi: _ } => "PPU(dot)".to_string(),
+                PpuCycle::Frame => "PPU(frame)".to_string(),
             },
         };
         items.push(ListItem::new(line.to_string()));
@@ -465,9 +465,9 @@ fn draw<'a, B: Backend>(
     terminal: &'a mut Terminal<B>,
     state: &NesState<'_>,
     app_state: &AppState,
-) -> Result<ratatui::terminal::CompletedFrame<'a>, io::Error> {
+) -> Result<ratatui::CompletedFrame<'a>, B::Error> {
     terminal.draw(|f| {
-        let size = f.size();
+        let size = f.area();
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
