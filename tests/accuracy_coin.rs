@@ -4,7 +4,7 @@
 #[allow(unused)]
 mod common;
 
-use yaner_cpu::OpCode;
+use yaner::nes::debug::Instruction;
 
 use crate::common::run_test_with_steps;
 use std::sync::Once;
@@ -170,7 +170,7 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
                         // Check our assumption before setting the breakpoint
                         assert_matches!(
                             nes_state.active_op(),
-                            (OpCode(yaner_cpu::Op::JSR, _), addr) if addr == ReadController1
+                            Instruction { op: yaner_cpu::Op::JSR, mode: _, operand } if operand == ReadController1
                         );
                         breakpoint = Some(nes_state.cpu.active_pc + 3);
                     } else if let Some(bp) = breakpoint
@@ -197,8 +197,12 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
                     }
                 }
                 State::Running => {
-                    if let (OpCode(yaner_cpu::Op::JSR, _), addr) = nes_state.active_op()
-                        && addr == RunTest
+                    if let Instruction {
+                        op: yaner_cpu::Op::JSR,
+                        mode: _,
+                        operand,
+                    } = nes_state.active_op()
+                        && operand == RunTest
                     {
                         breakpoint = Some(nes_state.cpu.active_pc + 3);
                     } else if let Some(bp) = breakpoint

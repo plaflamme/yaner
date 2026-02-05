@@ -10,8 +10,6 @@ use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
-use crate::cpu::Cpu;
-use crate::cpu::opcode::OpCode;
 use crate::input::JoypadButtons;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
@@ -213,32 +211,23 @@ fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
     Paragraph::new(state).block(Block::default().title("PPU").borders(Borders::ALL))
 }
 
-// TODO: make sure the pc is in the middle of the list, or at least not at the bottom.
-fn prg_rom(f: &mut Frame<'_>, state: &NesState, addr_space: &dyn AddressSpace, chunk: Rect) {
-    let start = state.cpu.pc.saturating_sub(16);
-
+fn prg_rom(f: &mut Frame<'_>, state: &NesState, chunk: Rect) {
     let mut items = Vec::new();
-    let mut addr = start;
-    let mut selected: Option<usize> = None;
-    loop {
-        let (OpCode(opcode, _), operand) = Cpu::decompile(addr, addr_space);
-        let instr = Span::from(format!("{:04X} {:?} {}", addr, opcode, operand.0));
+    let mut addr = state.cpu.active_pc;
+    for _ in 0..16 {
+        let instruction = state.instruction(addr);
+        let instr = Span::from(format!("{addr:04X} {instruction}"));
 
-        // We can be in the middle of an instruction which has incremented pc,
-        //   use the closest instruction to the current pc value if there's no exact match.
-        if addr <= state.cpu.pc {
-            selected = Some(items.len());
-        }
         items.push(ListItem::new(instr));
 
-        addr = addr.saturating_add(1).saturating_add(operand.1 as u16);
-        if addr >= state.cpu.pc.saturating_add(16) {
+        addr = addr.saturating_add(instruction.size() + 1);
+        if addr == 0xFFFF {
             break;
         }
     }
 
     let mut state = ListState::default();
-    state.select(selected);
+    state.select(Some(0));
     let list = List::new(items)
         .block(Block::default().title("PRG").borders(Borders::ALL))
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))
@@ -342,13 +331,7 @@ fn cycles(f: &mut Frame<'_>, app_state: &AppState, chunk: Rect) {
 
     f.render_stateful_widget(list, chunk, &mut state);
 }
-fn statusbar(
-    f: &mut Frame<'_>,
-    app_state: &AppState,
-    nes: &NesState,
-    addr_space: &dyn AddressSpace,
-    size: Rect,
-) {
+fn statusbar(f: &mut Frame<'_>, app_state: &AppState, nes: &NesState, size: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -367,7 +350,7 @@ fn statusbar(
     f.render_widget(ppu_block(nes), chunks[1]);
     // f.render_widget(sprite_block(nes), chunks[2]);
     cycles(f, app_state, chunks[3]);
-    prg_rom(f, nes, addr_space, chunks[2]);
+    prg_rom(f, nes, chunks[2]);
 }
 
 struct MemoryBlock<'a> {
@@ -494,7 +477,7 @@ fn draw<'a, B: Backend>(
             .constraints([Constraint::Length(21), Constraint::Percentage(100)].as_ref())
             .split(size);
 
-        statusbar(f, app_state, state, state.prg_rom, chunks[0]);
+        statusbar(f, app_state, state, chunks[0]);
         match app_state.main_view {
             View::Memory => rams(f, state, app_state.shift.down, chunks[1]),
             View::Frame => frame(f, state, app_state.shift, chunks[1]),
