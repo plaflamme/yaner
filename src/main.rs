@@ -43,7 +43,6 @@ enum YanerCommand {
         /// The iNES ROM file.
         rom: PathBuf,
     },
-    Generate,
 }
 
 fn main() {
@@ -73,6 +72,5 @@ fn main() {
             let mut debugger = yaner::tui::Debugger::new(nes);
             debugger.start().unwrap();
         }
-        Generate => yaner::cpu::generator::generate_opcode_table(),
     }
 }

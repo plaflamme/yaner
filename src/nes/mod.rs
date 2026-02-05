@@ -257,21 +257,16 @@ impl Steps {
 
     pub fn step_ppu(&mut self) -> Result<PpuCycle, StepperError> {
         loop {
-            match self.step()? {
-                NesCycle::Ppu(cycle) => break Ok(cycle),
-                // NesCycle::Cpu(CpuCycle::Halt) => break Err(StepperError::Halted),
-                _ => (),
+            if let NesCycle::Ppu(cycle) = self.step()? {
+                break Ok(cycle);
             }
         }
     }
 
     pub fn step_cpu(&mut self) -> Result<yaner_cpu::CpuEvent, StepperError> {
         loop {
-            match self.step()? {
-                NesCycle::Cpu(cycle @ CpuEvent::Cycle) => {
-                    break Ok(cycle);
-                }
-                _ => (),
+            if let NesCycle::Cpu(cycle @ CpuEvent::Cycle) = self.step()? {
+                break Ok(cycle);
             }
         }
     }
