@@ -4,7 +4,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 use ouroboros::self_referencing;
-use yaner_cpu::CpuEvent;
 
 use crate::Reset;
 use crate::cartridge::Cartridge;
@@ -89,7 +88,7 @@ impl Nes {
 
     // yields on every nes ppu tick
     #[define_opaque(NesCoroutine)]
-    fn ppu_steps(&self) -> NesCoroutine<'_> {
+    fn run(&self) -> NesCoroutine<'_> {
         let mut cpu = self.cpu.run();
         let mut ppu = self.ppu.run();
         let ppu_stride = 4;
@@ -106,38 +105,43 @@ impl Nes {
             loop {
                 match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(
-                        cycle @ yaner_cpu::CpuEvent::Tick(yaner_cpu::CpuTick { phase, rw, addr }),
-                    ) => {
-                        if matches!(phase, yaner_cpu::Phase::One) {
-                            match rw {
-                                yaner_cpu::Rw::Read => {
-                                    let value = self.cpu_bus.read_u8(addr);
-                                    self.clocks.cpu_master_clock.update(|c| c + 5);
-                                    self.cpu.io_bus.set(value);
-                                    yield NesCycle::Cpu(cycle);
-                                }
-                                yaner_cpu::Rw::Write => {
-                                    self.clocks.cpu_master_clock.update(|c| c + 7);
-                                    self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
-                                    yield NesCycle::Cpu(cycle);
-                                }
-                            }
-                        } else {
-                            match rw {
-                                yaner_cpu::Rw::Read => {
-                                    self.clocks.cpu_master_clock.update(|c| c + 7);
-                                    self.clocks.tick_cpu();
-                                    yield NesCycle::Cpu(cycle);
-                                }
-                                yaner_cpu::Rw::Write => {
-                                    self.clocks.cpu_master_clock.update(|c| c + 5);
-                                    self.clocks.tick_cpu();
-                                    yield NesCycle::Cpu(cycle);
-                                }
-                            }
+                        cycle @ yaner_cpu::CpuEvent::HalfCycle {
+                            phase: yaner_cpu::Phase::One,
+                            rw,
+                            addr,
+                        },
+                    ) => match rw {
+                        yaner_cpu::Rw::Read => {
+                            let value = self.cpu_bus.read_u8(addr);
+                            self.clocks.cpu_master_clock.update(|c| c + 5);
+                            self.cpu.io_bus.set(value);
+                            yield NesCycle::Cpu(cycle);
                         }
-                    }
-                    CoroutineState::Yielded(c) => yield NesCycle::Cpu(c),
+                        yaner_cpu::Rw::Write => {
+                            self.clocks.cpu_master_clock.update(|c| c + 7);
+                            self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
+                            yield NesCycle::Cpu(cycle);
+                        }
+                    },
+                    CoroutineState::Yielded(
+                        cycle @ yaner_cpu::CpuEvent::HalfCycle {
+                            phase: yaner_cpu::Phase::Two,
+                            rw,
+                            addr: _,
+                        },
+                    ) => match rw {
+                        yaner_cpu::Rw::Read => {
+                            self.clocks.cpu_master_clock.update(|c| c + 7);
+                            self.clocks.tick_cpu();
+                            yield NesCycle::Cpu(cycle);
+                        }
+                        yaner_cpu::Rw::Write => {
+                            self.clocks.cpu_master_clock.update(|c| c + 5);
+                            self.clocks.tick_cpu();
+                            yield NesCycle::Cpu(cycle);
+                        }
+                    },
+
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
 
@@ -184,7 +188,7 @@ impl Nes {
         StepsBuilder {
             nes: self,
             halted: false,
-            steps_builder: |nes: &Nes| nes.ppu_steps(),
+            steps_builder: |nes: &Nes| nes.run(),
         }
         .build()
     }
@@ -264,8 +268,11 @@ impl Steps {
     }
 
     pub fn step_cpu(&mut self) -> Result<yaner_cpu::CpuEvent, StepperError> {
+        let active_pc = self.nes().cpu.active_pc();
         loop {
-            if let NesCycle::Cpu(cycle @ CpuEvent::Cycle) = self.step()? {
+            if let NesCycle::Cpu(cycle) = self.step()?
+                && self.nes().cpu.active_pc() != active_pc
+            {
                 break Ok(cycle);
             }
         }

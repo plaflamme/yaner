@@ -344,15 +344,9 @@ impl Display for Phase {
 
 #[derive(Debug, Clone, Copy)]
 pub enum CpuEvent {
-    Cycle,
-    Tick(CpuTick),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct CpuTick {
-    pub phase: Phase,
-    pub rw: Rw,
-    pub addr: u16,
+    /// The CPU devides every cycle in 2 phases: φ1 and φ2.
+    /// This event is emitted on every such half cycle
+    HalfCycle { phase: Phase, rw: Rw, addr: u16 },
 }
 
 pub struct Cpu {
@@ -496,17 +490,17 @@ impl Cpu {
         macro_rules! cycle {
             ($rw:expr, $addr:expr) => {{
                 self.start_cycle();
-                yield CpuEvent::Tick(CpuTick {
+                yield CpuEvent::HalfCycle {
                     phase: Phase::One,
                     rw: $rw,
                     addr: $addr,
-                });
+                };
                 self.end_cycle();
-                yield CpuEvent::Tick(CpuTick {
+                yield CpuEvent::HalfCycle {
                     phase: Phase::Two,
                     rw: $rw,
                     addr: $addr,
-                });
+                };
             }};
         }
         macro_rules! dma {
@@ -826,7 +820,6 @@ impl Cpu {
                 process_interrupts!();
 
                 self.active_pc.set(self.pc.get());
-                yield CpuEvent::Cycle;
                 let opcode = next_pc!();
 
                 let OpCode(op, mode) = OpCode::decode(opcode);
@@ -1140,7 +1133,6 @@ mod test {
     use crate::{CpuEvent, Phase};
 
     use super::Cpu;
-    use super::CpuTick;
     use super::Rw;
 
     bitflags::bitflags! {
@@ -1175,7 +1167,7 @@ mod test {
         let mut feedback_register = Pins::from_bits_truncate(ram[FEEDBACK_ADDR as usize]);
         loop {
             match Pin::new(&mut cpu_routine).resume(()) {
-                CoroutineState::Yielded(CpuEvent::Tick(CpuTick { phase, rw, addr })) => {
+                CoroutineState::Yielded(CpuEvent::HalfCycle { phase, rw, addr }) => {
                     if matches!(phase, Phase::One) {
                         match rw {
                             Rw::Read => {
@@ -1217,7 +1209,6 @@ mod test {
                         }
                     }
                 }
-                CoroutineState::Yielded(CpuEvent::Cycle) => (),
                 CoroutineState::Complete(_) => {
                     panic!("cpu stopped, PC was 0x{:X}", cpu.active_pc.get());
                 }
