@@ -5,9 +5,3 @@ edition = "2024"
 [dependencies]
 bitflags = "2.4"
 log = "*"
-
-[build-dependencies]
-strum = "*"
-strum_macros = "*"
-quote = "1"
-proc-macro2 = "1"

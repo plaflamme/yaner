@@ -1984,10 +1984,6 @@ version = "0.0.0"
 dependencies = [
  "bitflags 2.10.0",
  "log",
- "proc-macro2",
- "quote",
- "strum",
- "strum_macros",
 ]
 
 [[package]]
