@@ -160,7 +160,9 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
             if let Some(label) = accuracy_coin.label(nes_state.cpu.pc)
                 && label != last_label
             {
-                log::debug!("Reached label (0x{:02X}): {}", nes_state.cpu.pc, label);
+                if !label.starts_with("Clockslide_") {
+                    log::debug!("Reached label (0x{:02X}): {}", nes_state.cpu.pc, label);
+                }
                 // TODO: count instead of skipping
                 last_label = label.to_string();
             }
@@ -281,7 +283,7 @@ test_suite! {
     TEST_RamMirroring,
     Test_ProgramCounter_Wraparound,
     TEST_DecimalFlag,
-    TEST_BFlag => Err(Error::Code(3)), // requires APU
+    TEST_BFlag,
     TEST_DummyReads,
     TEST_DummyWrites,
     TEST_OpenBus => Err(Error::Code(1)), // Reading from open bus is not all zeroes.
@@ -413,7 +415,7 @@ test_suite! {
     TEST_DMA_Plus_2002R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007W => Err(Error::Code(1)),
-    TEST_DMA_Plus_4015R => Err(Error::Code(1)),
+    TEST_DMA_Plus_4015R => Err(Error::Code(2)),
     TEST_DMA_Plus_4016R => Err(Error::Code(1)),
     TEST_DMABusConflict => Err(Error::Code(2)),
     TEST_DMCDMAPlusOAMDMA => Err(Error::Code(1)),
@@ -425,7 +427,7 @@ test_suite! {
     Suite_APUTiming,
     TEST_APULengthCounter => Err(Error::Code(2)),
     TEST_APULengthTable => Err(Error::Code(1)),
-    TEST_FrameCounterIRQ => Err(Error::Code(1)),
+    TEST_FrameCounterIRQ => Err(Error::Code(7)),
     TEST_FrameCounter4Step => Err(Error::Code(1)),
     TEST_FrameCounter5Step => Err(Error::Code(1)),
     TEST_DeltaModulationChannel => Err(Error::Code(1)),
@@ -491,7 +493,7 @@ test_suite! {
 test_suite! {
     Suite_CPUBehavior2,
     TEST_InstructionTiming => Err(Error::Code(1)), // The DMA should update the data bus.
-    TEST_ImpliedDummyRead => Err(Error::Code(2)), // Your emulator did not implement the frame counter interrupt flag properly.
+    TEST_ImpliedDummyRead => Err(Error::Code(3)), // Your emulator did not update the data bus when the DMC DMA occured, or your DMA timing is off.
     TEST_BranchDummyRead => Err(Error::Timeout),
     TEST_JSREdgeCases => Err(Error::Code(3)) // Your emulator has incorrect open bus emulation.
 }

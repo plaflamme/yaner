@@ -92,6 +92,7 @@ impl IoRegisters {
 impl AddressSpace for IoRegisters {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
+            0x4015 => self.apu.read_u8(addr),
             // In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
             // Usually this is the most significant byte of the address of the controller port—0x40.
             // Certain games (such as Paperboy) rely on this behavior and require that reads from the controller ports return exactly $40 or $41 as appropriate.

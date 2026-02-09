@@ -6,7 +6,7 @@ use std::rc::Rc;
 use ouroboros::self_referencing;
 
 use crate::Reset;
-use crate::apu::Apu;
+use crate::apu::{Apu, ApuCycle};
 use crate::cartridge::Cartridge;
 use crate::cpu::{CpuBus, IoRegisters};
 use crate::input::Joypad;
@@ -152,6 +152,16 @@ impl Nes {
 
                 if let Some(addr) = self.cpu_bus.io_regsiters.dma_latch() {
                     self.cpu.dma_latch.set(Some(addr));
+                }
+
+                match Pin::new(&mut apu).resume(()) {
+                    CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
+                        if irq {
+                            log::debug!("APU IRQ");
+                            self.cpu.set_irq(irq);
+                        }
+                    }
+                    CoroutineState::Complete(_) => (),
                 }
 
                 while self.clocks.ppu_master_clock.get() + ppu_stride

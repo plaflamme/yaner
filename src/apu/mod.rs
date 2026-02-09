@@ -1,4 +1,4 @@
-use bitflags::{bitflags, Flags};
+use bitflags::{Flags, bitflags};
 use std::{cell::Cell, ops::Coroutine};
 
 mod frame_counter;
@@ -42,6 +42,9 @@ impl Apu {
         #[coroutine]
         move || loop {
             if let Some(clock) = self.frame_counter.tick() {
+                if clock.raise_interrupt {
+                    self.status.update(|s| s | Status::F);
+                }
                 yield ApuCycle::Tick {
                     irq: clock.raise_interrupt,
                 }
@@ -55,7 +58,12 @@ impl Apu {
 impl AddressSpace for Apu {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
-            0x4015 => self.status.get().bits(),
+            0x4015 => {
+                let status = self.status.get();
+                self.status.update(|s| s - Status::F);
+                log::debug!("APU Status: {status:?}");
+                status.bits()
+            }
             _ => todo!(),
         }
     }
