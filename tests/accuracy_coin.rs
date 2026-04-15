@@ -114,7 +114,7 @@ impl AccuracyCoin {
 //   * write 1 in $menuCursorYPos (as if we're selecting the first test of the suite)
 //   * write the test's PC to $suiteExecPointerList+2 (the +2 is because we're pointing at the 1st test in the suite, the 0th is the suite itself)
 //   * write the address where we want the result to be stored to $suitePointerList+2
-//   * wriate 0x80 to $controller_New, mimics pressing A on the joypad
+//   * write 0x80 to $controller_New, mimics pressing A on the joypad
 // * we let the NMI_Routine continue until RunTest which we jump over
 // * ==> test runs
 // * on RTS, we look at the result in the RAM location specified earlier.
@@ -285,7 +285,7 @@ test_suite! {
     TEST_DummyReads,
     TEST_DummyWrites,
     TEST_OpenBus => Err(Error::Code(1)), // Reading from open bus is not all zeroes.
-    TEST_AllNOPs => Err(Error::Code(2)) // Opcode $0C (NOP Absolute) malfunctioned. - but I think this is dummy read
+    TEST_AllNOPs
 }
 
 test_suite! {
@@ -448,8 +448,8 @@ test_suite! {
     TEST_CHRROMIsNotWritable,
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
-    TEST_PPUReadBuffer,
-    TEST_PaletteRAMQuirks,
+    TEST_PPUReadBuffer => Err(Error::Code(16)), // Not an actual test failure code??
+    TEST_PaletteRAMQuirks => Err(Error::Code(6)), // With "Greyscale Mode" enabled, the lower four bits of the value read should all be zero.
     TEST_RenderingFlagBehavior,
     TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
 }
@@ -491,5 +491,5 @@ test_suite! {
     TEST_InstructionTiming => Err(Error::Code(1)), // The DMA should update the data bus.
     TEST_ImpliedDummyRead => Err(Error::Code(2)), // Your emulator did not implement the frame counter interrupt flag properly.
     TEST_BranchDummyRead => Err(Error::Timeout),
-    TEST_JSREdgeCases => Err(Error::Code(2)) // Your emulator has incorrect open bus emulation.
+    TEST_JSREdgeCases => Err(Error::Code(3)) // Your emulator has incorrect open bus emulation.
 }
