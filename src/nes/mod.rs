@@ -15,7 +15,7 @@ use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 
 pub mod debug;
 
-type NesCoroutine<'a> = impl Coroutine<Yield = NesCycle, Return = ()> + Unpin + 'a;
+type NesCoroutine<'a> = impl Coroutine<Yield = NesCycle, Return = !> + Unpin + 'a;
 
 #[derive(Default)]
 pub struct Clocks {

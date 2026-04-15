@@ -7,7 +7,6 @@ mod common;
 use yaner::nes::debug::Instruction;
 
 use crate::common::run_test_with_steps;
-use std::sync::Once;
 use std::sync::mpsc::RecvTimeoutError;
 use std::{assert_matches, collections::HashMap, path::PathBuf};
 use test_case::test_case;
@@ -25,16 +24,6 @@ impl From<anyhow::Error> for Error {
     fn from(value: anyhow::Error) -> Self {
         Self::Other(value.to_string())
     }
-}
-
-static INIT: Once = Once::new();
-
-fn setup_logging() {
-    INIT.call_once(|| {
-        // Initialize the logger only once
-        // set is_test(true) to ensure logs are captured by the test harness
-        let _ = env_logger::builder().is_test(true).try_init();
-    });
 }
 
 struct AccuracyCoin {
@@ -124,7 +113,6 @@ impl AccuracyCoin {
 // NOTE: In order to limit the number of hardcoded constants, we extract the label address we care about
 // out of the listing file (AccuracyCoin.fns) which is parsed at the beginnig of each test.
 fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> {
-    setup_logging();
     let accuracy_coin = AccuracyCoin::new("roms/AccuracyCoin")?;
     let suite_pointer = accuracy_coin.addr(suite)?;
     let test_exec_pointer = accuracy_coin.addr(test)?;

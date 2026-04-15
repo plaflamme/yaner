@@ -1,5 +1,6 @@
 use yaner_cpu::OpCode;
 
+use crate::apu::debug::ApuState;
 use crate::memory::AddressSpace;
 use crate::ppu::debug::PpuState;
 
@@ -13,6 +14,7 @@ pub struct ClockState {
 // TODO: expose address spaces (read only?)
 pub struct NesState<'a> {
     pub cpu: yaner_cpu::CpuState,
+    pub apu: ApuState,
     pub ppu: PpuState<'a>,
     pub clocks: ClockState,
 
@@ -28,6 +30,7 @@ impl<'a> NesState<'a> {
     pub fn new(nes: &'a super::Nes) -> Self {
         NesState {
             cpu: yaner_cpu::CpuState::new(&nes.cpu),
+            apu: ApuState::new(&nes.apu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
                 cpu_master_clock: nes.clocks.cpu_master_clock.get(),

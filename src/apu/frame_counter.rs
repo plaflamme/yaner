@@ -155,3 +155,19 @@ impl FrameCounter {
         clock
     }
 }
+
+pub struct FrameCounterState {
+    pub register: Register,
+    pub cycles: u16,
+    pub step: u16,
+}
+
+impl FrameCounterState {
+    pub fn new(fc: &FrameCounter) -> Self {
+        Self {
+            register: fc.register.get(),
+            cycles: fc.cycles.get(),
+            step: fc.step.get(),
+        }
+    }
+}

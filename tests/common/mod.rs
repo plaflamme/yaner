@@ -1,12 +1,23 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
+use std::sync::Once;
 use yaner::Reset;
 use yaner::cartridge::Cartridge;
 use yaner::nes::Nes;
 use yaner::nes::debug::NesState;
 
 pub mod blargg;
+
+static INIT: Once = Once::new();
+
+fn setup_logging() {
+    INIT.call_once(|| {
+        // Initialize the logger only once
+        // set is_test(true) to ensure logs are captured by the test harness
+        let _ = env_logger::builder().is_test(true).try_init();
+    });
+}
 
 // result of evaluating the nes state between ppu frames
 // used to determine what the test loop should do
@@ -23,6 +34,7 @@ pub fn run_test_with_steps<T>(
     mut eval: impl FnMut(&NesState) -> Eval,
     assert: impl FnOnce(&NesState) -> T,
 ) -> T {
+    setup_logging();
     let cart = Cartridge::try_from(rom_path.into()).unwrap();
     {
         let mut stepper = Nes::new_with_pc(cart, start_at).steps();

@@ -10,6 +10,7 @@ use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
+use crate::apu::debug::ApuState;
 use crate::input::JoypadButtons;
 use crate::memory::AddressSpace;
 use crate::nes::debug::NesState;
@@ -84,6 +85,40 @@ fn cpu_block<'a>(state: &NesState<'a>) -> Paragraph<'a> {
         ]),
     ]);
     Paragraph::new(state).block(Block::default().title("CPU").borders(Borders::ALL))
+}
+
+fn apu_block<'a>(state: &ApuState) -> Paragraph<'a> {
+    let value_style = Style::default().add_modifier(Modifier::BOLD);
+
+    let state = Text::from(vec![
+        Line::from(vec![
+            Span::from(" ST: "),
+            Span::styled(
+                format!("{:02X} {}", state.status, format_bitflags(state.status)),
+                value_style,
+            ),
+        ]),
+        Line::from(vec![
+            Span::from(" FR: "),
+            Span::styled(
+                format!(
+                    "{:02X} {}",
+                    state.frame_counter.register,
+                    format_bitflags(state.frame_counter.register)
+                ),
+                value_style,
+            ),
+        ]),
+        Line::from(vec![
+            Span::from(" FC: "),
+            Span::styled(format!("{}", state.frame_counter.cycles), value_style),
+        ]),
+        Line::from(vec![
+            Span::from(" FS: "),
+            Span::styled(format!("{}", state.frame_counter.step), value_style),
+        ]),
+    ]);
+    Paragraph::new(state).block(Block::default().title("APU").borders(Borders::ALL))
 }
 
 fn ppu_block<'a>(nes: &NesState<'a>) -> Paragraph<'a> {
@@ -333,6 +368,7 @@ fn statusbar(f: &mut Frame<'_>, app_state: &AppState, nes: &NesState, size: Rect
         .constraints(
             [
                 Constraint::Length(11),
+                Constraint::Length(6),
                 Constraint::Length(15),
                 Constraint::Length(21),
                 Constraint::Length(10),
@@ -343,10 +379,11 @@ fn statusbar(f: &mut Frame<'_>, app_state: &AppState, nes: &NesState, size: Rect
         .split(size);
 
     f.render_widget(cpu_block(nes), chunks[0]);
-    f.render_widget(ppu_block(nes), chunks[1]);
-    // f.render_widget(sprite_block(nes), chunks[2]);
+    f.render_widget(apu_block(&nes.apu), chunks[1]);
+    f.render_widget(ppu_block(nes), chunks[2]);
+    // f.render_widget(sprite_block(nes), chunks[3]);
     cycles(f, app_state, chunks[3]);
-    prg_rom(f, nes, chunks[2]);
+    prg_rom(f, nes, chunks[4]);
 }
 
 struct MemoryBlock<'a> {

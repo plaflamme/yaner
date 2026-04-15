@@ -1,5 +1,6 @@
 #![feature(coroutines, coroutine_trait)]
 #![feature(type_alias_impl_trait)]
+#![feature(never_type)]
 #[macro_use]
 pub mod helper;
 pub mod apu;

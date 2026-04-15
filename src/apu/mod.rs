@@ -1,7 +1,8 @@
-use bitflags::{Flags, bitflags};
+use bitflags::bitflags;
 use std::{cell::Cell, ops::Coroutine};
 
-mod frame_counter;
+pub mod debug;
+pub mod frame_counter;
 
 use frame_counter::FrameCounter;
 
@@ -70,6 +71,7 @@ impl AddressSpace for Apu {
 
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
+            0x4015 => self.status.set(Status::from_bits_truncate(value)),
             0x4017 => self.frame_counter.write(value),
             _ => (),
         }
