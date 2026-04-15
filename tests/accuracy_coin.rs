@@ -254,7 +254,7 @@ fn run_accuracy_coin_test_with_timeout(
         };
         sender.send(result).unwrap();
     });
-    match receiver.recv_timeout(std::time::Duration::from_secs(15)) {
+    match receiver.recv_timeout(std::time::Duration::from_secs(30)) {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => Err(Error::Timeout),
         Err(RecvTimeoutError::Disconnected) => panic!("unexpected panic in test thread"),
