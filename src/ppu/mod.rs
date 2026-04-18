@@ -77,7 +77,19 @@ impl Ppu {
     // read from VRAM with side effects
     // returns the value and the address where it was read from (since it is modified as a side effect)
     fn vram_read_u8(&self) -> (u16, u8) {
-        let addr = self.registers.rw_vram_addr();
+        let addr =
+            if self.renderer.scanline.get() >= 240 || !self.registers.mask.get().is_rendering() {
+                self.registers.rw_vram_addr()
+            } else {
+                //"During rendering (on the pre-render line and the visible lines 0-239, provided either background or sprite rendering is enabled), "
+                //it will update v in an odd way, triggering a coarse X increment and a Y increment simultaneously"
+                self.registers.v_addr.update(|mut v| {
+                    v.incr_x();
+                    v.incr_y();
+                    v
+                });
+                self.registers.v_addr.get().into()
+            };
         (addr, self.bus.read_u8(addr))
     }
 

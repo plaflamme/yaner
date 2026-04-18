@@ -451,7 +451,7 @@ test_suite! {
     TEST_PPUReadBuffer,
     TEST_PaletteRAMQuirks,
     TEST_RenderingFlagBehavior,
-    TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
+    TEST_Rendering2007Read
 }
 
 test_suite! {
