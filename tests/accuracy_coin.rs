@@ -468,7 +468,7 @@ test_suite! {
 test_suite! {
     Suite_SpriteZeroHits,
     TEST_SprOverflow_Behavior,
-    TEST_Sprite0Hit_Behavior => Err(Error::Code(12)),
+    TEST_Sprite0Hit_Behavior,
     TEST_SuddenlyResizeSprite => Err(Error::Code(4)),
     TEST_ArbitrarySpriteZero => Err(Error::Code(2)),
     TEST_MisalignedOAM_Behavior => Err(Error::Code(1)),

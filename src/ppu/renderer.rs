@@ -175,15 +175,18 @@ impl Renderer {
 
     fn cycle_sprites(
         &self,
+        scanline: u16,
+        dot: u16,
         registers: &Registers,
         oam_ram: &impl AddressSpace,
         bus: &impl AddressSpace,
         pre_render: bool,
     ) {
-        let dot = self.dot.get();
         if pre_render {
             match dot {
                 1 => {
+                    // clear whatever we prepared on line 239 (the last visible line which prepared the next line, which is invisible)
+                    self.sprite_pipeline.borrow_mut().reset_output_units();
                     // Clear sprite overflow and 0hit
                     registers.status.update(|s| s - PpuStatus::S - PpuStatus::O);
                     // This reset signal is set on reset and cleared at the end of VBlank, by the same signal that clears the VBlank, sprite 0, and overflow flags
@@ -205,13 +208,9 @@ impl Renderer {
                 self.sprite_pipeline.borrow_mut().reset_output_units();
             }
             if registers.mask.get().is_rendering() {
-                self.sprite_pipeline.borrow_mut().cycle(
-                    self.scanline.get(),
-                    dot,
-                    registers,
-                    oam_ram,
-                    bus,
-                )
+                self.sprite_pipeline
+                    .borrow_mut()
+                    .cycle(scanline, dot, registers, oam_ram, bus)
             }
         }
     }
@@ -297,12 +296,17 @@ impl Renderer {
         }
     }
 
-    fn render_pixel(&self, registers: &Registers, bus: &impl AddressSpace, dot: u16) {
+    fn render_pixel(
+        &self,
+        scanline: u16,
+        dot: u16,
+        registers: &Registers,
+        bus: &impl AddressSpace,
+    ) {
         // NOTE: on the second tick, we draw pixel 0
         // TODO: the wiki says "Actual pixel output is delayed further due to internal render pipelining, and the first pixel is output during cycle 4."
         let pixel = dot - 2;
-        let sl = self.scanline.get();
-        if sl < 240 && pixel < 256 {
+        if scanline < 240 && pixel < 256 {
             let bg_color = self.render_background_pixel(registers, pixel);
             let (sprite_color, fg_priority) = self.render_sprite_pixel(registers, &bg_color, pixel);
 
@@ -319,18 +323,18 @@ impl Renderer {
             let s: &Cell<[Pixel]> = &self.frame_pixels;
             let pixels = s.as_slice_of_cells();
 
-            let pixel_index = pixel + sl * 256;
+            let pixel_index = pixel + scanline * 256;
             pixels[pixel_index as usize].set(pixel_value);
         }
     }
 
     // determines the color of the current pixel, shifts registers
-    fn cycle_pixel(&self, registers: &Registers, bus: &impl AddressSpace) {
-        match self.dot.get() {
-            // From http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
+    fn cycle_pixel(&self, scanline: u16, dot: u16, registers: &Registers, bus: &impl AddressSpace) {
+        match dot {
+            // From http://wiki.nesdev.org/w/images/4/4f/Ppu.svg
             //   The background shift registers shift during each of dots 2...257 and 322...337, inclusive.
-            dot @ 2..=257 | dot @ 322..=337 => {
-                self.render_pixel(registers, bus, dot);
+            2..=257 | 322..=337 => {
+                self.render_pixel(scanline, dot, registers, bus);
                 self.shift();
             }
             _ => (),
@@ -339,9 +343,9 @@ impl Renderer {
 
     // implements the VRAM nametable, attribute and pattern fetches.
     // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
-    fn cycle_bg(&self, registers: &Registers, bus: &impl AddressSpace, pre_render: bool) {
-        match self.dot.get() {
-            dot @ 2..=256 | dot @ 322..=337 => {
+    fn cycle_bg(&self, dot: u16, registers: &Registers, bus: &impl AddressSpace, pre_render: bool) {
+        match dot {
+            2..=256 | 322..=337 => {
                 match dot % 8 {
                     1 => {
                         self.fetch_addr.set(
@@ -446,10 +450,10 @@ impl Renderer {
         #[coroutine]
         move || loop {
             match (self.scanline.get(), self.dot.get()) {
-                (0..=239, _) => {
-                    self.cycle_sprites(registers, oam_ram, bus, false);
-                    self.cycle_pixel(registers, bus);
-                    self.cycle_bg(registers, bus, false);
+                (scanline @ 0..=239, dot) => {
+                    self.cycle_sprites(scanline, dot, registers, oam_ram, bus, false);
+                    self.cycle_pixel(scanline, dot, registers, bus);
+                    self.cycle_bg(dot, registers, bus, false);
                 }
                 (241, 1) => {
                     if !self.suppress_vbl.get() {
@@ -458,14 +462,14 @@ impl Renderer {
                     }
                     self.suppress_vbl.set(false);
                 }
-                (261, dot) => {
+                (scanline @ 261, dot) => {
                     if dot == 1 {
                         registers.status.update(|s| s - PpuStatus::V);
                     }
 
-                    self.cycle_sprites(registers, oam_ram, bus, true);
-                    self.cycle_pixel(registers, bus);
-                    self.cycle_bg(registers, bus, true);
+                    self.cycle_sprites(scanline, dot, registers, oam_ram, bus, true);
+                    self.cycle_pixel(scanline, dot, registers, bus);
+                    self.cycle_bg(dot, registers, bus, true);
 
                     // NOTE: my assumption is that this should be 339, but
                     // the test only passes with 338
@@ -637,48 +641,40 @@ mod test {
 
         let renderer = Renderer::default();
         // dot 0 is idle
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(0, &registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0);
 
         // dot 1 prepares the nametable address
         registers.v_addr.set(VramAddress::from(0u16));
-        renderer.dot.set(1);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(1, &registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0x2000);
 
         // dot 2 fetches the pattern index
-        renderer.dot.set(2);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(2, &registers, &vram, false);
         assert_eq!(renderer.nametable_entry.get(), 0xAB);
 
         // dot 3 prepares the attribute address
-        renderer.dot.set(3);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(3, &registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0x23C0);
 
         // dot 4 fetches the attribute value and initializes the attribute latch
-        renderer.dot.set(4);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(4, &registers, &vram, false);
         assert_eq!(renderer.attribute_entry.get(), 0b00_10_01_11);
 
         // dot 5 prepares the low pattern byte address
-        renderer.dot.set(5);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(5, &registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0xAB * 16);
 
         // dot 6 loads the low byte
-        renderer.dot.set(6);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(6, &registers, &vram, false);
         assert_eq!(renderer.pattern_data.latch.low.get(), 0x12);
 
         // dot 7 prepares the high pattern byte address
-        renderer.dot.set(7);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(7, &registers, &vram, false);
         assert_eq!(renderer.fetch_addr.get(), 0xAB * 16 + 8);
 
         // dot 8 loads the high byte and increments H
-        renderer.dot.set(8);
-        renderer.cycle_bg(&registers, &vram, false);
+        renderer.cycle_bg(8, &registers, &vram, false);
         assert_eq!(renderer.pattern_data.latch.high.get(), 0x12);
         assert_eq!(registers.v_addr.get().coarse_x(), 0x01);
     }
