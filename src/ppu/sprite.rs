@@ -258,9 +258,14 @@ impl SpritePipeline {
 
                             // NOTE: Mesen tests against the index in secondary oam apparently to replicate some obscure corner case.
                             if oam_addr.incr_low() {
+                                oam_addr.incr_high();
+                            }
+
+                            // A complete sprite is exactly 4 bytes. We just copied one byte.
+                            // If secondary_oam_index is a multiple of 4, we've successfully copied all 4 bytes.
+                            if self.secondary_oam_index.is_multiple_of(4) {
                                 // finished copying this sprite's data, move to the next one.
                                 self.sprite_in_range = false;
-                                oam_addr.incr_high();
                             }
                         } else {
                             // nothing to do for this sprite, skip to the next one
