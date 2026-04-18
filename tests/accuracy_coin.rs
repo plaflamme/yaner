@@ -472,9 +472,9 @@ test_suite! {
     TEST_SuddenlyResizeSprite => Err(Error::Code(4)), // Writing to $2000 to disable 16 pixel tall sprites at the beginning of HBlank should properly prevent an otherwise in-range 16 pixel tall sprite from extending into the current scanline.
     TEST_ArbitrarySpriteZero,
     TEST_MisalignedOAM_Behavior,
-    TEST_Address2004_Behavior => Err(Error::Code(4)),
-    TEST_OAM_Corruption => Err(Error::Code(2)),
-    TEST_INC4014 => Err(Error::Code(1))
+    TEST_Address2004_Behavior => Err(Error::Code(4)), // Reads from $2004 during PPU cycles 1 to 64 of a visible scanline (with rendering enabled) should always read $FF.
+    TEST_OAM_Corruption => Err(Error::Code(2)), // OAM Corruption should "corrupt" a row in OAM by copying the 8 values from row 0 to another row.
+    TEST_INC4014 => Err(Error::Code(1)) // The DMC DMA should update the data bus.
 }
 
 test_suite! {
