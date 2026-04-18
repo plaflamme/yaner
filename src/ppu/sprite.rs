@@ -270,6 +270,9 @@ impl SpritePipeline {
                         } else {
                             // nothing to do for this sprite, skip to the next one
                             oam_addr.incr_high();
+                            // the hardware explicitly clears the lower 2 bits in this case
+                            // this only matters if the OAM address was misaligned (not a multiple of 4), in that case, it gets re-aligned here.
+                            oam_addr.set_low(0);
                         }
                     } else {
                         // OAM is full
