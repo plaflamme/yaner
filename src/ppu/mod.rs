@@ -242,18 +242,17 @@ impl AddressSpace for PpuRegisters {
                 if !self.ppu.registers.allow_access.get() {
                     return 0;
                 }
-                let (vram_addr, value) = self.ppu.vram_read_u8();
+                let (vram_addr, vram_value) = self.ppu.vram_read_u8();
                 let result = match vram_addr {
-                    0..=0x3EFF => self.read_buffer.replace(value),
+                    0..=0x3EFF => self.read_buffer.replace(vram_value),
                     0x3F00..=0x3FFF => {
                         // "The palette data is placed immediately on the data bus, and hence no dummy read is required.
                         // Reading the palettes still updates the internal buffer though, but the data placed in it is the
                         // mirrored nametable data that would appear "underneath" the palette."
                         let nt_addr = self.ppu.bus.nametable_mirroring(vram_addr);
                         self.read_buffer.set(self.ppu.bus.vram.read_u8(nt_addr));
-
                         // palette values are 6bits wide
-                        (value & 0b0011_1111) | self.open_bus.get() & 0b1100_0000
+                        vram_value & 0b0011_1111 | self.open_bus.get() & 0b1100_0000
                     }
                     _ => 0x00,
                 };

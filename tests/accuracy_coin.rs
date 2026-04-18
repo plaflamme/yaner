@@ -232,7 +232,7 @@ fn run_accuracy_coin_test(suite: &str, test: &str) -> anyhow::Result<(), Error> 
                 ResultAddr
             };
             let result = nes_state.ram.read_u8(result_addr);
-            if result == 1 {
+            if result & 0b0000_0011 == 1 {
                 Ok(())
             } else {
                 log::debug!("{result}");
@@ -431,7 +431,7 @@ test_suite! {
     TEST_DeltaModulationChannel => Err(Error::Code(1)),
     TEST_APURegActivation => Err(Error::Code(1)),
     TEST_ControllerStrobing => Err(Error::Code(4)),
-    TEST_ControllerClocking => Err(Error::Code(2))
+    TEST_ControllerClocking
 }
 
 test_suite! {
@@ -448,7 +448,7 @@ test_suite! {
     TEST_CHRROMIsNotWritable,
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
-    TEST_PPUReadBuffer => Err(Error::Code(16)), // Not an actual test failure code??
+    TEST_PPUReadBuffer,
     TEST_PaletteRAMQuirks => Err(Error::Code(6)), // With "Greyscale Mode" enabled, the lower four bits of the value read should all be zero.
     TEST_RenderingFlagBehavior,
     TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
