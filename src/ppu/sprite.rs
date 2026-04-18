@@ -247,7 +247,12 @@ impl SpritePipeline {
                         if in_range {
                             self.secondary_oam_index += 1;
 
-                            if oam_addr.high() == 0 {
+                            // If this is sprite 0, then it is in range.
+                            // But in practice, the hardware doesn't check the oam address, it just assumes the first sprite being processed is sprite 0
+                            // So instead, if this is the very first sprite, we raise the flag, regardless of its address.
+                            // This matters if the CPU messes around with oam_addr after dot 65
+                            /* if oam_addr.high() == 0 */
+                            if dot == 66 {
                                 self.sprite0_in_range = true;
                             }
 

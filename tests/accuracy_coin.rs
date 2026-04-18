@@ -469,8 +469,8 @@ test_suite! {
     Suite_SpriteZeroHits,
     TEST_SprOverflow_Behavior,
     TEST_Sprite0Hit_Behavior,
-    TEST_SuddenlyResizeSprite => Err(Error::Code(4)),
-    TEST_ArbitrarySpriteZero => Err(Error::Code(2)),
+    TEST_SuddenlyResizeSprite => Err(Error::Code(4)), // Writing to $2000 to disable 16 pixel tall sprites at the beginning of HBlank should properly prevent an otherwise in-range 16 pixel tall sprite from extending into the current scanline.
+    TEST_ArbitrarySpriteZero => Err(Error::Code(3)), // Misaligned OAM should be able to trigger a sprite zero hit.
     TEST_MisalignedOAM_Behavior => Err(Error::Code(1)),
     TEST_Address2004_Behavior => Err(Error::Code(4)),
     TEST_OAM_Corruption => Err(Error::Code(2)),
