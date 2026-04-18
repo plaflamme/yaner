@@ -449,7 +449,7 @@ test_suite! {
     TEST_PPURegMirroring,
     TEST_PPU_Open_Bus,
     TEST_PPUReadBuffer,
-    TEST_PaletteRAMQuirks => Err(Error::Code(6)), // With "Greyscale Mode" enabled, the lower four bits of the value read should all be zero.
+    TEST_PaletteRAMQuirks,
     TEST_RenderingFlagBehavior,
     TEST_Rendering2007Read => Err(Error::Code(2)) // Reading from $2007 while rendering is enabled should result in a vertical increment of v.
 }

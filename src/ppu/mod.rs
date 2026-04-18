@@ -251,8 +251,15 @@ impl AddressSpace for PpuRegisters {
                         // mirrored nametable data that would appear "underneath" the palette."
                         let nt_addr = self.ppu.bus.nametable_mirroring(vram_addr);
                         self.read_buffer.set(self.ppu.bus.vram.read_u8(nt_addr));
+
                         // palette values are 6bits wide
-                        vram_value & 0b0011_1111 | self.open_bus.get() & 0b1100_0000
+                        // if rendering in greyscale, then the lower four bits are set to 0
+                        let mask = if self.ppu.registers.mask.get().contains(PpuMask::GREYSCALE) {
+                            0b0011_0000
+                        } else {
+                            0b0011_1111
+                        };
+                        vram_value & mask | self.open_bus.get() & 0b1100_0000
                     }
                     _ => 0x00,
                 };
