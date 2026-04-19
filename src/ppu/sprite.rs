@@ -184,6 +184,11 @@ impl SpritePipeline {
         self.secondary_oam_index >> 2
     }
 
+    // Value of the internal buffer updated during sprite evaluation
+    pub fn oam_entry(&self) -> u8 {
+        self.oam_entry
+    }
+
     pub fn reset_output_units(&mut self) {
         // NOTE: we assume this is invoked after evaluation.
         // TODO: We should probably control this more explicitely, e.g.: by doing this within cycle()
@@ -211,6 +216,7 @@ impl SpritePipeline {
             1..=64 => {
                 // "Cycles 1-64: Secondary OAM (32-byte buffer for current sprites on scanline) is initialized to $FF - attempting to read $2004 will return $FF.
                 // Internally, the clear operation is implemented by reading from the OAM and writing into the secondary OAM as usual, only a signal is active that makes the read always return $FF."
+                self.oam_entry = 0xFF;
                 self.clear((dot - 1) as usize >> 1);
             }
             65..=256 => {
@@ -297,6 +303,7 @@ impl SpritePipeline {
                 }
             }
             257..=320 => {
+                self.oam_entry = 0xFF;
                 //"OAMADDR is set to 0 during each of ticks 257-320 (the sprite tile loading interval) of the pre-render and visible scanlines." (When rendering)
                 registers.oam_addr.set(0);
 

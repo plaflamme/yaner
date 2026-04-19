@@ -240,11 +240,15 @@ impl AddressSpace for PpuRegisters {
             }
             0x2003 => self.open_bus.get(),
             0x2004 => {
-                // http://wiki.nesdev.com/w/index.php/PPU_OAM#Byte_2
-                // bits 2-4 of byte 2 are "unimplemented" and thus, should be cleared
-                let addr = self.ppu.registers.oam_addr.get() as u16;
-                let mask = if addr % 4 == 2 { 0b1110_0011 } else { 0xFF };
-                let result = self.ppu.oam_data.read_u8(addr) & mask;
+                let scanline = self.ppu.renderer.scanline.get();
+                let is_rendering = (scanline < 240 || scanline == 261)
+                    && self.ppu.registers.mask.get().is_rendering();
+                let result = if is_rendering {
+                    self.ppu.renderer.sprite_pipeline.borrow().oam_entry()
+                } else {
+                    let addr = self.ppu.registers.oam_addr.get() as u16;
+                    self.ppu.oam_data.read_u8(addr)
+                };
                 self.open_bus.set(result);
                 result
             }
@@ -303,13 +307,28 @@ impl AddressSpace for PpuRegisters {
             0x2002 => (),
             0x2003 => self.ppu.registers.oam_addr.set(value),
             0x2004 => {
-                self.ppu
-                    .oam_data
-                    .write_u8(self.ppu.registers.oam_addr.get() as u16, value);
-                self.ppu
-                    .registers
-                    .oam_addr
-                    .update(|addr| addr.wrapping_add(1));
+                let scanline = self.ppu.renderer.scanline.get();
+                let is_rendering = (scanline < 240 || scanline == 261)
+                    && self.ppu.registers.mask.get().is_rendering();
+
+                if is_rendering {
+                    // "Writes to OAMDATA during rendering (on the pre-render line and the visible lines 0-239, provided either sprite or background rendering is enabled) do not modify values in OAM,
+                    // but do perform a glitchy increment of OAMADDR, bumping only the high 6 bits"
+                    // According to AccuracyCoin, part of the glitchy is also to bitwise AND with 0xFC
+                    self.ppu
+                        .registers
+                        .oam_addr
+                        .update(|addr| addr.wrapping_add(4) & 0xFC);
+                } else {
+                    let addr = self.ppu.registers.oam_addr.get() as u16;
+                    // "The three unimplemented bits of each sprite's byte 2 do not exist in the PPU and always read back as 0 on PPU revisions that allow reading PPU OAM through OAMDATA ($2004)"
+                    let value = if addr % 4 == 2 { value & 0xE3 } else { value };
+                    self.ppu.oam_data.write_u8(addr, value);
+                    self.ppu
+                        .registers
+                        .oam_addr
+                        .update(|addr| addr.wrapping_add(1));
+                }
             }
             0x2005 => {
                 if !self.ppu.registers.allow_access.get() {
