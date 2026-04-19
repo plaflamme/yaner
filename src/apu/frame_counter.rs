@@ -31,6 +31,7 @@ impl Register {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum FrameType {
     Half,
     Quarter,

@@ -2,9 +2,15 @@ use bitflags::bitflags;
 use std::{cell::Cell, ops::Coroutine};
 
 pub mod debug;
+mod envelope;
 pub mod frame_counter;
+mod length_counter;
+pub mod pulse;
+mod sequencer;
+mod sweep;
 
 use frame_counter::FrameCounter;
+use pulse::Pulse;
 
 use crate::memory::AddressSpace;
 
@@ -28,6 +34,8 @@ pub enum ApuCycle {
 
 pub struct Apu {
     status: Cell<Status>,
+    pulse_1: Pulse,
+    pulse_2: Pulse,
     frame_counter: FrameCounter,
 }
 
@@ -36,6 +44,8 @@ impl Apu {
         Self {
             status: Cell::default(),
             frame_counter: FrameCounter::new(),
+            pulse_1: Pulse::new(),
+            pulse_2: Pulse::new(),
         }
     }
 
@@ -43,6 +53,8 @@ impl Apu {
         #[coroutine]
         move || loop {
             if let Some(clock) = self.frame_counter.tick() {
+                self.pulse_1.tick(clock.frame_type);
+                self.pulse_2.tick(clock.frame_type);
                 if clock.raise_interrupt {
                     self.status.update(|s| s | Status::F);
                 }
@@ -56,12 +68,22 @@ impl Apu {
     }
 }
 
+impl Default for Apu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AddressSpace for Apu {
     fn read_u8(&self, addr: u16) -> u8 {
         match addr {
+            0x4000..=0x4003 => self.pulse_1.read_u8(addr),
+            0x4004..=0x4007 => self.pulse_2.read_u8(addr),
             0x4015 => {
-                let status = self.status.get();
+                let mut status = self.status.get();
                 self.status.update(|s| s - Status::F);
+                status.set(Status::P1, self.pulse_1.playing());
+                status.set(Status::P2, self.pulse_2.playing());
                 log::debug!("APU Status: {status:?}");
                 status.bits()
             }
@@ -71,7 +93,16 @@ impl AddressSpace for Apu {
 
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
-            0x4015 => self.status.set(Status::from_bits_truncate(value)),
+            0x4000..=0x4003 => self.pulse_1.write_u8(addr, value),
+            0x4004..=0x4007 => self.pulse_2.write_u8(addr, value),
+            0x4015 => {
+                let status = Status::from_bits_truncate(value);
+                self.status.set(status);
+                self.pulse_1
+                    .enable_length_counter(status.contains(Status::P1));
+                self.pulse_2
+                    .enable_length_counter(status.contains(Status::P2));
+            }
             0x4017 => self.frame_counter.write(value),
             _ => (),
         }
