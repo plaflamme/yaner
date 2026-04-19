@@ -413,14 +413,14 @@ test_suite! {
 
 test_suite! {
     Suite_APUTiming,
-    TEST_APULengthCounter => Err(Error::Code(2)),
-    TEST_APULengthTable => Err(Error::Code(1)),
-    TEST_FrameCounterIRQ => Err(Error::Code(7)),
-    TEST_FrameCounter4Step => Err(Error::Code(1)),
-    TEST_FrameCounter5Step => Err(Error::Code(1)),
-    TEST_DeltaModulationChannel => Err(Error::Code(1)),
-    TEST_APURegActivation => Err(Error::Code(1)),
-    TEST_ControllerStrobing => Err(Error::Code(4)),
+    TEST_APULengthCounter => Err(Error::Code(1)), // Reading from $4015 should not state that the pulse 1 channel is playing before you write to $4003.
+    TEST_APULengthTable => Err(Error::Code(1)), // Your emulator did not pass APU Length Counter.
+    TEST_FrameCounterIRQ => Err(Error::Code(2)), // The IRQ flag should not be set when the APU frame counter is in the 4-step mode, and the IRQ flag is disabled.
+    TEST_FrameCounter4Step => Err(Error::Code(2)), // The first clock of the length counters was late.
+    TEST_FrameCounter5Step => Err(Error::Code(2)), // The first clock of the length counters was late.
+    TEST_DeltaModulationChannel => Err(Error::Code(1)), // Reading address $4015 should set bit 4 when the DMC is playing and clear bit 4 when the sample ends.
+    TEST_APURegActivation => Err(Error::Code(1)), // A series of prerequisite tests failed. CPU and PPU open bus, PPU Read Buffer, DMA + Open Bus, and DMA + $2007 Read.
+    TEST_ControllerStrobing => Err(Error::Code(4)), // Controllers should not be strobed when the CPU transitions from a "put" cycle to a "get" cycle.
     TEST_ControllerClocking
 }
 
@@ -481,7 +481,7 @@ test_suite! {
 test_suite! {
     Suite_CPUBehavior2,
     TEST_InstructionTiming => Err(Error::Code(1)), // The DMA should update the data bus.
-    TEST_ImpliedDummyRead => Err(Error::Code(3)), // Your emulator did not update the data bus when the DMC DMA occured, or your DMA timing is off.
+    TEST_ImpliedDummyRead => Err(Error::Code(2)), // Your emulator did not implement the frame counter interrupt flag properly.
     TEST_BranchDummyRead => Err(Error::Timeout),
     TEST_JSREdgeCases => Err(Error::Code(3)) // Your emulator has incorrect open bus emulation.
 }
