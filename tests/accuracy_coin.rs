@@ -483,7 +483,9 @@ test_suite! {
     TEST_tRegisterQuirks,
     TEST_StaleBGShiftRegisters => Err(Error::Code(3)), // The background shift registers should not be clocked during H-Blank or F-Blank. After re-enabling rendering, a sprite zero hit should be able to occur entirely on stale background shift register data.
     TEST_BGSerialIn => Err(Error::Code(2)), // Background shift registers should bring in a 1 into bit 0 when shifted. These can be drawn on screen with carefully timed writes to $2001 to enable/disable rendering to skip reloading the shift registers.
-    TEST_Scanline0Sprites => Err(Error::Code(2)) // A sprite should be able to be drawn at Y=0 via the pre-render scanline's sprite evaluation with stale secondary OAM data.
+    TEST_Scanline0Sprites => Err(Error::Code(2)), // A sprite should be able to be drawn at Y=0 via the pre-render scanline's sprite evaluation with stale secondary OAM data.
+    TEST_2004_Stress => Err(Error::Code(1)), // Reading from $2004 (with rendering enabled) should read from the "OAM Buffer" used during OAM Evaluation. Your results did not match the expected results of the test where OAMADDR overflows
+    TEST_2007_Stress => Err(Error::Code(1)) // Reading from $2007 should set up the PPU Read Buffer two ppu cycles after the CPU Read ends
 }
 
 test_suite! {
