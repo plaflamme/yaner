@@ -403,7 +403,7 @@ test_suite! {
     TEST_DMA_Plus_2002R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007W => Err(Error::Code(1)),
-    TEST_DMA_Plus_4015R => Err(Error::Code(2)),
+    TEST_DMA_Plus_4015R => Err(Error::Code(1)),
     TEST_DMA_Plus_4016R => Err(Error::Code(1)),
     TEST_DMABusConflict => Err(Error::Code(2)),
     TEST_DMCDMAPlusOAMDMA => Err(Error::Code(1)),
@@ -415,7 +415,7 @@ test_suite! {
     Suite_APUTiming,
     TEST_APULengthCounter,
     TEST_APULengthTable,
-    TEST_FrameCounterIRQ => Err(Error::Code(2)), // The IRQ flag should not be set when the APU frame counter is in the 4-step mode, and the IRQ flag is disabled.
+    TEST_FrameCounterIRQ => Err(Error::Code(1)), // The IRQ flag should be set when the APU Frame counter is in the 4-step mode, and the IRQ flag is enabled.
     TEST_FrameCounter4Step => Err(Error::Code(1)), // The first clock of the length counters was early.
     TEST_FrameCounter5Step => Err(Error::Code(1)), // The first clock of the length counters was early..
     TEST_DeltaModulationChannel => Err(Error::Code(1)), // Reading address $4015 should set bit 4 when the DMC is playing and clear bit 4 when the sample ends.

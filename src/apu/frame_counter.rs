@@ -47,6 +47,7 @@ pub struct FrameCounter {
     bufferred: Cell<Option<(u8, Register)>>,
     cycles: Cell<u16>,
     step: Cell<u16>,
+    irq_flag: Cell<bool>,
 }
 
 impl FrameCounter {
@@ -74,7 +75,14 @@ impl FrameCounter {
             bufferred: Cell::default(),
             cycles: Cell::new(Self::NTSC_STEP_CYCLES[Mode::FourStep as usize][0]),
             step: Cell::default(),
+            irq_flag: Cell::default(),
         }
+    }
+
+    // Reads the
+    pub(crate) fn irq_flag(&self) -> bool {
+        // Reading the IRQ flag disables it
+        self.irq_flag.replace(false)
     }
 
     pub fn write(&self, value: u8) {
@@ -123,6 +131,10 @@ impl FrameCounter {
             let raise_interrupt =
                 !state.inhibit_irq() && state.mode() == Mode::FourStep && step >= 3;
 
+            if raise_interrupt {
+                self.irq_flag.set(true);
+            }
+
             Some(Clock {
                 frame_type,
                 raise_interrupt,
@@ -138,17 +150,17 @@ impl FrameCounter {
             if delay - 1 == 0 {
                 self.set_state(value);
 
-                // If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated.
-                if value.mode() == Mode::FiveStep {
-                    // Note this can't generate a Clock, but the previous can.
-                    self.cycle();
-                    // TODO: we need to generate another quarter frame here...
-                    // but this won't generate an extra one, it will inhibit the other one if any
-                    return Some(Clock {
-                        frame_type: Some(FrameType::Quarter),
-                        raise_interrupt: false,
-                    });
-                }
+                // // If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated.
+                // if value.mode() == Mode::FiveStep {
+                //     // Note this can't generate a Clock, but the previous can.
+                //     self.cycle();
+                //     // TODO: we need to generate another quarter frame here...
+                //     // but this won't generate an extra one, it will inhibit the other one if any
+                //     return Some(Clock {
+                //         frame_type: Some(FrameType::Quarter),
+                //         raise_interrupt: false,
+                //     });
+                // }
             } else {
                 self.bufferred.set(Some((delay - 1, value)))
             }

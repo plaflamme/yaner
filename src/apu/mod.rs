@@ -33,7 +33,6 @@ pub enum ApuCycle {
 }
 
 pub struct Apu {
-    status: Cell<Status>,
     pulse_1: Pulse,
     pulse_2: Pulse,
     frame_counter: FrameCounter,
@@ -42,7 +41,6 @@ pub struct Apu {
 impl Apu {
     pub fn new() -> Self {
         Self {
-            status: Cell::default(),
             frame_counter: FrameCounter::new(),
             pulse_1: Pulse::new(),
             pulse_2: Pulse::new(),
@@ -52,6 +50,14 @@ impl Apu {
     fn handle_frame(&self, frame_type: FrameType) {
         self.pulse_1.tick(frame_type);
         self.pulse_2.tick(frame_type);
+    }
+
+    fn status(&self) -> Status {
+        let mut status = Status::default();
+        status.set(Status::F, self.frame_counter.irq_flag());
+        status.set(Status::P1, self.pulse_1.playing());
+        status.set(Status::P2, self.pulse_2.playing());
+        status
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
@@ -82,14 +88,7 @@ impl AddressSpace for Apu {
         match addr {
             0x4000..=0x4003 => self.pulse_1.read_u8(addr),
             0x4004..=0x4007 => self.pulse_2.read_u8(addr),
-            0x4015 => {
-                let mut status = self.status.get();
-                self.status.update(|s| s - Status::F);
-                status.set(Status::P1, self.pulse_1.playing());
-                status.set(Status::P2, self.pulse_2.playing());
-                log::debug!("APU Status: {status:?}");
-                status.bits()
-            }
+            0x4015 => self.status().bits(),
             _ => todo!(),
         }
     }
@@ -100,7 +99,6 @@ impl AddressSpace for Apu {
             0x4004..=0x4007 => self.pulse_2.write_u8(addr, value),
             0x4015 => {
                 let status = Status::from_bits_truncate(value);
-                self.status.set(status);
                 self.pulse_1
                     .enable_length_counter(status.contains(Status::P1));
                 self.pulse_2

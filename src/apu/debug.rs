@@ -10,7 +10,7 @@ pub struct ApuState {
 impl ApuState {
     pub fn new(apu: &Apu) -> Self {
         Self {
-            status: apu.status.get(),
+            status: apu.status(),
             frame_counter: FrameCounterState::new(&apu.frame_counter),
         }
     }
