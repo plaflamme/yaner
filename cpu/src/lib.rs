@@ -608,8 +608,12 @@ impl Cpu {
             ($flags:expr, $intr:expr) => {{
                 push!((self.pc.get() >> 8) as u8);
                 push!((self.pc.get() & 0x00FF) as u8);
+                push!(($flags | Flags::U).bits());
 
                 // https://www.nesdev.org/wiki/CPU_interrupts#Interrupt_hijacking
+                // NOTE: the wiki says that it's the state after tick 4 that matters
+                //   but the NMI interrupt is raised one cycle later, so we check the state **after** tick 5.
+                //   As such, the state of the nmi signal after tick 4 is the one that matters.
                 let is_nmi =
                     $intr == Interrupts::NMI || self.interrupts.get().contains(Interrupts::NMI);
 
@@ -618,8 +622,6 @@ impl Cpu {
                 } else {
                     (0xFFFE, 0xFFFF)
                 };
-
-                push!(($flags | Flags::U).bits());
 
                 let pcl = read!(jmp_lo);
                 self.set_flag(Flags::I, true);
