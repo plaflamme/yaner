@@ -38,7 +38,7 @@ pub enum FrameType {
 }
 
 pub struct Clock {
-    pub frame_type: FrameType,
+    pub frame_type: Option<FrameType>,
     pub raise_interrupt: bool,
 }
 
@@ -115,9 +115,9 @@ impl FrameCounter {
             // - l - - l -   Length counter and sweep (aka HalfFrame)
             // e e e - e -   Envelope and linear counter (aka QuarterFrame)
             let frame_type = match step {
-                0 | 2 => FrameType::Quarter,
-                1 | 4 => FrameType::Half,
-                _ => return None,
+                0 | 2 => Some(FrameType::Quarter),
+                1 | 4 => Some(FrameType::Half),
+                _ => None,
             };
 
             let raise_interrupt =
@@ -145,7 +145,7 @@ impl FrameCounter {
                     // TODO: we need to generate another quarter frame here...
                     // but this won't generate an extra one, it will inhibit the other one if any
                     return Some(Clock {
-                        frame_type: FrameType::Quarter,
+                        frame_type: Some(FrameType::Quarter),
                         raise_interrupt: false,
                     });
                 }

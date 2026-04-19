@@ -58,9 +58,8 @@ impl Apu {
         #[coroutine]
         move || loop {
             if let Some(clock) = self.frame_counter.tick() {
-                self.handle_frame(clock.frame_type);
-                if clock.raise_interrupt {
-                    self.status.update(|s| s | Status::F);
+                if let Some(frame_type) = clock.frame_type {
+                    self.handle_frame(frame_type);
                 }
                 yield ApuCycle::Tick {
                     irq: clock.raise_interrupt,
