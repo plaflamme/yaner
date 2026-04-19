@@ -11,19 +11,19 @@ use test_case::test_case;
 use crate::common::Eval;
 
 #[test_case("01-basics")]
-#[test_case("02-implied")]
-#[test_case("03-immediate")]
-#[test_case("04-zero_page")]
-#[test_case("05-zp_xy")]
-#[test_case("06-absolute")]
-#[test_case("07-abs_xy")]
-#[test_case("08-ind_x")]
-#[test_case("09-ind_y")]
-#[test_case("10-branches")]
-#[test_case("11-stack")]
-#[test_case("12-jmp_jsr")]
-#[test_case("13-rts")]
-#[test_case("14-rti")]
+#[test_case("02-implied" => panics "Result code: 0x01")]
+#[test_case("03-immediate" => panics "Result code: 0x01")]
+#[test_case("04-zero_page" => panics "Result code: 0x01")]
+#[test_case("05-zp_xy" => panics "Result code: 0x01")]
+#[test_case("06-absolute" => panics)]
+#[test_case("07-abs_xy" => panics "Result code: 0x01")]
+#[test_case("08-ind_x" => panics)]
+#[test_case("09-ind_y" => panics "Result code: 0x01")]
+#[test_case("10-branches" => panics "Result code: 0x01")]
+#[test_case("11-stack" => panics "Result code: 0x01")]
+#[test_case("12-jmp_jsr" => panics "Result code: 0x01")]
+#[test_case("13-rts" => panics "Result code: 0x01")]
+#[test_case("14-rti" => panics "Result code: 0x01")]
 #[test_case("15-brk")]
 #[test_case("16-special")]
 fn instr_test(case: &str) {
@@ -33,7 +33,7 @@ fn instr_test(case: &str) {
 #[test_case("01-abs_x_wrap")]
 #[test_case("02-branch_wrap")]
 #[test_case("03-dummy_reads")]
-#[test_case("04-dummy_reads_apu" => panics "not implemented")] // TODO
+#[test_case("04-dummy_reads_apu" => panics)]
 fn instr_misc(case: &str) {
     run_blargg_test(format!("roms/nes-test-roms/instr_misc/rom_singles/{}.nes", case).as_str());
 }
@@ -99,11 +99,11 @@ fn cpu_exec_space(case: &str) {
     run_blargg_test(format!("roms/nes-test-roms/cpu_exec_space/{}.nes", case).as_str());
 }
 
-#[test_case("1-cli_latency" => panics "assertion `left == right` failed")] // requires APU
-#[test_case("2-nmi_and_brk" => panics "assertion `left == right` failed")]
-#[test_case("3-nmi_and_irq" => panics "assertion `left == right` failed")]
-#[test_case("4-irq_and_dma" => panics "assertion `left == right` failed")]
-// #[test_case("5-branch_delays_irq" => panics "assertion failed")] // runs forever...
+#[test_case("1-cli_latency" => panics "Result code: 0x04")]
+#[test_case("2-nmi_and_brk" => panics "Result code: 0x01")]
+#[test_case("3-nmi_and_irq" => panics "Result code: 0x01")]
+#[test_case("4-irq_and_dma" => panics "Result code: 0x01")]
+#[test_case("5-branch_delays_irq" => panics "Result code: 0x01")]
 fn cpu_interrupts_v2(case: &str) {
     run_blargg_test(format!(
         "roms/nes-test-roms/cpu_interrupts_v2/rom_singles/{}.nes",

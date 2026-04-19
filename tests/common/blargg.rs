@@ -1,9 +1,15 @@
-use super::run_test;
+use super::run_test_with_steps;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::mpsc::RecvTimeoutError};
 
 use crate::common::Eval;
 use yaner::memory::AddressSpace;
+
+#[derive(Debug)]
+enum Error {
+    Failure(String),
+    Panic,
+}
 
 pub fn read_zero_terminated_string(addr_space: &dyn AddressSpace, at: u16) -> String {
     let mut str_addr = at;
@@ -22,10 +28,32 @@ pub fn run_blargg_test(rom_path: impl Into<PathBuf>) {
 }
 
 pub fn blargg_test(rom_path: impl Into<PathBuf>, expect_success: bool) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let pb = rom_path.into();
+    std::thread::spawn(move || {
+        let result = match std::panic::catch_unwind(|| _blargg_test(pb, expect_success)) {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(msg)) => Err(Error::Failure(msg)),
+            Err(_) => Err(Error::Panic),
+        };
+        sender.send(result).unwrap();
+    });
+
+    match receiver.recv_timeout(std::time::Duration::from_secs(30)) {
+        Ok(Ok(_)) => (),
+        Ok(Err(Error::Failure(msg))) => panic!("{}", msg),
+        Ok(Err(e)) => panic!("unexpected error {e:?}"),
+        Err(RecvTimeoutError::Timeout) => panic!("timeout"),
+        Err(RecvTimeoutError::Disconnected) => panic!("unexpected panic in test thread"),
+    }
+}
+
+fn _blargg_test(rom_path: PathBuf, expect_success: bool) -> Result<(), String> {
     let mut reset_pending = None;
-    run_test(
+    run_test_with_steps(
         rom_path,
         None,
+        |steps| steps.step_frame().map(|_| ()),
         |state| {
             if let Some(remaining) = reset_pending {
                 if remaining == 0 {
@@ -59,12 +87,17 @@ pub fn blargg_test(rom_path: impl Into<PathBuf>, expect_success: bool) {
         |state| {
             let result = state.cpu_bus.read_u8(0x6000);
             let result_str = read_zero_terminated_string(state.cpu_bus, 0x6004);
+            let msg = format!(
+                "Result code: 0x{result:02X}\nTest output: {}",
+                result_str.trim()
+            );
+            let success = result == 0x00;
 
-            if expect_success {
-                assert_eq!(0x00, result, "Test output: {}", result_str.trim());
+            if expect_success != success {
+                Err(msg)
             } else {
-                assert_ne!(0x00, result, "Test output: {}", result_str.trim());
+                Ok(())
             }
         },
-    );
+    )
 }
