@@ -413,11 +413,11 @@ test_suite! {
 
 test_suite! {
     Suite_APUTiming,
-    TEST_APULengthCounter => Err(Error::Code(4)), // Writing $80 to $4017 should immediately clock the Length Counter.
-    TEST_APULengthTable => Err(Error::Code(1)), // Your emulator did not pass APU Length Counter.
+    TEST_APULengthCounter,
+    TEST_APULengthTable,
     TEST_FrameCounterIRQ => Err(Error::Code(2)), // The IRQ flag should not be set when the APU frame counter is in the 4-step mode, and the IRQ flag is disabled.
-    TEST_FrameCounter4Step => Err(Error::Code(3)), // The second clock of the length counters was early.
-    TEST_FrameCounter5Step => Err(Error::Code(3)), // The second clock of the length counters was early.
+    TEST_FrameCounter4Step => Err(Error::Code(1)), // The first clock of the length counters was early.
+    TEST_FrameCounter5Step => Err(Error::Code(1)), // The first clock of the length counters was early..
     TEST_DeltaModulationChannel => Err(Error::Code(1)), // Reading address $4015 should set bit 4 when the DMC is playing and clear bit 4 when the sample ends.
     TEST_APURegActivation => Err(Error::Code(1)), // A series of prerequisite tests failed. CPU and PPU open bus, PPU Read Buffer, DMA + Open Bus, and DMA + $2007 Read.
     TEST_ControllerStrobing => Err(Error::Code(4)), // Controllers should not be strobed when the CPU transitions from a "put" cycle to a "get" cycle.

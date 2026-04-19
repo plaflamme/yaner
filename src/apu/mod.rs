@@ -12,7 +12,7 @@ mod sweep;
 use frame_counter::FrameCounter;
 use pulse::Pulse;
 
-use crate::memory::AddressSpace;
+use crate::{apu::frame_counter::FrameType, memory::AddressSpace};
 
 // https://www.nesdev.org/wiki/APU_Frame_Counter
 bitflags! {
@@ -49,12 +49,16 @@ impl Apu {
         }
     }
 
+    fn handle_frame(&self, frame_type: FrameType) {
+        self.pulse_1.tick(frame_type);
+        self.pulse_2.tick(frame_type);
+    }
+
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
         #[coroutine]
         move || loop {
             if let Some(clock) = self.frame_counter.tick() {
-                self.pulse_1.tick(clock.frame_type);
-                self.pulse_2.tick(clock.frame_type);
+                self.handle_frame(clock.frame_type);
                 if clock.raise_interrupt {
                     self.status.update(|s| s | Status::F);
                 }
@@ -103,7 +107,13 @@ impl AddressSpace for Apu {
                 self.pulse_2
                     .enable_length_counter(status.contains(Status::P2));
             }
-            0x4017 => self.frame_counter.write(value),
+            0x4017 => {
+                self.frame_counter.write(value);
+                if value & 0x80 != 0 {
+                    // Writing to $4017 with bit 7 set ($80) will immediately clock all of its controlled units at the beginning of the 5-step sequence
+                    self.handle_frame(FrameType::Half);
+                }
+            }
             _ => (),
         }
     }
