@@ -10,7 +10,7 @@ mod rom;
 
 use rom::{Rom, RomError};
 
-// https://wiki.nesdev.com/w/index.php/Mirroring#Nametable_Mirroring
+// https://wiki.nesdev.org/w/index.php/Mirroring#Nametable_Mirroring
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NametableMirroring {
     Horizontal, // vertical arrangement

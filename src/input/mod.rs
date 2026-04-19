@@ -31,7 +31,7 @@ bitflags! {
     }
 }
 
-// http://wiki.nesdev.com/w/index.php/Standard_controller
+// http://wiki.nesdev.org/w/index.php/Standard_controller
 #[derive(Default)]
 pub struct Joypad {
     strobe: Cell<u8>,

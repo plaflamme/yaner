@@ -59,7 +59,7 @@ impl crate::memory::AddressSpace for CpuBus {
     }
 }
 
-// http://wiki.nesdev.com/w/index.php/2A03
+// http://wiki.nesdev.org/w/index.php/2A03
 pub struct IoRegisters {
     input1: Rc<dyn Input>,
     input2: Rc<dyn Input>,

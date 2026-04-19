@@ -258,32 +258,32 @@ impl OpCode {
     }
 }
 
-// http://wiki.nesdev.com/w/index.php/Status_flags
+// http://wiki.nesdev.org/w/index.php/Status_flags
 bitflags!(
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Flags: u8 {
-        // http://wiki.nesdev.com/w/index.php/Status_flags#C:_Carry
+        // http://wiki.nesdev.org/w/index.php/Status_flags#C:_Carry
         const C = 1 << 0;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#Z:_Zero
+        // http://wiki.nesdev.org/w/index.php/Status_flags#Z:_Zero
         const Z = 1 << 1;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#I:_Interrupt_Disable
+        // http://wiki.nesdev.org/w/index.php/Status_flags#I:_Interrupt_Disable
         const I = 1 << 2;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#D:_Decimal
+        // http://wiki.nesdev.org/w/index.php/Status_flags#D:_Decimal
         const D = 1 << 3;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#The_B_flag
+        // http://wiki.nesdev.org/w/index.php/Status_flags#The_B_flag
         const B = 1 << 4;
 
         // unused
         const U = 1 << 5;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#V:_Overflow
+        // http://wiki.nesdev.org/w/index.php/Status_flags#V:_Overflow
         const V = 1 << 6;
 
-        // http://wiki.nesdev.com/w/index.php/Status_flags#N:_Negative
+        // http://wiki.nesdev.org/w/index.php/Status_flags#N:_Negative
         const N = 1 << 7;
     }
 );

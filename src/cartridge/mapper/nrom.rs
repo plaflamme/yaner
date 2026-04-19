@@ -4,7 +4,7 @@ use crate::cartridge::rom::RomData;
 use crate::cartridge::rom::{Chr, Rom};
 use crate::memory::{AddressSpace, Dyn};
 
-// http://wiki.nesdev.com/w/index.php/NROM
+// http://wiki.nesdev.org/w/index.php/NROM
 #[allow(clippy::upper_case_acronyms)]
 pub struct NROM {
     mirroring: NametableMirroring,

@@ -4,7 +4,7 @@ use std::cell::Cell;
 use super::vram_address::VramAddress;
 
 bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUCTRL
+    // http://wiki.nesdev.org/w/index.php/PPU_programmer_reference#PPUCTRL
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuCtrl: u8 {
         /// Low bit of base nametable address
@@ -77,7 +77,7 @@ impl PpuCtrl {
 }
 
 bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUMASK
+    // http://wiki.nesdev.org/w/index.php/PPU_programmer_reference#PPUMASK
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuMask: u8 {
         /// Greyscale
@@ -113,7 +113,7 @@ impl PpuMask {
 }
 
 bitflags! {
-    // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference#PPUSTATUS
+    // http://wiki.nesdev.org/w/index.php/PPU_programmer_reference#PPUSTATUS
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct PpuStatus: u8 {
         /// Sprite overflow
@@ -125,7 +125,7 @@ bitflags! {
     }
 }
 
-// http://wiki.nesdev.com/w/index.php/PPU_power_up_state
+// http://wiki.nesdev.org/w/index.php/PPU_power_up_state
 impl Default for PpuStatus {
     fn default() -> Self {
         let mut status = Self::empty();
@@ -146,7 +146,7 @@ pub struct Registers {
 
     pub oam_addr: Cell<u8>, // OAMADDR
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#PPU_internal_registers
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#PPU_internal_registers
     // Accessed through PPUSCROLL and PPUADDR
     pub t_addr: Cell<VramAddress>,
     pub v_addr: Cell<VramAddress>,
@@ -175,8 +175,8 @@ impl Registers {
     }
 
     // handles writes to PPUSCROLL
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUSCROLL
-    // See writes to $2005 here http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+    // http://wiki.nesdev.org/w/index.php/PPU_registers#PPUSCROLL
+    // See writes to $2005 here http://wiki.nesdev.org/w/index.php/PPU_scrolling#Register_controls
     pub fn write_scroll(&self, value: u8) {
         if self.addr_latch.get() {
             // t: FGH..AB CDE..... <- d: ABCDEFGH
@@ -200,8 +200,8 @@ impl Registers {
     }
 
     // handles writes to PPUADDR
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUADDR
-    // See writes to $2006 here http://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+    // http://wiki.nesdev.org/w/index.php/PPU_registers#PPUADDR
+    // See writes to $2006 here http://wiki.nesdev.org/w/index.php/PPU_scrolling#Register_controls
     pub fn write_addr(&self, value: u8) {
         let u16_value = value as u16;
         if self.addr_latch.get() {
@@ -225,7 +225,7 @@ impl Registers {
     }
 
     // handles side-effects of reading or writing to PPUDATA ($2007)
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#PPUADDR
+    // http://wiki.nesdev.org/w/index.php/PPU_registers#PPUADDR
     // NOTE: this does not actually read or write from the VRAM, it returns the address to read or write.
     pub fn rw_vram_addr(&self) -> u16 {
         let addr: u16 = self.v_addr.get().into();

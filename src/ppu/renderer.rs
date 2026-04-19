@@ -126,7 +126,7 @@ pub struct Renderer {
 
     pub(super) frame_pixels: Cell<[Pixel; 256 * 240]>,
 
-    // https://wiki.nesdev.com/w/index.php/PPU_frame_timing#VBL_Flag_Timing
+    // https://wiki.nesdev.org/w/index.php/PPU_frame_timing#VBL_Flag_Timing
     pub(super) suppress_vbl: Cell<bool>,
 
     pub(super) sprite_pipeline: std::cell::RefCell<SpritePipeline>,
@@ -282,7 +282,7 @@ impl Renderer {
         if !registers.mask.get().contains(render_mask) {
             PaletteColor::default()
         } else {
-            // From http://wiki.nesdev.com/w/index.php/PPU_rendering
+            // From http://wiki.nesdev.org/w/index.php/PPU_rendering
             //   Every cycle, a bit is fetched from the 4 background shift registers in order to create a pixel on screen.
             //   Exactly which bit is fetched depends on the fine X scroll, set by $2005 (this is how fine X scrolling is possible).
             //   Afterwards, the shift registers are shifted once, to the data for the next pixel.
@@ -342,7 +342,7 @@ impl Renderer {
     }
 
     // implements the VRAM nametable, attribute and pattern fetches.
-    // This is mostly described in http://wiki.nesdev.com/w/images/4/4f/Ppu.svg
+    // This is mostly described in http://wiki.nesdev.org/w/images/4/4f/Ppu.svg
     fn cycle_bg(&self, dot: u16, registers: &Registers, bus: &impl AddressSpace, pre_render: bool) {
         match dot {
             2..=256 | 322..=337 => {
@@ -401,7 +401,7 @@ impl Renderer {
             }
             257 => {
                 self.latch();
-                // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
+                // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#At_dot_257_of_each_scanline
                 if registers.mask.get().is_rendering() {
                     registers.v_addr.update(|mut v| {
                         v.copy_horizontal_bits(&registers.t_addr.get());
@@ -411,7 +411,7 @@ impl Renderer {
             }
             280..=304 => {
                 if pre_render {
-                    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
+                    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
                     if registers.mask.get().is_rendering() {
                         registers.v_addr.update(|mut v| {
                             v.copy_vertical_bits(&registers.t_addr.get());

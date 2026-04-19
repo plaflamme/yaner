@@ -16,13 +16,13 @@ impl VramAddress {
         self.0 = self.0.saturating_add(step);
     }
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the nametable
     pub fn nametable_addr(&self, base_addr: u16) -> u16 {
         base_addr | (self.0 & 0x0FFF)
     }
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#Tile_and_attribute_fetching
     // this value as an address into the attribute table
     pub fn attribute_addr(&self) -> u16 {
         let v = self.0;
@@ -34,13 +34,13 @@ impl VramAddress {
         self.0 |= from.0 & 0b000_01_00000_11111;
     }
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#During_dots_280_to_304_of_the_pre-render_scanline_.28end_of_vblank.29
     pub fn copy_vertical_bits(&mut self, from: &VramAddress) {
         self.0 &= !0b111_10_11111_00000;
         self.0 |= from.0 & 0b111_10_11111_00000;
     }
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Coarse_X_increment
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#Coarse_X_increment
     pub fn incr_x(&mut self) {
         if self.coarse_x() == 31 {
             self.set_coarse_x(0u16);
@@ -50,7 +50,7 @@ impl VramAddress {
         }
     }
 
-    // https://wiki.nesdev.com/w/index.php?title=PPU_scrolling#Y_increment
+    // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#Y_increment
     pub fn incr_y(&mut self) {
         let fy = self.fine_y();
         if fy < 7 {

@@ -27,8 +27,8 @@ pub(super) trait WriteOperation {
     fn operate(&self, cpu: &Cpu) -> u8;
 }
 
-// http://nesdev.com/6502_cpu.txt
-// http://nesdev.com/undocumented_opcodes.txt
+// http://nesdev.org/6502_cpu.txt
+// http://nesdev.org/undocumented_opcodes.txt
 // http://www.oxyron.de/html/opcodes02.html
 
 pub struct bcc;
@@ -384,8 +384,8 @@ impl ModifyOperation for rra {
     }
 }
 
-//  http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
-//  https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
+//  http://forums.nesdev.org/viewtopic.php?f=3&t=10698&start=15
+//  https://forums.nesdev.org/viewtopic.php?f=3&t=1fn 4063
 //  https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
 //  http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes
 pub struct shx;
@@ -408,8 +408,8 @@ impl ModifyOperation for shx {
     }
 }
 
-//  http://forums.nesdev.com/viewtopic.php?f=3&t=10698&start=15
-//  https://forums.nesdev.com/viewtopic.php?f=3&t=1fn 4063
+//  http://forums.nesdev.org/viewtopic.php?f=3&t=10698&start=15
+//  https://forums.nesdev.org/viewtopic.php?f=3&t=1fn 4063
 //  https://github.com/starrhorne/nes-rust/blob/master/src/cpu.rs#L1153
 //  http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes
 pub struct shy;

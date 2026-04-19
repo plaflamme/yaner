@@ -89,7 +89,7 @@ enum BankAddr {
     High,
 }
 
-// http://wiki.nesdev.com/w/index.php/MMC1
+// http://wiki.nesdev.org/w/index.php/MMC1
 pub struct SxROM {
     mirroring: NametableMirroring,
     prg_rom: Switched<Dyn>,

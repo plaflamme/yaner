@@ -180,9 +180,9 @@ impl AddressSpace for PpuBus {
 // PpuRegisters exposed to the CPU on its bus.
 pub struct PpuRegisters {
     ppu: Rc<Ppu>,
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#The_PPUDATA_read_buffer_.28post-fetch.29
+    // http://wiki.nesdev.org/w/index.php/PPU_registers#The_PPUDATA_read_buffer_.28post-fetch.29
     read_buffer: Cell<u8>,
-    // http://wiki.nesdev.com/w/index.php/PPU_registers#Ports
+    // http://wiki.nesdev.org/w/index.php/PPU_registers#Ports
     open_bus: Cell<u8>,
 }
 
