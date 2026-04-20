@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use bitflags::bitflags;
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
     FourStep = 0,
     FiveStep = 1,
@@ -31,7 +31,7 @@ impl Status {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum FrameType {
     Half,
     Quarter,
@@ -97,6 +97,7 @@ impl FrameCounter {
         self.status.set(value);
         self.step.set(0);
         self.cycles.set(0);
+        log::debug!("set_state: status={:?} step=0 cycles=0", self.status.get());
     }
 
     fn cycle(&self) -> Clock {
@@ -116,11 +117,16 @@ impl FrameCounter {
             if raise_interrupt {
                 self.irq_flag.set(true);
             }
+            log::debug!(
+                "tick: step={current_step} cycles={cycle} frame_type={frame_type:?} intr={raise_interrupt}",
+            );
             let current_step = (current_step + 1) % 6;
             self.step.set(current_step);
             if current_step == 0 {
                 self.cycles.set(0);
             }
+            log::debug!("tick: current_step={:?} step=0 cycles=0", self.status.get());
+
             frame_type
         };
 

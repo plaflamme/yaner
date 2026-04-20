@@ -22,6 +22,7 @@ pub struct Clocks {
     pub cpu_master_clock: Cell<usize>,
     pub ppu_master_clock: Cell<usize>,
     pub cpu_cycles: Cell<u64>,
+    pub apu_cycles: Cell<u64>,
     pub ppu_cycles: Cell<u64>,
     pub ppu_frames: Cell<u64>,
 }
@@ -29,6 +30,10 @@ pub struct Clocks {
 impl Clocks {
     fn tick_cpu(&self) {
         self.cpu_cycles.update(|c| c.wrapping_add(1));
+    }
+
+    fn tick_apu(&self) {
+        self.apu_cycles.update(|c| c.wrapping_add(1));
     }
 
     fn tick_ppu(&self) {
@@ -104,6 +109,59 @@ impl Nes {
         let ppu_offset = 0;
 
         self.clocks.cpu_master_clock.set(12);
+
+        macro_rules! tick_apu {
+            () => {
+                while self.clocks.apu_cycles.get() < self.clocks.cpu_cycles.get() {
+                    match Pin::new(&mut apu).resume(()) {
+                        CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
+                            if irq {
+                                self.cpu.set_irq(irq);
+                            }
+                        }
+                        CoroutineState::Complete(_) => (),
+                    }
+                    self.clocks.tick_apu();
+                }
+            };
+        }
+
+        macro_rules! tick_ppu {
+            () => {
+                while self.clocks.ppu_master_clock.get() + ppu_stride
+                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
+                {
+                    match Pin::new(&mut ppu).resume(()) {
+                        CoroutineState::Yielded(cycle) => {
+                            match cycle {
+                                PpuCycle::Tick { nmi } => {
+                                    self.cpu.set_nmi(nmi);
+                                }
+                                PpuCycle::Frame => self.clocks.tick_frame(),
+                            }
+                            self.clocks.tick_ppu();
+                            self.clocks.ppu_master_clock.update(|c| c + ppu_stride);
+                            yield NesCycle::Ppu(cycle)
+                        }
+                        CoroutineState::Complete(_) => panic!("ppu stopped"),
+                    };
+
+                    // According to ppu_open_bus/readme.txt, the open bus register should decay
+                    //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
+                    //
+                    // The PPU runs at 21.477272 MHz / 4 (5.369318 Mhz)
+                    //   5_369_318 cycles/s
+                    //   0.6 * 5_369_318 = 3_221_590.8
+                    //   So 600ms on the NES is approximately 3_221_590 PPU ticks
+                    if self.clocks.ppu_cycles.get().is_multiple_of(3_221_590) {
+                        // TODO: this should remember when each bit was last set to 1
+                        // TODO: this should just happen as a side effect of ticking the ppu
+                        self.cpu_bus.ppu_registers.decay_open_bus()
+                    }
+                }
+            };
+        }
+
         #[coroutine]
         move || {
             yield NesCycle::PowerUp;
@@ -117,8 +175,8 @@ impl Nes {
                         },
                     ) => match rw {
                         yaner_cpu::Rw::Read => {
-                            let value = self.cpu_bus.read_u8(addr);
                             self.clocks.cpu_master_clock.update(|c| c + 5);
+                            let value = self.cpu_bus.read_u8(addr);
                             self.cpu.io_bus.set(value);
                             yield NesCycle::Cpu(cycle);
                         }
@@ -154,46 +212,8 @@ impl Nes {
                     self.cpu.dma_latch.set(Some(addr));
                 }
 
-                match Pin::new(&mut apu).resume(()) {
-                    CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
-                        if irq {
-                            self.cpu.set_irq(irq);
-                        }
-                    }
-                    CoroutineState::Complete(_) => (),
-                }
-
-                while self.clocks.ppu_master_clock.get() + ppu_stride
-                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
-                {
-                    match Pin::new(&mut ppu).resume(()) {
-                        CoroutineState::Yielded(cycle) => {
-                            match cycle {
-                                PpuCycle::Tick { nmi } => {
-                                    self.cpu.set_nmi(nmi);
-                                }
-                                PpuCycle::Frame => self.clocks.tick_frame(),
-                            }
-                            self.clocks.tick_ppu();
-                            self.clocks.ppu_master_clock.update(|c| c + ppu_stride);
-                            yield NesCycle::Ppu(cycle)
-                        }
-                        CoroutineState::Complete(_) => panic!("ppu stopped"),
-                    };
-
-                    // According to ppu_open_bus/readme.txt, the open bus register should decay
-                    //   to 0 if a bit hasn't been set to 1 in the last ~600ms.
-                    //
-                    // The PPU runs at 21.477272 MHz / 4 (5.369318 Mhz)
-                    //   5_369_318 cycles/s
-                    //   0.6 * 5_369_318 = 3_221_590.8
-                    //   So 600ms on the NES is approximately 3_221_590 PPU ticks
-                    if self.clocks.ppu_cycles.get().is_multiple_of(3_221_590) {
-                        // TODO: this should remember when each bit was last set to 1
-                        // TODO: this should just happen as a side effect of ticking the ppu
-                        self.cpu_bus.ppu_registers.decay_open_bus()
-                    }
-                }
+                tick_apu!();
+                tick_ppu!();
             }
         }
     }

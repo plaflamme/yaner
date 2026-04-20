@@ -47,6 +47,7 @@ impl Pulse {
             }
             FrameType::Quarter => (),
         }
+        log::debug!("tick length_counter={:?}", self.length_counter.get());
     }
 
     pub(super) fn playing(&self) -> bool {
@@ -68,6 +69,7 @@ impl AddressSpace for Pulse {
         match addr % 4 {
             0x00 => {
                 let status = Status::from(value);
+                log::debug!("set_state status={status:?}");
                 self.status.set(status);
                 self.length_counter
                     .update(|lc| lc.halt(status.length_counter_halt()));
@@ -76,6 +78,11 @@ impl AddressSpace for Pulse {
             0x02 => (), // TODO: timer low
             0x03 => {
                 let load = Load::from(value);
+                log::debug!(
+                    "load length_counter={:02X} timer_high={:02X}",
+                    load.length_counter(),
+                    load.timer_high()
+                );
                 self.length_counter
                     .update(|lc| lc.load(load.length_counter()));
             }

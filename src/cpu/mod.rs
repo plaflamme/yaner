@@ -106,7 +106,10 @@ impl AddressSpace for IoRegisters {
 
     fn write_u8(&self, addr: u16, value: u8) {
         match addr {
-            0x4014 => self.dma_latch.set(Some(value)),
+            0x4014 => {
+                log::debug!("DMA@0x{value:02X}");
+                self.dma_latch.set(Some(value))
+            }
             0x4016 => {
                 self.out_latch.set(value & 0x7); // lower 3 bits
 

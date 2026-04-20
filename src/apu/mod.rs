@@ -48,6 +48,7 @@ impl Apu {
     }
 
     fn handle_frame(&self, frame_type: FrameType) {
+        log::debug!("{frame_type:?}");
         self.pulse_1.tick(frame_type);
         self.pulse_2.tick(frame_type);
     }
@@ -85,7 +86,11 @@ impl AddressSpace for Apu {
         match addr {
             0x4000..=0x4003 => self.pulse_1.read_u8(addr),
             0x4004..=0x4007 => self.pulse_2.read_u8(addr),
-            0x4015 => self.status().bits(),
+            0x4015 => {
+                let status = self.status();
+                log::debug!("read 0x4015: {status:?}");
+                status.bits()
+            }
             _ => todo!(),
         }
     }
@@ -96,12 +101,14 @@ impl AddressSpace for Apu {
             0x4004..=0x4007 => self.pulse_2.write_u8(addr, value),
             0x4015 => {
                 let status = Status::from_bits_truncate(value);
+                log::debug!("write 0x4015: {status:?}");
                 self.pulse_1
                     .enable_length_counter(status.contains(Status::P1));
                 self.pulse_2
                     .enable_length_counter(status.contains(Status::P2));
             }
             0x4017 => {
+                log::debug!("write 0x4017: {value:02X}");
                 self.frame_counter.write(value);
                 if value & 0x80 != 0 {
                     // Writing to $4017 with bit 7 set ($80) will immediately clock all of its controlled units at the beginning of the 5-step sequence
