@@ -55,7 +55,6 @@ fn cpu_timing_test() {
 }
 
 #[test]
-#[should_panic] // requires APU
 fn instr_timing() {
     run_blargg_test("roms/nes-test-roms/instr_timing/instr_timing.nes");
 }

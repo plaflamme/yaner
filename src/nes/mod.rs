@@ -20,6 +20,7 @@ type NesCoroutine<'a> = impl Coroutine<Yield = NesCycle, Return = !> + Unpin + '
 #[derive(Default)]
 pub struct Clocks {
     pub cpu_master_clock: Cell<usize>,
+    pub apu_master_clock: Cell<usize>,
     pub ppu_master_clock: Cell<usize>,
     pub cpu_cycles: Cell<u64>,
     pub apu_cycles: Cell<u64>,
@@ -30,10 +31,6 @@ pub struct Clocks {
 impl Clocks {
     fn tick_cpu(&self) {
         self.cpu_cycles.update(|c| c.wrapping_add(1));
-    }
-
-    fn tick_apu(&self) {
-        self.apu_cycles.update(|c| c.wrapping_add(1));
     }
 
     fn tick_ppu(&self) {
@@ -101,18 +98,14 @@ impl Nes {
         let mut cpu = self.cpu.run();
         let mut apu = self.apu.run();
         let mut ppu = self.ppu.run();
+        let apu_stride = 12;
         let ppu_stride = 4;
-
-        // From what I understand, the PPU detects 0 -> 1 transitions on the master clock while
-        // the cpu detects 1 -> 0 transitions.
-        // This effectively means that they're always off by one master clock tick which is represented here.
-        let ppu_offset = 0;
-
         self.clocks.cpu_master_clock.set(12);
-
         macro_rules! tick_apu {
             () => {
-                while self.clocks.apu_cycles.get() < self.clocks.cpu_cycles.get() {
+                while self.clocks.apu_master_clock.get() + apu_stride
+                    < self.clocks.cpu_master_clock.get()
+                {
                     match Pin::new(&mut apu).resume(()) {
                         CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
                             if irq {
@@ -121,7 +114,7 @@ impl Nes {
                         }
                         CoroutineState::Complete(_) => (),
                     }
-                    self.clocks.tick_apu();
+                    self.clocks.apu_master_clock.update(|c| c + apu_stride);
                 }
             };
         }
@@ -129,7 +122,7 @@ impl Nes {
         macro_rules! tick_ppu {
             () => {
                 while self.clocks.ppu_master_clock.get() + ppu_stride
-                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
+                    <= (self.clocks.cpu_master_clock.get())
                 {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
@@ -162,10 +155,8 @@ impl Nes {
             };
         }
 
-        #[coroutine]
-        move || {
-            yield NesCycle::PowerUp;
-            loop {
+        macro_rules! tick_cpu {
+            () => {
                 match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(
                         cycle @ yaner_cpu::CpuEvent::HalfCycle {
@@ -176,14 +167,16 @@ impl Nes {
                     ) => match rw {
                         yaner_cpu::Rw::Read => {
                             self.clocks.cpu_master_clock.update(|c| c + 5);
+                            yield NesCycle::Cpu(cycle);
+                            tick_apu!();
                             let value = self.cpu_bus.read_u8(addr);
                             self.cpu.io_bus.set(value);
-                            yield NesCycle::Cpu(cycle);
                         }
                         yaner_cpu::Rw::Write => {
                             self.clocks.cpu_master_clock.update(|c| c + 7);
-                            self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
                             yield NesCycle::Cpu(cycle);
+                            tick_apu!();
+                            self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
                         }
                     },
                     CoroutineState::Yielded(
@@ -207,11 +200,17 @@ impl Nes {
 
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
-
                 if let Some(addr) = self.cpu_bus.io_regsiters.dma_latch() {
                     self.cpu.dma_latch.set(Some(addr));
                 }
+            };
+        }
 
+        #[coroutine]
+        move || {
+            yield NesCycle::PowerUp;
+            loop {
+                tick_cpu!();
                 tick_apu!();
                 tick_ppu!();
             }

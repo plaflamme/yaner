@@ -416,8 +416,8 @@ test_suite! {
     TEST_APULengthCounter,
     TEST_APULengthTable,
     TEST_FrameCounterIRQ => Err(Error::Code(1)), // The IRQ flag should be set when the APU Frame counter is in the 4-step mode, and the IRQ flag is enabled.
-    TEST_FrameCounter4Step => Err(Error::Code(2)), // The first clock of the length counters was late.
-    TEST_FrameCounter5Step => Err(Error::Code(2)), // The first clock of the length counters was late.
+    TEST_FrameCounter4Step => Err(Error::Code(4)), // The second clock of the length counters was late.
+    TEST_FrameCounter5Step => Err(Error::Code(4)), // The second clock of the length counters was late.
     TEST_DeltaModulationChannel => Err(Error::Code(1)), // Reading address $4015 should set bit 4 when the DMC is playing and clear bit 4 when the sample ends.
     TEST_APURegActivation => Err(Error::Code(1)), // A series of prerequisite tests failed. CPU and PPU open bus, PPU Read Buffer, DMA + Open Bus, and DMA + $2007 Read.
     TEST_ControllerStrobing => Err(Error::Code(4)), // Controllers should not be strobed when the CPU transitions from a "put" cycle to a "get" cycle.
