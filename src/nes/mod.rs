@@ -157,7 +157,6 @@ impl Nes {
                 match Pin::new(&mut apu).resume(()) {
                     CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
                         if irq {
-                            log::debug!("APU IRQ");
                             self.cpu.set_irq(irq);
                         }
                     }

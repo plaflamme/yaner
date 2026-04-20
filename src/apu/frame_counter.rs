@@ -11,15 +11,15 @@ pub enum Mode {
 // https://www.nesdev.org/wiki/APU_Frame_Counter
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-    pub struct Register: u8 {
+    pub struct Status: u8 {
         const I = 1 << 6; // inhibit IRQ
-        const M = 1 << 7; // mode
+        const M = 1 << 7; // mode: 0 == FourStep, 1 == FiveStep
     }
 }
 
-impl Register {
+impl Status {
     pub fn mode(&self) -> Mode {
-        if self.contains(Register::M) {
+        if self.contains(Status::M) {
             Mode::FiveStep
         } else {
             Mode::FourStep
@@ -27,7 +27,7 @@ impl Register {
     }
 
     pub fn inhibit_irq(&self) -> bool {
-        self.contains(Register::I)
+        self.contains(Status::I)
     }
 }
 
@@ -43,37 +43,34 @@ pub struct Clock {
 }
 
 pub struct FrameCounter {
-    register: Cell<Register>,
-    bufferred: Cell<Option<(u8, Register)>>,
+    status: Cell<Status>,
+    bufferred: Cell<Option<(u8, Status)>>,
     cycles: Cell<u16>,
-    step: Cell<u16>,
+    step: Cell<u8>,
     irq_flag: Cell<bool>,
 }
 
 impl FrameCounter {
     // https://www.nesdev.org/wiki/APU_Frame_Counter
-    // The APU is clocked on half-CPU cycles, but because it acutally acts on half clock ticks,
-    //   we use the same cpu cycle here instead.
-    // So the numbers in the chart are thus (for 4-step mode):
-    // | APU Cycles | CPU Cycles | Delta |
-    // | ---------- | ---------- | ----- |
-    // |  3728.5    |   7457     | 7457  |
-    // |  7456.5    |   14913    | 7456  |
-    // |  11185.5   |   22371    | 7458  |
-    // |  14914     |   29828    | 7457  |
-    // |  14914.5   |   29829    | 1     |
-    // |  14915     |   29830    | 1     |
-
     const NTSC_STEP_CYCLES: [[u16; 6]; 2] = [
-        [7457, 7456, 7458, 7457, 1, 1],    // FourStep
-        [7457, 7456, 7458, 7458, 7452, 1], // FiveStep
+        [7457, 14913, 22371, 29828, 29829, 29830], // FourStep
+        [7457, 14913, 22371, 29829, 37281, 37282], // FiveStep
+    ];
+
+    const FRAME_TYPES: [Option<FrameType>; 6] = [
+        Some(FrameType::Quarter),
+        Some(FrameType::Half),
+        Some(FrameType::Quarter),
+        None,
+        Some(FrameType::Half),
+        None,
     ];
 
     pub(super) fn new() -> Self {
         Self {
-            register: Cell::default(),
+            status: Cell::default(),
             bufferred: Cell::default(),
-            cycles: Cell::new(Self::NTSC_STEP_CYCLES[Mode::FourStep as usize][0]),
+            cycles: Cell::default(),
             step: Cell::default(),
             irq_flag: Cell::default(),
         }
@@ -86,81 +83,58 @@ impl FrameCounter {
     }
 
     pub fn write(&self, value: u8) {
-        let value = Register::from_bits_truncate(value);
+        let value = Status::from_bits_truncate(value);
+        if value.inhibit_irq() {
+            self.irq_flag.set(false);
+        }
         // If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle.
         let cycles = self.cycles.get();
         let delay = if cycles & 0x01 == 1 { 4 } else { 3 };
         self.bufferred.set(Some((delay, value)));
     }
 
-    fn set_state(&self, value: Register) {
-        self.register.set(value);
+    fn set_state(&self, value: Status) {
+        self.status.set(value);
         self.step.set(0);
-        self.cycles
-            .set(Self::NTSC_STEP_CYCLES[value.mode() as usize][0]);
+        self.cycles.set(0);
     }
 
-    fn cycle(&self) -> Option<Clock> {
-        self.cycles.update(|c| c - 1);
+    fn cycle(&self) -> Clock {
+        self.cycles.update(|c| c + 1);
         let cycle = self.cycles.get();
-        if cycle == 0 {
-            self.step.update(|s| (s + 1) % 6);
-            let step = self.step.get() as usize;
-            let state = self.register.get();
-            self.cycles
-                .set(Self::NTSC_STEP_CYCLES[state.mode() as usize][step]);
+        let state = self.status.get();
+        let current_step = self.step.get();
+        // The next cycle number when something needs to happen
+        let next_cycle = Self::NTSC_STEP_CYCLES[state.mode() as usize][current_step as usize];
 
-            // From Mode 0: 4-Step Sequence (bit 7 of $4017 clear)
-            // Due to half-cycles, there are 6 steps (0-5) in each mode
-            //
-            // 4-step mode:
-            // - - - f f f   Interrupt
-            // - l - - l -   Length counter and sweep (aka HalfFrame)
-            // e e e - e -   Envelope and linear counter (aka QuarterFrame)
-            //
-            // 5-step mode:
-            // - - - - - -   Interrupt (always disabled)
-            // - l - - l -   Length counter and sweep (aka HalfFrame)
-            // e e e - e -   Envelope and linear counter (aka QuarterFrame)
-            let frame_type = match step {
-                0 | 2 => Some(FrameType::Quarter),
-                1 | 4 => Some(FrameType::Half),
-                _ => None,
-            };
-
+        let frame_type = if cycle != next_cycle {
+            None
+        } else {
+            let frame_type = Self::FRAME_TYPES[current_step as usize];
             let raise_interrupt =
-                !state.inhibit_irq() && state.mode() == Mode::FourStep && step >= 3;
-
+                !state.inhibit_irq() && state.mode() == Mode::FourStep && current_step >= 3;
             if raise_interrupt {
                 self.irq_flag.set(true);
             }
+            let current_step = (current_step + 1) % 6;
+            self.step.set(current_step);
+            if current_step == 0 {
+                self.cycles.set(0);
+            }
+            frame_type
+        };
 
-            Some(Clock {
-                frame_type,
-                raise_interrupt,
-            })
-        } else {
-            None
+        Clock {
+            frame_type,
+            raise_interrupt: self.irq_flag.get(),
         }
     }
 
-    pub fn tick(&self) -> Option<Clock> {
+    pub fn tick(&self) -> Clock {
         let clock = self.cycle();
         if let Some((delay, value)) = self.bufferred.take() {
             if delay - 1 == 0 {
                 self.set_state(value);
-
-                // // If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated.
-                // if value.mode() == Mode::FiveStep {
-                //     // Note this can't generate a Clock, but the previous can.
-                //     self.cycle();
-                //     // TODO: we need to generate another quarter frame here...
-                //     // but this won't generate an extra one, it will inhibit the other one if any
-                //     return Some(Clock {
-                //         frame_type: Some(FrameType::Quarter),
-                //         raise_interrupt: false,
-                //     });
-                // }
             } else {
                 self.bufferred.set(Some((delay - 1, value)))
             }
@@ -170,15 +144,15 @@ impl FrameCounter {
 }
 
 pub struct FrameCounterState {
-    pub register: Register,
+    pub status: Status,
     pub cycles: u16,
-    pub step: u16,
+    pub step: u8,
 }
 
 impl FrameCounterState {
     pub fn new(fc: &FrameCounter) -> Self {
         Self {
-            register: fc.register.get(),
+            status: fc.status.get(),
             cycles: fc.cycles.get(),
             step: fc.step.get(),
         }

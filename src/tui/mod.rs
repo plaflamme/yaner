@@ -103,8 +103,8 @@ fn apu_block<'a>(state: &ApuState) -> Paragraph<'a> {
             Span::styled(
                 format!(
                     "{:02X} {}",
-                    state.frame_counter.register,
-                    format_bitflags(state.frame_counter.register)
+                    state.frame_counter.status,
+                    format_bitflags(state.frame_counter.status)
                 ),
                 value_style,
             ),

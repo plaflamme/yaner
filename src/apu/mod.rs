@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use std::{cell::Cell, ops::Coroutine};
+use std::ops::Coroutine;
 
 pub mod debug;
 mod envelope;
@@ -63,15 +63,12 @@ impl Apu {
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
         #[coroutine]
         move || loop {
-            if let Some(clock) = self.frame_counter.tick() {
-                if let Some(frame_type) = clock.frame_type {
-                    self.handle_frame(frame_type);
-                }
-                yield ApuCycle::Tick {
-                    irq: clock.raise_interrupt,
-                }
-            } else {
-                yield ApuCycle::Tick { irq: false }
+            let clock = self.frame_counter.tick();
+            if let Some(frame_type) = clock.frame_type {
+                self.handle_frame(frame_type);
+            }
+            yield ApuCycle::Tick {
+                irq: clock.raise_interrupt,
             }
         }
     }
