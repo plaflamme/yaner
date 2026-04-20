@@ -100,6 +100,10 @@ impl Nes {
         let mut ppu = self.ppu.run();
         let apu_stride = 12;
         let ppu_stride = 4;
+        // force CUP/PPU alignment to this non-random value:
+        // * avoids the special case where cpu/ppu are aligned
+        // * avoids non-determinism
+        let ppu_offset = 1;
         self.clocks.cpu_master_clock.set(12);
         macro_rules! tick_apu {
             () => {
@@ -122,7 +126,7 @@ impl Nes {
         macro_rules! tick_ppu {
             () => {
                 while self.clocks.ppu_master_clock.get() + ppu_stride
-                    <= (self.clocks.cpu_master_clock.get())
+                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
                 {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
@@ -169,6 +173,7 @@ impl Nes {
                             self.clocks.cpu_master_clock.update(|c| c + 5);
                             yield NesCycle::Cpu(cycle);
                             tick_apu!();
+                            tick_ppu!();
                             let value = self.cpu_bus.read_u8(addr);
                             self.cpu.io_bus.set(value);
                         }
@@ -176,6 +181,7 @@ impl Nes {
                             self.clocks.cpu_master_clock.update(|c| c + 7);
                             yield NesCycle::Cpu(cycle);
                             tick_apu!();
+                            tick_ppu!();
                             self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
                         }
                     },
@@ -190,11 +196,15 @@ impl Nes {
                             self.clocks.cpu_master_clock.update(|c| c + 7);
                             self.clocks.tick_cpu();
                             yield NesCycle::Cpu(cycle);
+                            tick_apu!();
+                            tick_ppu!();
                         }
                         yaner_cpu::Rw::Write => {
                             self.clocks.cpu_master_clock.update(|c| c + 5);
                             self.clocks.tick_cpu();
                             yield NesCycle::Cpu(cycle);
+                            tick_apu!();
+                            tick_ppu!();
                         }
                     },
 
@@ -211,8 +221,6 @@ impl Nes {
             yield NesCycle::PowerUp;
             loop {
                 tick_cpu!();
-                tick_apu!();
-                tick_ppu!();
             }
         }
     }

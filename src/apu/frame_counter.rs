@@ -91,6 +91,7 @@ impl FrameCounter {
         let cycles = self.cycles.get();
         let delay = if cycles & 0x01 == 1 { 4 } else { 3 };
         self.bufferred.set(Some((delay, value)));
+        log::debug!("write status={value:?} cycles={cycles} delay={delay}");
     }
 
     fn set_state(&self, value: Status) {

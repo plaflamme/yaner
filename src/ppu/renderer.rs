@@ -111,7 +111,9 @@ impl Pixel {
 }
 
 pub struct Renderer {
-    // the scanline and dot we're about to draw
+    // the scanline and dot we're **about** to draw
+    // this matters because if dot is `1` then, from a timing perspective, it means that we're still effectively on dot `0` until the run method resumes.
+    // see ppustatus_read for one such implication
     pub scanline: Cell<u16>,
     pub dot: Cell<u16>,
     // 2 16-bit shift registers. These contain the pattern table data for two tiles [...]
@@ -151,13 +153,10 @@ impl Default for Renderer {
 
 impl Renderer {
     // interactions between vbl and PPUSTATUS reads:
-    //   Reading PPUSTATUS one PPU clock before reads it as clear and never sets the flag
-    //     or generates NMI for that frame
-    //   Reading PPUSTATUS on the same PPU clock or one later reads it as set, clears it,
-    //     and suppresses the NMI for that frame
+    //   Reading the flag on the dot before it is set (scanling 241, dot 0) causes it to read as 0 and be cleared
     pub(super) fn ppustatus_read(&self, _: &mut PpuStatus) {
-        // NOTE: previously, this would do something on dots 0, 1 and 2 (as per the statements above)
-        // But it turns out that this is sufficient.
+        // NOTE: we check the dot value as 1 here because this is the dot we're **about** to draw when the PPU resumes:
+        // From a CPU/PPU timing perspective, this means we're still at "before it is set (scanling 241, dot 0)".
         if let (241, 1) = (self.scanline.get(), self.dot.get()) {
             self.suppress_vbl.set(true);
         }

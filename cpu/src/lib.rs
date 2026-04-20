@@ -495,12 +495,12 @@ impl Cpu {
                     rw: $rw,
                     addr: $addr,
                 };
-                self.end_cycle();
                 yield CpuEvent::HalfCycle {
                     phase: Phase::Two,
                     rw: $rw,
                     addr: $addr,
                 };
+                self.end_cycle();
             }};
         }
         macro_rules! dma {
