@@ -45,6 +45,7 @@ pub struct Clock {
 pub struct FrameCounter {
     status: Cell<Status>,
     bufferred: Cell<Option<(u8, Status)>>,
+    cpu_cycles: Cell<u64>,
     cycles: Cell<u16>,
     step: Cell<u8>,
     irq_flag: Cell<bool>,
@@ -70,6 +71,7 @@ impl FrameCounter {
         Self {
             status: Cell::default(),
             bufferred: Cell::default(),
+            cpu_cycles: Cell::default(),
             cycles: Cell::default(),
             step: Cell::default(),
             irq_flag: Cell::default(),
@@ -88,10 +90,10 @@ impl FrameCounter {
             self.irq_flag.set(false);
         }
         // If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle.
-        let cycles = self.cycles.get();
+        let cycles = self.cpu_cycles.get();
         let delay = if cycles & 0x01 == 1 { 4 } else { 3 };
         self.bufferred.set(Some((delay, value)));
-        log::debug!("write status={value:?} cycles={cycles} delay={delay}");
+        log::debug!("write status={value:?} cpu_cycles={cycles} delay={delay}");
     }
 
     fn set_state(&self, value: Status) {
@@ -102,6 +104,7 @@ impl FrameCounter {
     }
 
     fn cycle(&self) -> Clock {
+        self.cpu_cycles.update(|c| c + 1);
         self.cycles.update(|c| c + 1);
         let cycle = self.cycles.get();
         let state = self.status.get();

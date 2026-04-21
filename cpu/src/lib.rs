@@ -368,6 +368,9 @@ pub struct Cpu {
     // The PC of the currently executing instruction
     active_pc: Cell<u16>,
 
+    // cycle counter for DMA alignment purposes
+    cycles: Cell<u64>,
+
     pub dma_latch: Cell<Option<u8>>,
     pub io_bus: Cell<u8>,
 }
@@ -411,6 +414,8 @@ impl Cpu {
             delay_intr_flag: Cell::default(),
             delay_nmi: Cell::default(),
             active_pc: Cell::default(),
+
+            cycles: Cell::default(),
 
             dma_latch: Cell::default(),
             io_bus: Cell::new(0),
@@ -484,12 +489,14 @@ impl Cpu {
     fn start_cycle(&self) {}
     fn end_cycle(&self) {
         self.poll_nmi();
+        self.cycles.update(|c| c.wrapping_add(1));
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuEvent, Return = ()> + '_ {
         macro_rules! cycle {
             ($rw:expr, $addr:expr) => {{
                 self.start_cycle();
+
                 yield CpuEvent::HalfCycle {
                     phase: Phase::One,
                     rw: $rw,
@@ -505,8 +512,13 @@ impl Cpu {
         }
         macro_rules! dma {
             ($addr:expr) => {{
-                log::debug!("DMA");
+                log::debug!("DMA start {:02X}", $addr);
                 cycle!(Rw::Read, $addr);
+
+                if self.cycles.get() % 2 == 1 {
+                    log::debug!("DMA alignment cycle");
+                    cycle!(Rw::Read, $addr);
+                }
 
                 for addr_lo in 0x00..=0xFF {
                     cycle!(Rw::Read, $addr | addr_lo);
