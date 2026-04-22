@@ -50,6 +50,8 @@ pub struct FrameCounter {
     cycles: Cell<u16>,
     step: Cell<u8>,
     irq_flag: Cell<bool>,
+    // the IRQ flag is cleared when reading 4015, but only on the next Get cycle
+    clear_irq_flag: Cell<bool>,
 }
 
 impl std::fmt::Debug for FrameCounter {
@@ -58,7 +60,8 @@ impl std::fmt::Debug for FrameCounter {
         write!(f, "bufferred={:?} ", self.bufferred.get())?;
         write!(f, "cycles={:?} ", self.cycles.get())?;
         write!(f, "step={:?} ", self.step.get())?;
-        write!(f, "irq_flag={:?}", self.irq_flag.get())
+        write!(f, "irq_flag={:?}", self.irq_flag.get())?;
+        write!(f, "clear_irq_flag={:?}", self.clear_irq_flag.get())
     }
 }
 
@@ -85,13 +88,18 @@ impl FrameCounter {
             cycles: Cell::default(),
             step: Cell::default(),
             irq_flag: Cell::default(),
+            clear_irq_flag: Cell::default(),
         }
     }
 
-    // Reads the
-    pub(crate) fn irq_flag(&self) -> bool {
-        // Reading the IRQ flag disables it
-        self.irq_flag.replace(false)
+    pub(super) fn irq_flag(&self, cpu_cycle: CpuCycle) -> bool {
+        // Reading the IRQ flag disables it, but only on Get cycles
+        if cpu_cycle == CpuCycle::Get {
+            self.irq_flag.replace(false)
+        } else {
+            self.clear_irq_flag.set(true);
+            self.irq_flag.get()
+        }
     }
 
     pub(super) fn write(&self, cpu_cycle: CpuCycle, value: u8) {
@@ -117,7 +125,10 @@ impl FrameCounter {
         log::debug!("set_state: {self:?}");
     }
 
-    fn cycle(&self) -> Clock {
+    fn cycle(&self, cpu_cycle: CpuCycle) -> Clock {
+        if cpu_cycle == CpuCycle::Get && self.clear_irq_flag.replace(false) {
+            self.irq_flag.set(false);
+        }
         self.cycles.update(|c| c + 1);
         let cycle = self.cycles.get();
         let state = self.status.get();
@@ -149,8 +160,8 @@ impl FrameCounter {
         }
     }
 
-    pub fn tick(&self) -> Clock {
-        let clock = self.cycle();
+    pub(super) fn tick(&self, cpu_cycle: CpuCycle) -> Clock {
+        let clock = self.cycle(cpu_cycle);
         if let Some((delay, value)) = self.bufferred.take() {
             if delay - 1 == 0 {
                 self.set_state(value);

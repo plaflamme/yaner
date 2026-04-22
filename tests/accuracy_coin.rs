@@ -415,7 +415,7 @@ test_suite! {
     Suite_APUTiming,
     TEST_APULengthCounter,
     TEST_APULengthTable,
-    TEST_FrameCounterIRQ => Err(Error::Code(1)), // The IRQ flag should be set when the APU Frame counter is in the 4-step mode, and the IRQ flag is enabled.
+    TEST_FrameCounterIRQ => Err(Error::Code(19)), // The Frame Counter Interrupt flag should have been set 29828 cycles after resetting the frame counter, even if supressing Frame Counter Interrupts.
     TEST_FrameCounter4Step,
     TEST_FrameCounter5Step,
     TEST_DeltaModulationChannel => Err(Error::Code(1)), // Reading address $4015 should set bit 4 when the DMC is playing and clear bit 4 when the sample ends.

@@ -72,7 +72,13 @@ impl Apu {
 
     fn status(&self) -> Status {
         let mut status = Status::default();
-        status.set(Status::F, self.frame_counter.irq_flag());
+        // The CPU is reading now, during its own cycle which we haven't caught up to yet.
+        // So the read is actually occuring on "the next" cycle, the one we're about top catch up to.
+        let cpu_cycle = match self.cpu_cycle() {
+            CpuCycle::Get => CpuCycle::Put,
+            CpuCycle::Put => CpuCycle::Get,
+        };
+        status.set(Status::F, self.frame_counter.irq_flag(cpu_cycle));
         status.set(Status::P1, self.pulse_1.playing());
         status.set(Status::P2, self.pulse_2.playing());
         status
@@ -82,7 +88,7 @@ impl Apu {
         #[coroutine]
         move || loop {
             self.cpu_cycles.update(|c| c.wrapping_add(1));
-            let clock = self.frame_counter.tick();
+            let clock = self.frame_counter.tick(self.cpu_cycle());
             if let Some(frame_type) = clock.frame_type {
                 self.handle_frame(frame_type);
             }
