@@ -1,6 +1,8 @@
-use std::cell::Cell;
+use std::{cell::Cell, fmt::Debug};
 
 use bitflags::bitflags;
+
+use crate::apu::CpuCycle;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -45,10 +47,19 @@ pub struct Clock {
 pub struct FrameCounter {
     status: Cell<Status>,
     bufferred: Cell<Option<(u8, Status)>>,
-    cpu_cycles: Cell<u64>,
     cycles: Cell<u16>,
     step: Cell<u8>,
     irq_flag: Cell<bool>,
+}
+
+impl std::fmt::Debug for FrameCounter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "status={:?} ", self.status.get())?;
+        write!(f, "bufferred={:?} ", self.bufferred.get())?;
+        write!(f, "cycles={:?} ", self.cycles.get())?;
+        write!(f, "step={:?} ", self.step.get())?;
+        write!(f, "irq_flag={:?}", self.irq_flag.get())
+    }
 }
 
 impl FrameCounter {
@@ -71,7 +82,6 @@ impl FrameCounter {
         Self {
             status: Cell::default(),
             bufferred: Cell::default(),
-            cpu_cycles: Cell::default(),
             cycles: Cell::default(),
             step: Cell::default(),
             irq_flag: Cell::default(),
@@ -84,27 +94,30 @@ impl FrameCounter {
         self.irq_flag.replace(false)
     }
 
-    pub fn write(&self, value: u8) {
+    pub(super) fn write(&self, cpu_cycle: CpuCycle, value: u8) {
         let value = Status::from_bits_truncate(value);
         if value.inhibit_irq() {
             self.irq_flag.set(false);
         }
-        // If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle.
-        let cycles = self.cpu_cycles.get();
-        let delay = if cycles & 0x01 == 1 { 4 } else { 3 };
+        // "If the write occurs during an APU cycle, the effects occur 3 CPU cycles after the $4017 write cycle, and if the write occurs between APU cycles, the effects occurs 4 CPU cycles after the write cycle."
+        // The terminology is confusing:
+        // "While these cycles are sometimes described as even and odd CPU cycles, this is not accurate because the CPU and APU randomly power into either of 2 alignments relative to each other. Therefore, get and put may occur on different CPU cycle parities across different power cycles."
+        // Here we use
+        //   * get == "between"
+        //   * put == "during"
+        let delay = if cpu_cycle == CpuCycle::Get { 4 } else { 3 };
         self.bufferred.set(Some((delay, value)));
-        log::debug!("write status={value:?} cpu_cycles={cycles} delay={delay}");
+        log::debug!("write: {self:?}");
     }
 
     fn set_state(&self, value: Status) {
         self.status.set(value);
         self.step.set(0);
         self.cycles.set(0);
-        log::debug!("set_state: status={:?} step=0 cycles=0", self.status.get());
+        log::debug!("set_state: {self:?}");
     }
 
     fn cycle(&self) -> Clock {
-        self.cpu_cycles.update(|c| c + 1);
         self.cycles.update(|c| c + 1);
         let cycle = self.cycles.get();
         let state = self.status.get();
@@ -121,16 +134,12 @@ impl FrameCounter {
             if raise_interrupt {
                 self.irq_flag.set(true);
             }
-            log::debug!(
-                "tick: step={current_step} cycles={cycle} frame_type={frame_type:?} intr={raise_interrupt}",
-            );
             let current_step = (current_step + 1) % 6;
             self.step.set(current_step);
             if current_step == 0 {
                 self.cycles.set(0);
             }
-            log::debug!("tick: current_step={:?} step=0 cycles=0", self.status.get());
-
+            log::debug!("tick: {self:?}");
             frame_type
         };
 

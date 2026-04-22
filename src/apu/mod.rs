@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use std::ops::Coroutine;
+use std::{cell::Cell, ops::Coroutine};
 
 pub mod debug;
 mod envelope;
@@ -28,11 +28,19 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CpuCycle {
+    Get,
+    Put,
+}
+
 pub enum ApuCycle {
     Tick { irq: bool },
 }
 
 pub struct Apu {
+    // Count CPU cycles to determine get vs put cycles
+    cpu_cycles: Cell<u64>,
     pulse_1: Pulse,
     pulse_2: Pulse,
     frame_counter: FrameCounter,
@@ -41,14 +49,23 @@ pub struct Apu {
 impl Apu {
     pub fn new() -> Self {
         Self {
+            cpu_cycles: Cell::default(),
             frame_counter: FrameCounter::new(),
             pulse_1: Pulse::new(),
             pulse_2: Pulse::new(),
         }
     }
 
+    fn cpu_cycle(&self) -> CpuCycle {
+        if self.cpu_cycles.get() & 0x01 == 1 {
+            CpuCycle::Get
+        } else {
+            CpuCycle::Put
+        }
+    }
+
     fn handle_frame(&self, frame_type: FrameType) {
-        log::debug!("{frame_type:?}");
+        log::debug!("handle_frame: frame_type={frame_type:?}");
         self.pulse_1.tick(frame_type);
         self.pulse_2.tick(frame_type);
     }
@@ -64,6 +81,7 @@ impl Apu {
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
         #[coroutine]
         move || loop {
+            self.cpu_cycles.update(|c| c.wrapping_add(1));
             let clock = self.frame_counter.tick();
             if let Some(frame_type) = clock.frame_type {
                 self.handle_frame(frame_type);
@@ -109,7 +127,7 @@ impl AddressSpace for Apu {
             }
             0x4017 => {
                 log::debug!("write 0x4017: {value:02X}");
-                self.frame_counter.write(value);
+                self.frame_counter.write(self.cpu_cycle(), value);
                 if value & 0x80 != 0 {
                     // Writing to $4017 with bit 7 set ($80) will immediately clock all of its controlled units at the beginning of the 5-step sequence
                     self.handle_frame(FrameType::Half);

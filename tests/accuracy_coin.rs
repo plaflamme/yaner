@@ -403,7 +403,7 @@ test_suite! {
     TEST_DMA_Plus_2002R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007R => Err(Error::Code(2)),
     TEST_DMA_Plus_2007W => Err(Error::Code(1)),
-    TEST_DMA_Plus_4015R => Err(Error::Code(1)),
+    TEST_DMA_Plus_4015R => Err(Error::Code(2)),
     TEST_DMA_Plus_4016R => Err(Error::Code(1)),
     TEST_DMABusConflict => Err(Error::Code(2)),
     TEST_DMCDMAPlusOAMDMA => Err(Error::Code(1)),
@@ -481,7 +481,7 @@ test_suite! {
 test_suite! {
     Suite_CPUBehavior2,
     TEST_InstructionTiming => Err(Error::Code(1)), // The DMA should update the data bus.
-    TEST_ImpliedDummyRead => Err(Error::Code(2)), // Your emulator did not implement the frame counter interrupt flag properly.
+    TEST_ImpliedDummyRead => Err(Error::Code(3)), // Your emulator did not update the data bus when the DMC DMA occured, or your DMA timing is off.
     TEST_BranchDummyRead => Err(Error::Timeout),
     TEST_JSREdgeCases => Err(Error::Code(3)) // Your emulator has incorrect open bus emulation.
 }
