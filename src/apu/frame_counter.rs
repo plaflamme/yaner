@@ -140,12 +140,16 @@ impl FrameCounter {
             None
         } else {
             let frame_type = Self::FRAME_TYPES[current_step as usize];
-            let irq_flag = state.mode() == Mode::FourStep && current_step >= 3;
-            // The IRQ flag is raised regardless of the inhibit flag
-            if irq_flag {
-                self.irq_flag.set(true);
-                // But the inhibit flag does also act as a way to clear the flag 2 cycles later.
-                self.clear_irq_flag.set(state.inhibit_irq());
+
+            let is_irq_step = state.mode() == Mode::FourStep && current_step >= 3;
+            if is_irq_step {
+                // The IRQ flag is raised regardless of the inhibit flag
+                // But the inhibit flag will lower the flag once were past the IRQ flag window
+                if state.inhibit_irq() && current_step == 5 {
+                    self.irq_flag.set(false);
+                } else {
+                    self.irq_flag.set(true);
+                }
             }
             let current_step = (current_step + 1) % 6;
             self.step.set(current_step);
