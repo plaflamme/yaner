@@ -5,8 +5,8 @@ use crate::memory::AddressSpace;
 use crate::ppu::debug::PpuState;
 
 pub struct ClockState {
-    pub cpu_master_clock: usize,
-    pub ppu_master_clock: usize,
+    pub cpu_master_clock: u64,
+    pub ppu_master_clock: u64,
     pub cpu_cycles: u64,
     pub ppu_cycles: u64,
     pub ppu_frames: u64,
@@ -29,23 +29,23 @@ pub struct NesState<'a> {
 impl<'a> NesState<'a> {
     pub fn new(nes: &'a super::Nes) -> Self {
         NesState {
-            cpu: yaner_cpu::CpuState::new(&nes.cpu),
-            apu: ApuState::new(&nes.apu),
+            cpu: yaner_cpu::CpuState::new(&nes.cpu.cpu),
+            apu: ApuState::new(&nes.cpu.apu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
-                cpu_master_clock: nes.clocks.cpu_master_clock.get(),
+                cpu_master_clock: nes.cpu.cycles.get(),
                 ppu_master_clock: nes.clocks.ppu_master_clock.get(),
                 cpu_cycles: nes.clocks.cpu_cycles.get(),
                 ppu_cycles: nes.clocks.ppu_cycles.get(),
                 ppu_frames: nes.clocks.ppu_frames.get(),
             },
 
-            cpu_bus: &nes.cpu_bus,
+            cpu_bus: &nes.cpu.cpu_bus,
             ppu_bus: &nes.ppu.bus,
-            ram: &nes.cpu_bus.ram,
+            ram: &nes.cpu.cpu_bus.ram,
             vram: &nes.ppu.bus.vram,
-            prg_rom: &nes.cpu_bus, // TODO: use mapper directly
-            chr_rom: &nes.ppu.bus, // TODO: use mapper directly
+            prg_rom: &nes.cpu.cpu_bus, // TODO: use mapper directly
+            chr_rom: &nes.ppu.bus,     // TODO: use mapper directly
         }
     }
 

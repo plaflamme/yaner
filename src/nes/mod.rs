@@ -6,11 +6,9 @@ use std::rc::Rc;
 use ouroboros::self_referencing;
 
 use crate::Reset;
-use crate::apu::{Apu, ApuCycle};
 use crate::cartridge::Cartridge;
-use crate::cpu::{CpuBus, IoRegisters};
+use crate::cpu::RP2A03;
 use crate::input::Joypad;
-use crate::memory::AddressSpace;
 use crate::ppu::{Ppu, PpuCycle, PpuRegisters};
 
 pub mod debug;
@@ -19,11 +17,8 @@ type NesCoroutine<'a> = impl Coroutine<Yield = NesCycle, Return = !> + Unpin + '
 
 #[derive(Default)]
 pub struct Clocks {
-    pub cpu_master_clock: Cell<usize>,
-    pub apu_master_clock: Cell<usize>,
-    pub ppu_master_clock: Cell<usize>,
+    pub ppu_master_clock: Cell<u64>,
     pub cpu_cycles: Cell<u64>,
-    pub apu_cycles: Cell<u64>,
     pub ppu_cycles: Cell<u64>,
     pub ppu_frames: Cell<u64>,
 }
@@ -50,10 +45,7 @@ pub enum NesCycle {
 }
 
 pub struct Nes {
-    pub cpu: yaner_cpu::Cpu,
-    pub cpu_bus: CpuBus,
-    pub apu: Rc<Apu>,
-
+    pub cpu: RP2A03,
     pub ppu: Rc<Ppu>,
     pub clocks: Clocks,
     pub input1: Rc<Joypad>, // TODO: abstract these away (dyn Input) and use Option
@@ -72,14 +64,16 @@ impl Nes {
         let mapper = Rc::new(RefCell::new(cartridge.mapper()));
         let ppu = Rc::new(Ppu::new(mapper.clone()));
         let ppu_registers = PpuRegisters::new(ppu.clone());
-        let apu = Rc::new(Apu::new());
-        let io_registers = IoRegisters::new(apu.clone(), input1.clone(), input2.clone());
-        let cpu_bus = CpuBus::new(io_registers, ppu_registers, mapper.clone());
+        let cpu = RP2A03::new(
+            start_at,
+            mapper.clone(),
+            ppu_registers,
+            input1.clone(),
+            input2.clone(),
+        );
 
         Nes {
-            cpu: yaner_cpu::Cpu::new(start_at),
-            cpu_bus,
-            apu,
+            cpu,
             ppu,
             clocks: Clocks::default(),
             input1,
@@ -96,37 +90,17 @@ impl Nes {
     #[define_opaque(NesCoroutine)]
     fn run(&self) -> NesCoroutine<'_> {
         let mut cpu = self.cpu.run();
-        let mut apu = self.apu.run();
         let mut ppu = self.ppu.run();
-        let apu_stride = 12;
         let ppu_stride = 4;
         // force CUP/PPU alignment to this non-random value:
         // * avoids the special case where cpu/ppu are aligned
         // * avoids non-determinism
         let ppu_offset = 1;
-        self.clocks.cpu_master_clock.set(12);
-        macro_rules! tick_apu {
-            () => {
-                while self.clocks.apu_master_clock.get() + apu_stride
-                    < self.clocks.cpu_master_clock.get()
-                {
-                    match Pin::new(&mut apu).resume(()) {
-                        CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
-                            if irq {
-                                self.cpu.set_irq(irq);
-                            }
-                        }
-                        CoroutineState::Complete(_) => (),
-                    }
-                    self.clocks.apu_master_clock.update(|c| c + apu_stride);
-                }
-            };
-        }
 
         macro_rules! tick_ppu {
             () => {
                 while self.clocks.ppu_master_clock.get() + ppu_stride
-                    <= (self.clocks.cpu_master_clock.get() - ppu_offset)
+                    <= (self.cpu.cycles.get() - ppu_offset)
                 {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
@@ -153,7 +127,7 @@ impl Nes {
                     if self.clocks.ppu_cycles.get().is_multiple_of(3_221_590) {
                         // TODO: this should remember when each bit was last set to 1
                         // TODO: this should just happen as a side effect of ticking the ppu
-                        self.cpu_bus.ppu_registers.decay_open_bus()
+                        self.cpu.decay_open_bus()
                     }
                 }
             };
@@ -162,57 +136,12 @@ impl Nes {
         macro_rules! tick_cpu {
             () => {
                 match Pin::new(&mut cpu).resume(()) {
-                    CoroutineState::Yielded(
-                        cycle @ yaner_cpu::CpuEvent::HalfCycle {
-                            phase: yaner_cpu::Phase::One,
-                            rw,
-                            addr,
-                        },
-                    ) => match rw {
-                        yaner_cpu::Rw::Read => {
-                            self.clocks.cpu_master_clock.update(|c| c + 5);
-                            yield NesCycle::Cpu(cycle);
-                            tick_apu!();
-                            tick_ppu!();
-                            let value = self.cpu_bus.read_u8(addr);
-                            self.cpu.io_bus.set(value);
-                        }
-                        yaner_cpu::Rw::Write => {
-                            self.clocks.cpu_master_clock.update(|c| c + 7);
-                            yield NesCycle::Cpu(cycle);
-                            tick_apu!();
-                            tick_ppu!();
-                            self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
-                        }
-                    },
-                    CoroutineState::Yielded(
-                        cycle @ yaner_cpu::CpuEvent::HalfCycle {
-                            phase: yaner_cpu::Phase::Two,
-                            rw,
-                            addr: _,
-                        },
-                    ) => match rw {
-                        yaner_cpu::Rw::Read => {
-                            self.clocks.cpu_master_clock.update(|c| c + 7);
-                            self.clocks.tick_cpu();
-                            yield NesCycle::Cpu(cycle);
-                            tick_apu!();
-                            tick_ppu!();
-                        }
-                        yaner_cpu::Rw::Write => {
-                            self.clocks.cpu_master_clock.update(|c| c + 5);
-                            self.clocks.tick_cpu();
-                            yield NesCycle::Cpu(cycle);
-                            tick_apu!();
-                            tick_ppu!();
-                        }
-                    },
-
+                    CoroutineState::Yielded(cycle) => {
+                        yield NesCycle::Cpu(cycle);
+                        tick_ppu!();
+                    }
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
-                if let Some(addr) = self.cpu_bus.io_regsiters.dma_latch() {
-                    self.cpu.dma_latch.set(Some(addr));
-                }
             };
         }
 
