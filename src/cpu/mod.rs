@@ -17,9 +17,7 @@ use std::rc::Rc;
 pub struct RP2A03 {
     pub(crate) cycles: Cell<u64>,
     pub(crate) apu_cycles: Cell<u64>, // TODO: remove this?
-    pub(crate) cpu: yaner_cpu::Cpu,
-    pub(crate) apu: Rc<Apu>,
-    pub(crate) cpu_bus: CpuBus,
+    pub(crate) bus: CpuBus,
 }
 
 impl RP2A03 {
@@ -30,47 +28,49 @@ impl RP2A03 {
         input_1: Rc<dyn Input>,
         input_2: Rc<dyn Input>,
     ) -> Self {
-        let apu = Rc::new(Apu::default());
-        let io_registers = IoRegisters::new(apu.clone(), input_1, input_2);
-        let cpu_bus = CpuBus::new(io_registers, ppu_registers, mapper);
         Self {
             cycles: Cell::new(12),
             apu_cycles: Cell::default(),
-            cpu: Cpu::new(start_at),
-            apu,
-            cpu_bus,
+            bus: CpuBus::new(
+                Cpu::new(start_at),
+                Apu::default(),
+                ppu_registers,
+                mapper,
+                input_1,
+                input_2,
+            ),
         }
     }
 
     pub fn set_nmi(&self, state: bool) {
-        self.cpu.set_nmi(state);
+        self.bus.cpu.set_nmi(state);
     }
 
     pub fn decay_open_bus(&self) {
-        self.cpu_bus.ppu_registers.decay_open_bus();
+        self.bus.ppu_registers.decay_open_bus();
     }
 
     pub(crate) fn active_pc(&self) -> u16 {
-        self.cpu.active_pc()
+        self.bus.cpu.active_pc()
     }
 
     pub(crate) fn reset(&self) {
-        self.cpu.reset();
+        self.bus.cpu.reset();
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuEvent, Return = ()> + '_ {
         #[coroutine]
         || {
             let apu_stride = 12;
-            let mut cpu = self.cpu.run();
-            let mut apu = self.apu.run();
+            let mut cpu = self.bus.cpu.run();
+            let mut apu = self.bus.apu.run();
             macro_rules! tick_apu {
                 () => {
                     while self.apu_cycles.get() + apu_stride < self.cycles.get() {
                         match Pin::new(&mut apu).resume(()) {
                             CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
                                 if irq {
-                                    self.cpu.set_irq(irq);
+                                    self.bus.cpu.set_irq(irq);
                                 }
                             }
                             CoroutineState::Complete(_) => (),
@@ -94,14 +94,14 @@ impl RP2A03 {
                                 tick_apu!();
                                 yield cycle;
 
-                                let value = self.cpu_bus.read_u8(addr);
-                                self.cpu.io_bus.set(value);
+                                let value = self.bus.read_u8(addr);
+                                self.bus.cpu.io_bus.set(value);
                             }
                             yaner_cpu::Rw::Write => {
                                 self.cycles.update(|c| c + 7);
                                 tick_apu!();
                                 yield cycle;
-                                self.cpu_bus.write_u8(addr, self.cpu.io_bus.get());
+                                self.bus.write_u8(addr, self.bus.cpu.io_bus.get());
                             }
                         },
                         CoroutineState::Yielded(
@@ -125,9 +125,6 @@ impl RP2A03 {
 
                         CoroutineState::Complete(_) => panic!("cpu stopped"),
                     };
-                    if let Some(addr) = self.cpu_bus.io_regsiters.dma_latch() {
-                        self.cpu.dma_latch.set(Some(addr));
-                    }
                 };
             }
         }
@@ -135,23 +132,32 @@ impl RP2A03 {
 }
 
 pub struct CpuBus {
+    pub cpu: Cpu,
+    pub apu: Apu,
     pub ram: Ram2KB,
-    pub io_regsiters: IoRegisters,
     pub ppu_registers: PpuRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
+    pub input_1: Rc<dyn Input>,
+    pub input_2: Rc<dyn Input>,
 }
 
 impl CpuBus {
     pub fn new(
-        io_regsiters: IoRegisters,
+        cpu: Cpu,
+        apu: Apu,
         ppu_registers: PpuRegisters,
         mapper: Rc<RefCell<Box<dyn Mapper>>>,
+        input_1: Rc<dyn Input>,
+        input_2: Rc<dyn Input>,
     ) -> Self {
-        CpuBus {
+        Self {
+            cpu,
+            apu,
             ram: Ram2KB::default(),
-            io_regsiters,
             ppu_registers,
             mapper,
+            input_1,
+            input_2,
         }
     }
 }
@@ -165,9 +171,19 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2000..=0x2007 => self.ppu_registers.read_u8(addr), // PPU
             0x2008..=0x3FFF => self.ppu_registers.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
-            0x4000..=0x401F => self.io_regsiters.read_u8(addr),
+            // "IO registers"
+            0x4015 => self.apu.read_u8(addr),
+            // In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
+            // Usually this is the most significant byte of the address of the controller port—0x40.
+            // Certain games (such as Paperboy) rely on this behavior and require that reads from the controller ports return exactly $40 or $41 as appropriate.
+            0x4016 => self.input_1.read() | 0x40, // joy1
+            0x4017 => self.input_2.read() | 0x40, // joy2
 
+            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+
+            // Mapper
             0x4020..=0xFFFF => self.mapper.borrow().read_u8(addr), // PRG ROM/RAM and mapper
+            _ => 0,
         }
     }
 
@@ -179,74 +195,23 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2000..=0x2007 => self.ppu_registers.write_u8(addr, value), // PPU
             0x2008..=0x3FFF => self.ppu_registers.write_u8(0x2000 + (addr % 8), value), // PPU mirror
 
-            0x4000..=0x401F => self.io_regsiters.write_u8(addr, value),
-
-            0x4020..=0xFFFF => self.mapper.borrow().write_u8(addr, value), // PRG ROM/RAM and mapper
-        }
-    }
-}
-
-// http://wiki.nesdev.org/w/index.php/2A03
-pub struct IoRegisters {
-    apu: Rc<Apu>,
-    input1: Rc<dyn Input>,
-    input2: Rc<dyn Input>,
-
-    // OUT0-OUT2 latch
-    out_latch: Cell<u8>,
-
-    dma_latch: Cell<Option<u8>>,
-}
-
-impl IoRegisters {
-    pub fn new(apu: Rc<Apu>, input1: Rc<dyn Input>, input2: Rc<dyn Input>) -> Self {
-        IoRegisters {
-            apu,
-            input1,
-            input2,
-            out_latch: Cell::default(),
-            dma_latch: Cell::new(None),
-        }
-    }
-
-    // This will return last write to OAM DMA and then None until the next write
-    pub fn dma_latch(&self) -> Option<u8> {
-        self.dma_latch.take()
-    }
-}
-
-impl AddressSpace for IoRegisters {
-    fn read_u8(&self, addr: u16) -> u8 {
-        match addr {
-            0x4015 => self.apu.read_u8(addr),
-            // In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
-            // Usually this is the most significant byte of the address of the controller port—0x40.
-            // Certain games (such as Paperboy) rely on this behavior and require that reads from the controller ports return exactly $40 or $41 as appropriate.
-            0x4016 => self.input1.read() | 0x40, // joy1
-            0x4017 => self.input2.read() | 0x40, // joy2
-
-            0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
-            _ => 0x0,
-        }
-    }
-
-    fn write_u8(&self, addr: u16, value: u8) {
-        match addr {
+            // "IO registers"
             0x4014 => {
                 log::debug!("DMA@0x{value:02X}");
-                self.dma_latch.set(Some(value))
+                self.cpu.dma_latch.set(Some(value))
             }
             0x4016 => {
-                self.out_latch.set(value & 0x7); // lower 3 bits
-
                 // The first bit is connected to the inputs
                 // TODO: is this supposed to happen now or on the next tick?
                 let out0 = value & 0x01;
-                self.input1.strobe(out0);
-                self.input2.strobe(out0);
+                self.input_1.strobe(out0);
+                self.input_2.strobe(out0);
             }
             0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write_u8(addr, value),
             0x4018..=0x401F => unimplemented!(), // APU and I/O functionality that is normally disabled.
+
+            // Mapper
+            0x4020..=0xFFFF => self.mapper.borrow().write_u8(addr, value), // PRG ROM/RAM and mapper
             _ => (),
         }
     }

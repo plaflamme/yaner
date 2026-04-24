@@ -29,8 +29,8 @@ pub struct NesState<'a> {
 impl<'a> NesState<'a> {
     pub fn new(nes: &'a super::Nes) -> Self {
         NesState {
-            cpu: yaner_cpu::CpuState::new(&nes.cpu.cpu),
-            apu: ApuState::new(&nes.cpu.apu),
+            cpu: yaner_cpu::CpuState::new(&nes.cpu.bus.cpu),
+            apu: ApuState::new(&nes.cpu.bus.apu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
                 cpu_master_clock: nes.cpu.cycles.get(),
@@ -40,12 +40,12 @@ impl<'a> NesState<'a> {
                 ppu_frames: nes.clocks.ppu_frames.get(),
             },
 
-            cpu_bus: &nes.cpu.cpu_bus,
+            cpu_bus: &nes.cpu.bus,
             ppu_bus: &nes.ppu.bus,
-            ram: &nes.cpu.cpu_bus.ram,
+            ram: &nes.cpu.bus.ram,
             vram: &nes.ppu.bus.vram,
-            prg_rom: &nes.cpu.cpu_bus, // TODO: use mapper directly
-            chr_rom: &nes.ppu.bus,     // TODO: use mapper directly
+            prg_rom: &nes.cpu.bus, // TODO: use mapper directly
+            chr_rom: &nes.ppu.bus, // TODO: use mapper directly
         }
     }
 
