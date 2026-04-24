@@ -93,15 +93,13 @@ impl RP2A03 {
                                 self.cycles.update(|c| c + 5);
                                 tick_apu!();
                                 yield cycle;
-
-                                let value = self.bus.read_u8(addr);
-                                self.bus.cpu.io_bus.set(value);
+                                self.bus.cpu_read_u8(addr);
                             }
                             yaner_cpu::Rw::Write => {
                                 self.cycles.update(|c| c + 7);
                                 tick_apu!();
                                 yield cycle;
-                                self.bus.write_u8(addr, self.bus.cpu.io_bus.get());
+                                self.bus.cpu_write_u8(addr);
                             }
                         },
                         CoroutineState::Yielded(
@@ -160,6 +158,16 @@ impl CpuBus {
             input_2,
         }
     }
+
+    // Read value from addr and write it to the CPU IO bus.
+    fn cpu_read_u8(&self, addr: u16) {
+        self.cpu.io_bus.set(self.read_u8(addr));
+    }
+
+    // Write the value from the CPU's IO bus to addr.
+    fn cpu_write_u8(&self, addr: u16) {
+        self.write_u8(addr, self.cpu.io_bus.get());
+    }
 }
 
 impl crate::memory::AddressSpace for CpuBus {
@@ -172,6 +180,8 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2008..=0x3FFF => self.ppu_registers.read_u8(0x2000 + (addr % 8)), // PPU mirror
 
             // "IO registers"
+            0x4000..=0x4014 => invalid_address!(addr, 0x00),
+
             0x4015 => self.apu.read_u8(addr),
             // In the NES and Famicom, the top three (or five) bits are not driven, and so retain the bits of the previous byte on the bus.
             // Usually this is the most significant byte of the address of the controller port—0x40.
@@ -183,7 +193,6 @@ impl crate::memory::AddressSpace for CpuBus {
 
             // Mapper
             0x4020..=0xFFFF => self.mapper.borrow().read_u8(addr), // PRG ROM/RAM and mapper
-            _ => 0,
         }
     }
 
@@ -212,7 +221,6 @@ impl crate::memory::AddressSpace for CpuBus {
 
             // Mapper
             0x4020..=0xFFFF => self.mapper.borrow().write_u8(addr, value), // PRG ROM/RAM and mapper
-            _ => (),
         }
     }
 }
