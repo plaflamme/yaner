@@ -33,7 +33,7 @@ impl<'a> NesState<'a> {
             apu: ApuState::new(&nes.cpu.bus.apu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
-                cpu_master_clock: nes.cpu.cycles.get(),
+                cpu_master_clock: nes.cpu.clock.get(),
                 ppu_master_clock: nes.clocks.ppu_master_clock.get(),
                 cpu_cycles: nes.clocks.cpu_cycles.get(),
                 ppu_cycles: nes.clocks.ppu_cycles.get(),

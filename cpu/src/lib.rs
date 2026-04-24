@@ -349,6 +349,19 @@ pub enum CpuEvent {
     HalfCycle { phase: Phase, rw: Rw, addr: u16 },
 }
 
+impl CpuEvent {
+    pub fn is_cycle_end(&self) -> bool {
+        matches!(
+            self,
+            CpuEvent::HalfCycle {
+                phase: Phase::Two,
+                rw: _,
+                addr: _
+            }
+        )
+    }
+}
+
 pub struct Cpu {
     acc: Cell<u8>,
     x: Cell<u8>,

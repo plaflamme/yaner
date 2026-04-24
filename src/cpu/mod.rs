@@ -15,8 +15,8 @@ use std::pin::Pin;
 use std::rc::Rc;
 
 pub struct RP2A03 {
-    pub(crate) cycles: Cell<u64>,
-    pub(crate) apu_cycles: Cell<u64>, // TODO: remove this?
+    pub(crate) clock: Cell<u64>,
+    pub(crate) apu_clock: Cell<u64>, // TODO: remove this?
     pub(crate) bus: CpuBus,
 }
 
@@ -29,8 +29,8 @@ impl RP2A03 {
         input_2: Rc<dyn Input>,
     ) -> Self {
         Self {
-            cycles: Cell::new(12),
-            apu_cycles: Cell::default(),
+            clock: Cell::new(12),
+            apu_clock: Cell::default(),
             bus: CpuBus::new(
                 Cpu::new(start_at),
                 Apu::default(),
@@ -66,7 +66,7 @@ impl RP2A03 {
             let mut apu = self.bus.apu.run();
             macro_rules! tick_apu {
                 () => {
-                    while self.apu_cycles.get() + apu_stride < self.cycles.get() {
+                    while self.apu_clock.get() + apu_stride < self.clock.get() {
                         match Pin::new(&mut apu).resume(()) {
                             CoroutineState::Yielded(ApuCycle::Tick { irq }) => {
                                 if irq {
@@ -75,7 +75,7 @@ impl RP2A03 {
                             }
                             CoroutineState::Complete(_) => (),
                         }
-                        self.apu_cycles.update(|c| c + apu_stride);
+                        self.apu_clock.update(|c| c + apu_stride);
                     }
                 };
             }
@@ -90,13 +90,13 @@ impl RP2A03 {
                             },
                         ) => match rw {
                             yaner_cpu::Rw::Read => {
-                                self.cycles.update(|c| c + 5);
+                                self.clock.update(|c| c + 5);
                                 tick_apu!();
                                 yield cycle;
                                 self.bus.cpu_read_u8(addr);
                             }
                             yaner_cpu::Rw::Write => {
-                                self.cycles.update(|c| c + 7);
+                                self.clock.update(|c| c + 7);
                                 tick_apu!();
                                 yield cycle;
                                 self.bus.cpu_write_u8(addr);
@@ -110,12 +110,12 @@ impl RP2A03 {
                             },
                         ) => match rw {
                             yaner_cpu::Rw::Read => {
-                                self.cycles.update(|c| c + 7);
+                                self.clock.update(|c| c + 7);
                                 tick_apu!();
                                 yield cycle;
                             }
                             yaner_cpu::Rw::Write => {
-                                self.cycles.update(|c| c + 5);
+                                self.clock.update(|c| c + 5);
                                 tick_apu!();
                                 yield cycle;
                             }

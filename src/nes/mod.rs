@@ -100,7 +100,7 @@ impl Nes {
         macro_rules! tick_ppu {
             () => {
                 while self.clocks.ppu_master_clock.get() + ppu_stride
-                    <= (self.cpu.cycles.get() - ppu_offset)
+                    <= (self.cpu.clock.get() - ppu_offset)
                 {
                     match Pin::new(&mut ppu).resume(()) {
                         CoroutineState::Yielded(cycle) => {
@@ -133,23 +133,20 @@ impl Nes {
             };
         }
 
-        macro_rules! tick_cpu {
-            () => {
+        #[coroutine]
+        move || {
+            yield NesCycle::PowerUp;
+            loop {
                 match Pin::new(&mut cpu).resume(()) {
                     CoroutineState::Yielded(cycle) => {
+                        if cycle.is_cycle_end() {
+                            self.clocks.tick_cpu();
+                        }
                         yield NesCycle::Cpu(cycle);
                         tick_ppu!();
                     }
                     CoroutineState::Complete(_) => panic!("cpu stopped"),
                 };
-            };
-        }
-
-        #[coroutine]
-        move || {
-            yield NesCycle::PowerUp;
-            loop {
-                tick_cpu!();
             }
         }
     }
