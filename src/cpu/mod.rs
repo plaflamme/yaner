@@ -79,6 +79,44 @@ impl RP2A03 {
                     }
                 };
             }
+            macro_rules! read {
+                ($addr:expr) => {
+                    self.clock.update(|c| c + 5);
+                    tick_apu!();
+                    yield yaner_cpu::CpuEvent::HalfCycle {
+                        phase: yaner_cpu::Phase::One,
+                        rw: yaner_cpu::Rw::Read,
+                        addr: $addr,
+                    };
+                    self.bus.cpu_read_u8($addr);
+                    self.clock.update(|c| c + 7);
+                    tick_apu!();
+                    yield yaner_cpu::CpuEvent::HalfCycle {
+                        phase: yaner_cpu::Phase::Two,
+                        rw: yaner_cpu::Rw::Read,
+                        addr: $addr,
+                    };
+                };
+            }
+            macro_rules! write {
+                ($addr:expr) => {
+                    self.clock.update(|c| c + 7);
+                    tick_apu!();
+                    yield yaner_cpu::CpuEvent::HalfCycle {
+                        phase: yaner_cpu::Phase::One,
+                        rw: yaner_cpu::Rw::Write,
+                        addr: $addr,
+                    };
+                    self.bus.cpu_write_u8($addr);
+                    self.clock.update(|c| c + 5);
+                    tick_apu!();
+                    yield yaner_cpu::CpuEvent::HalfCycle {
+                        phase: yaner_cpu::Phase::Two,
+                        rw: yaner_cpu::Rw::Write,
+                        addr: $addr,
+                    };
+                };
+            }
             loop {
                 {
                     match Pin::new(&mut cpu).resume(()) {
@@ -90,6 +128,20 @@ impl RP2A03 {
                             },
                         ) => match rw {
                             yaner_cpu::Rw::Read => {
+                                if let Some(addr) = self.bus.oam_latch.take() {
+                                    let addr = (addr as u16) << 8;
+                                    log::debug!("DMA start {addr:02X}");
+                                    read!(addr);
+                                    let cycles = self.clock.get() / 12;
+                                    if cycles.is_multiple_of(2) {
+                                        read!(addr);
+                                    }
+                                    for addr_lo in 0x00..=0xFF {
+                                        read!(addr | addr_lo);
+                                        write!(0x2004);
+                                    }
+                                }
+
                                 self.clock.update(|c| c + 5);
                                 tick_apu!();
                                 yield cycle;
@@ -132,6 +184,7 @@ impl RP2A03 {
 pub struct CpuBus {
     pub cpu: Cpu,
     pub apu: Apu,
+    pub oam_latch: Cell<Option<u8>>,
     pub ram: Ram2KB,
     pub ppu_registers: PpuRegisters,
     pub mapper: Rc<RefCell<Box<dyn Mapper>>>,
@@ -151,6 +204,7 @@ impl CpuBus {
         Self {
             cpu,
             apu,
+            oam_latch: Cell::default(),
             ram: Ram2KB::default(),
             ppu_registers,
             mapper,
@@ -205,10 +259,8 @@ impl crate::memory::AddressSpace for CpuBus {
             0x2008..=0x3FFF => self.ppu_registers.write_u8(0x2000 + (addr % 8), value), // PPU mirror
 
             // "IO registers"
-            0x4014 => {
-                log::debug!("DMA@0x{value:02X}");
-                self.cpu.dma_latch.set(Some(value))
-            }
+            0x4014 => self.oam_latch.set(Some(value)),
+
             0x4016 => {
                 // The first bit is connected to the inputs
                 // TODO: is this supposed to happen now or on the next tick?

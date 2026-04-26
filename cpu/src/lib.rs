@@ -380,11 +380,6 @@ pub struct Cpu {
     delay_nmi: Cell<Option<bool>>,
     // The PC of the currently executing instruction
     active_pc: Cell<u16>,
-
-    // cycle counter for DMA alignment purposes
-    cycles: Cell<u64>,
-
-    pub dma_latch: Cell<Option<u8>>,
     pub io_bus: Cell<u8>,
 }
 
@@ -427,10 +422,6 @@ impl Cpu {
             delay_intr_flag: Cell::default(),
             delay_nmi: Cell::default(),
             active_pc: Cell::default(),
-
-            cycles: Cell::default(),
-
-            dma_latch: Cell::default(),
             io_bus: Cell::new(0),
         }
     }
@@ -502,7 +493,6 @@ impl Cpu {
     fn start_cycle(&self) {}
     fn end_cycle(&self) {
         self.poll_nmi();
-        self.cycles.update(|c| c.wrapping_add(1));
     }
 
     pub fn run(&self) -> impl Coroutine<Yield = CpuEvent, Return = ()> + '_ {
@@ -523,46 +513,9 @@ impl Cpu {
                 self.end_cycle();
             }};
         }
-        macro_rules! dma {
-            ($addr:expr) => {{
-                log::debug!("DMA start {:02X}", $addr);
-                cycle!(Rw::Read, $addr);
-
-                if self.cycles.get() % 2 == 1 {
-                    log::debug!("DMA alignment cycle");
-                    cycle!(Rw::Read, $addr);
-                }
-
-                for addr_lo in 0x00..=0xFF {
-                    cycle!(Rw::Read, $addr | addr_lo);
-
-                    // 0x2004 is OAMDATA
-                    write!(0x2004, self.io_bus.get());
-                    if addr_lo == 0xFF {
-                        break;
-                    }
-                }
-            }};
-        }
-        macro_rules! read_and_dma {
-            ( $addr: expr ) => {{
-                let addr = $addr;
-                let dma = if let Some(addr) = self.dma_latch.take() {
-                    dma!((addr as u16) << 8);
-                    true
-                } else {
-                    false
-                };
-                cycle!(Rw::Read, addr);
-                (self.io_bus.get(), dma)
-            }};
-        }
         macro_rules! read {
             ( $addr: expr ) => {{
                 let addr = $addr;
-                if let Some(addr) = self.dma_latch.take() {
-                    dma!((addr as u16) << 8);
-                }
                 cycle!(Rw::Read, addr);
                 self.io_bus.get()
             }};
@@ -1071,7 +1024,9 @@ impl Cpu {
                         let (addr_lo, page_cross) = base_addr_lo.overflowing_add(y);
 
                         // Dummy read
-                        let (_, dma) = read_and_dma!((base_addr_hi as u16) << 8 | addr_lo as u16);
+                        let _ = read!((base_addr_hi as u16) << 8 | addr_lo as u16);
+                        // TODO:
+                        let dma = false;
 
                         let addr_hi = if page_cross {
                             // When a page is crossed, the address written to is ANDed with the register
