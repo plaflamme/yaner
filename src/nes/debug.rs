@@ -29,8 +29,8 @@ pub struct NesState<'a> {
 impl<'a> NesState<'a> {
     pub fn new(nes: &'a super::Nes) -> Self {
         NesState {
-            cpu: yaner_cpu::CpuState::new(&nes.cpu.bus.cpu),
-            apu: ApuState::new(&nes.cpu.bus.apu),
+            cpu: yaner_cpu::CpuState::new(&nes.cpu.cpu),
+            apu: ApuState::new(&nes.cpu.apu),
             ppu: PpuState::new(&nes.ppu),
             clocks: ClockState {
                 cpu_master_clock: nes.cpu.clock.get(),
