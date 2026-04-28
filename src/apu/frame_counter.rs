@@ -111,9 +111,9 @@ impl FrameCounter {
         // The terminology is confusing:
         // "While these cycles are sometimes described as even and odd CPU cycles, this is not accurate because the CPU and APU randomly power into either of 2 alignments relative to each other. Therefore, get and put may occur on different CPU cycle parities across different power cycles."
         // Here we use
-        //   * get == "between"
-        //   * put == "during"
-        let delay = if cpu_cycle == CpuCycle::Get { 4 } else { 3 };
+        //   * get == "during"
+        //   * put == "between"
+        let delay = if cpu_cycle == CpuCycle::Get { 3 } else { 4 };
         self.bufferred.set(Some((delay, value)));
         log::debug!("write: {self:?}");
     }

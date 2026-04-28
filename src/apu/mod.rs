@@ -33,14 +33,22 @@ enum CpuCycle {
     Get,
     Put,
 }
+impl CpuCycle {
+    fn next(&self) -> Self {
+        match self {
+            CpuCycle::Get => CpuCycle::Put,
+            CpuCycle::Put => CpuCycle::Get,
+        }
+    }
+}
 
 pub enum ApuCycle {
     Tick { irq: bool },
 }
 
 pub struct Apu {
-    // Count CPU cycles to determine get vs put cycles
-    cpu_cycles: Cell<u64>,
+    // Represents the current CPU cycle, the one we haven't caught up to yet
+    cpu_cycle: Cell<CpuCycle>,
     pulse_1: Pulse,
     pulse_2: Pulse,
     frame_counter: FrameCounter,
@@ -49,18 +57,10 @@ pub struct Apu {
 impl Apu {
     pub fn new() -> Self {
         Self {
-            cpu_cycles: Cell::default(),
+            cpu_cycle: Cell::new(CpuCycle::Get),
             frame_counter: FrameCounter::new(),
             pulse_1: Pulse::new(),
             pulse_2: Pulse::new(),
-        }
-    }
-
-    fn cpu_cycle(&self) -> CpuCycle {
-        if self.cpu_cycles.get() & 0x01 == 1 {
-            CpuCycle::Get
-        } else {
-            CpuCycle::Put
         }
     }
 
@@ -72,13 +72,7 @@ impl Apu {
 
     fn status(&self) -> Status {
         let mut status = Status::default();
-        // The CPU is reading now, during its own cycle which we haven't caught up to yet.
-        // So the read is actually occuring on "the next" cycle, the one we're about top catch up to.
-        let cpu_cycle = match self.cpu_cycle() {
-            CpuCycle::Get => CpuCycle::Put,
-            CpuCycle::Put => CpuCycle::Get,
-        };
-        status.set(Status::F, self.frame_counter.irq_flag(cpu_cycle));
+        status.set(Status::F, self.frame_counter.irq_flag(self.cpu_cycle.get()));
         status.set(Status::P1, self.pulse_1.playing());
         status.set(Status::P2, self.pulse_2.playing());
         status
@@ -87,14 +81,14 @@ impl Apu {
     pub fn run(&self) -> impl Coroutine<Yield = ApuCycle, Return = ()> + '_ {
         #[coroutine]
         move || loop {
-            self.cpu_cycles.update(|c| c.wrapping_add(1));
-            let clock = self.frame_counter.tick(self.cpu_cycle());
+            let clock = self.frame_counter.tick(self.cpu_cycle.get());
             if let Some(frame_type) = clock.frame_type {
                 self.handle_frame(frame_type);
             }
+            self.cpu_cycle.update(|c| c.next());
             yield ApuCycle::Tick {
                 irq: clock.raise_interrupt,
-            }
+            };
         }
     }
 }
@@ -133,7 +127,7 @@ impl AddressSpace for Apu {
             }
             0x4017 => {
                 log::debug!("write 0x4017: {value:02X}");
-                self.frame_counter.write(self.cpu_cycle(), value);
+                self.frame_counter.write(self.cpu_cycle.get(), value);
                 if value & 0x80 != 0 {
                     // Writing to $4017 with bit 7 set ($80) will immediately clock all of its controlled units at the beginning of the 5-step sequence
                     self.handle_frame(FrameType::Half);
