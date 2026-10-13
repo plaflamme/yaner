@@ -2,11 +2,11 @@
 
 extern crate yaner;
 
+use clap::Parser;
+
 use std::convert::TryFrom;
 use std::num::ParseIntError;
 use std::path::PathBuf;
-
-use structopt::StructOpt;
 
 use yaner::cartridge::Cartridge;
 use yaner::nes::Nes;
@@ -15,29 +15,31 @@ fn parse_hex(input: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(input, 16)
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Yet Another NES Emulator in Rust")]
+#[derive(Debug, Parser)]
+#[command(about = "Yet Another NES Emulator in Rust")]
 struct Yaner {
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
-    verbose: usize,
-    #[structopt(subcommand)]
+    // #[arg(short = 'v', long = "verbose", action=clap::ArgAction::Count)]
+    // verbose: u8,
+    #[command(flatten)]
+    verbose: clap_verbosity::Verbosity,
+    #[command(subcommand)]
     cmd: YanerCommand,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum YanerCommand {
     Info {
         rom: PathBuf,
     },
     Run {
-        #[structopt(short, parse(try_from_str = parse_hex))]
+        #[arg(short, value_parser = parse_hex)]
         /// Sets the initial PC value instead of reading it from the reset vector.
         pc: Option<u16>,
         /// The iNES ROM file.
         rom: PathBuf,
     },
     Debug {
-        #[structopt(short, parse(try_from_str = parse_hex))]
+        #[arg(short, value_parser = parse_hex)]
         /// Sets the initial PC value instead of reading it from the reset vector.
         pc: Option<u16>,
         /// The iNES ROM file.
@@ -46,11 +48,11 @@ enum YanerCommand {
 }
 
 fn main() {
-    let options = Yaner::from_args();
+    let options = Yaner::parse();
 
     stderrlog::new()
         .module(module_path!())
-        .verbosity(options.verbose)
+        .verbosity(options.verbose.log_level_filter())
         .timestamp(stderrlog::Timestamp::Off)
         .init()
         .unwrap();
